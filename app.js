@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getWaypoints() {
         if (waypointsDataCache) return waypointsDataCache;
         try {
-            const response = await fetch('waypoints.json');
+            const response = await fetch('/waypoints.json');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
             waypointsDataCache = data;
@@ -168,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // THIS IS THE MODIFIED FUNCTION
     async function getVORsFromOpenAIP(bbox) {
-        // The URL now points to your own server's proxy endpoint
         const url = `/api/navaids?bbox=${bbox.join(',')}`;
 
         try {
