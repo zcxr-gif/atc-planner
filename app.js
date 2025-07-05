@@ -281,13 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const waypoints = await getWaypoints();
             if(waypoints){
                 waypoints.forEach(waypoint => {
-                    const WAYPOINT_TYPES = ["WYP", "NDB", "ARP", "VHF"];
-                    if (WAYPOINT_TYPES.includes(waypoint.type)) {
-                        const coords = [waypoint.coords[1], waypoint.coords[0]];
-                        if (bounds.contains(coords)) {
-                            createWaypointMarker(coords, waypoint).addTo(waypointsGroup);
-                        }
-                    }
+    const coords = [waypoint.coords[1], waypoint.coords[0]];
+    if (bounds.contains(coords)) {
+        createWaypointMarker(coords, waypoint).addTo(waypointsGroup);
+    }
                 });
             }
         }
