@@ -1621,4 +1621,5 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const getMidPoint = (start, end) => L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
-});
+	
+	});
