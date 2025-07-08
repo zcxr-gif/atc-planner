@@ -1,4 +1,4 @@
-// app.js (updated)
+// app.js (updated for real-time magnetic declination)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     // The API key is now removed from the client-side code.
@@ -75,7 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMapMode = "regular";
     let runwayLayers = {};
     let appSettings = { dataBlockScale: 1.0, showDataBlocks: true };
-    let altitudeChart = null; // --- For Altitude Profile Editor ---
+    let altitudeChart = null;
+    let wmmModel = null; // Holds the loaded World Magnetic Model
 
     // --- Layer control with all terrain and navaid options ---
     const baseLayers = { "Dark Map": darkBaseLayer };
@@ -165,8 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
     }
-
-    // THIS IS THE MODIFIED FUNCTION
+    
     async function getVORsFromOpenAIP(bbox) {
         const url = `/api/navaids?bbox=${bbox.join(',')}`;
 
@@ -181,8 +181,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return data.items || [];
         } catch (error) {
             console.error("Failed to fetch VORs via proxy:", error);
-            // Optionally, display a user-friendly error message on the UI
             return [];
+        }
+    }
+    
+    // ** NEW: Load WMM data on startup **
+    async function initializeWMM() {
+        try {
+            const response = await fetch('wmm2025.json');
+            if (!response.ok) throw new Error('WMM data could not be loaded.');
+            const wmm_data = await response.json();
+            wmmModel = geomag.model(wmm_data);
+            console.log("World Magnetic Model for 2025 loaded successfully.");
+        } catch (error) {
+            console.error("Fatal Error: Could not initialize WMM.", error);
+            mslPopup.innerHTML = "Mag Var: Error";
         }
     }
 
@@ -191,6 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function initializeApp() {
         loadSettings();
         createMainPanel();
+        await initializeWMM(); // Load the magnetic model
         await getAirports();
         await getRunways();
         await getWaypoints(); 
@@ -232,15 +246,27 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(navaidRequestTimeout);
             navaidRequestTimeout = setTimeout(updateNavaids, 500); 
         });
+        
+        // ** UPDATED to include Magnetic Declination **
         map.on('mousemove', (e) => {
             if (isDrawingEnabled || !mslPopup) return;
             mslPopup.style.left = `${e.containerPoint.x + 15}px`;
             mslPopup.style.top = `${e.containerPoint.y}px`;
             mslPopup.style.display = 'block';
-            mslPopup.innerHTML = 'MSL: Loading...';
+
+            let magVarText = "Mag Var: N/A";
+            if (wmmModel) {
+                 const point = wmmModel.point({ lat: e.latlng.lat, lon: e.latlng.lng });
+                 const declination = point.decl;
+                 magVarText = `Mag Var: ${declination.toFixed(2)}°`;
+            }
+
+            mslPopup.innerHTML = 'MSL: Loading...<br>' + magVarText;
+            
             clearTimeout(elevationRequestTimeout);
-            elevationRequestTimeout = setTimeout(() => getElevationForPoint(e.latlng), 50);
+            elevationRequestTimeout = setTimeout(() => getElevationAndMag(e.latlng), 50);
         });
+
         map.on('mouseout', () => {
             if (mslPopup) mslPopup.style.display = 'none';
         });
@@ -280,10 +306,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const waypoints = await getWaypoints();
             if(waypoints){
                 waypoints.forEach(waypoint => {
-    const coords = [waypoint.coords[1], waypoint.coords[0]];
-    if (bounds.contains(coords)) {
-        createWaypointMarker(coords, waypoint).addTo(waypointsGroup);
-    }
+                    const coords = [waypoint.coords[1], waypoint.coords[0]];
+                    if (bounds.contains(coords)) {
+                        createWaypointMarker(coords, waypoint).addTo(waypointsGroup);
+                    }
                 });
             }
         }
@@ -726,7 +752,6 @@ document.addEventListener('DOMContentLoaded', () => {
         createFloatingPanel('help-panel', '<h2>Help</h2>', '150px', '150px', helpContent);
     }
 
-    // --- START: Altitude Profile Editor Functions ---
     function createAltitudeProfilePanel(stepId) {
         let panel = document.getElementById('altitude-profile-panel');
         if (panel) {
@@ -833,19 +858,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const legData = planLayers[stepId];
         if (!legData || !legData.label) return;
 
-        // --- Determine Altitude HTML and line style ---
         const startAlt = legData.startAltitude;
         const endAlt = legData.endAltitude;
         let altitudeHtml;
 
         if (startAlt !== undefined && endAlt !== undefined && startAlt !== endAlt) {
-            // Profile mode
             altitudeHtml = `<div class="fdb-data-item fdb-altitude"><span class="fdb-value" style="font-size: 12px; color: #FFD700;">${(startAlt / 1000).toFixed(1).replace('.0','')}k &rarr; ${(endAlt / 1000).toFixed(1).replace('.0','')}k</span><span class="fdb-unit">ft</span></div>`;
             const color = endAlt < startAlt ? '#FF8C00' : '#39FF14';
             if (legData.line) legData.line.setStyle({ color: color, weight: 4 });
             if (legData.outline) legData.outline.setStyle({ weight: 0 });
         } else {
-            // Single altitude mode
             const displayAlt = legData.altitude || startAlt;
             let altValueText = '---';
             if (displayAlt || displayAlt === 0) {
@@ -862,7 +884,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (legData.outline && currentMapMode === "regular") legData.outline.setStyle({ color: '#000', weight: 6, opacity: 1 });
         }
 
-        // --- Reconstruct and set the full icon HTML ---
         const speed = legData.speed || '---';
         const heading = legData.heading.text;
         const fullHtml = `<div class="flight-data-block" style="transform: translate(-50%, -50%) scale(${appSettings.dataBlockScale});">
@@ -888,11 +909,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const altitudeInput = document.getElementById(`alt-${stepId}`);
 
         if (startAlt !== undefined && endAlt !== undefined && startAlt !== endAlt) {
-            // Profile mode: clear single altitude input
             if (altitudeInput) altitudeInput.value = '';
             legData.altitude = '';
         } else {
-            // Single altitude mode: set single altitude input
             const displayAlt = legData.altitude || startAlt;
             if (altitudeInput) altitudeInput.value = displayAlt || '';
         }
@@ -972,7 +991,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const airportRunways = await getRunwaysForAirport(icao);
 
             airportRunways.forEach(runway => drawRunway(runway, airportDetailsGroup, runwayLabelsGroup, finalApproachGroup));
-            updateAirportInfoPanel(airport, airportRunways);
+            updateAirportInfoPanel(airport, airportRunways); // This is now async
 
             createDistanceRings(lat, lon, planLayers).forEach(ring => ring.addTo(airportDetailsGroup));
             if(map.getZoom() < 13) map.setView([lat, lon], 13);
@@ -989,22 +1008,31 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(`Failed to fetch details for ${icao}:`, err);
         }
     }
-
-    function updateAirportInfoPanel(airport, runways) {
+    
+    // ** UPDATED to be async and calculate magnetic headings **
+    async function updateAirportInfoPanel(airport, runways) {
         let airspaceClass = 'N/A';
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
         else if (airport.type === 'medium_airport') airspaceClass = 'Charlie';
         else if (airport.type === 'small_airport') airspaceClass = 'Other';
-        
-        let magneticVariation = parseFloat(airport.magnetic_variation_deg) || 0;
 
         const panelTitle = `INFO: ${airport.ident}`;
+
+        let declination = 0;
+        if (wmmModel) {
+            const point = wmmModel.point({
+                lat: parseFloat(airport.latitude_deg),
+                lon: parseFloat(airport.longitude_deg)
+            });
+            declination = point.decl;
+        }
 
         let runwaysHTML = `
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
                     <tr style="text-align: left; border-bottom: 1px solid #555;">
                         <th style="padding: 4px 2px;">Runway</th>
+                        <th style="padding: 4px 2px;">Mag Hdg</th>
                         <th style="padding: 4px 2px;">True Hdg</th>
                     </tr>
                 </thead>
@@ -1013,29 +1041,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (runways.length > 0) {
             runwaysHTML += runways.map(runway => {
-                const runwayName = (runway.le_ident && runway.he_ident)
-                    ? `${runway.le_ident}/${runway.he_ident}`
-                    : (runway.le_ident || runway.he_ident || 'Unnamed');
+                const runwayName = (runway.le_ident && runway.he_ident) ?
+                    `${runway.le_ident}/${runway.he_ident}` :
+                    (runway.le_ident || runway.he_ident || 'Unnamed');
 
-                let le_true_hdg = '---';
-                if (runway.le_heading_degT) {
-                    le_true_hdg = Math.round(parseFloat(runway.le_heading_degT)).toString().padStart(3, '0') + '°';
-                }
+                let le_true_hdg = parseFloat(runway.le_heading_degT);
+                let he_true_hdg = parseFloat(runway.he_heading_degT);
 
-                let he_true_hdg = '---';
-                if (runway.he_heading_degT) {
-                    he_true_hdg = Math.round(parseFloat(runway.he_heading_degT)).toString().padStart(3, '0') + '°';
-                }
+                let le_mag_hdg_raw = le_true_hdg - declination;
+                let he_mag_hdg_raw = he_true_hdg - declination;
+
+                le_mag_hdg_raw = (le_mag_hdg_raw + 360) % 360;
+                he_mag_hdg_raw = (he_mag_hdg_raw + 360) % 360;
+                
+                const le_mag_hdg_str = !isNaN(le_mag_hdg_raw) ? Math.round(le_mag_hdg_raw).toString().padStart(3, '0') + '°' : '---';
+                const he_mag_hdg_str = !isNaN(he_mag_hdg_raw) ? Math.round(he_mag_hdg_raw).toString().padStart(3, '0') + '°' : '---';
+
+                const le_true_hdg_str = !isNaN(le_true_hdg) ? Math.round(le_true_hdg).toString().padStart(3, '0') + '°' : '---';
+                const he_true_hdg_str = !isNaN(he_true_hdg) ? Math.round(he_true_hdg).toString().padStart(3, '0') + '°' : '---';
 
                 return `
                     <tr data-runway-id="${runway.id}" style="border-bottom: 1px solid #333; cursor: pointer;">
                         <td style="padding: 5px 2px;"><strong>${runwayName}</strong></td>
-                        <td style="padding: 5px 2px;">${le_true_hdg} / ${he_true_hdg}</td>
+                        <td style="padding: 5px 2px; font-weight: bold; color: var(--accent);">${le_mag_hdg_str} / ${he_mag_hdg_str}</td>
+                        <td style="padding: 5px 2px;">${le_true_hdg_str} / ${he_true_hdg_str}</td>
                     </tr>
                 `;
             }).join('');
         } else {
-            runwaysHTML += '<tr><td colspan="2" style="padding: 4px; text-align: center;">No runway data available.</td></tr>';
+            runwaysHTML += '<tr><td colspan="3" style="padding: 4px; text-align: center;">No runway data available.</td></tr>';
         }
 
         runwaysHTML += '</tbody></table>';
@@ -1046,15 +1080,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 <ul>
                     <li><strong>Class:</strong> ${airspaceClass}</li>
                     <li><strong>Elevation:</strong> ${parseInt(airport.elevation_ft).toLocaleString()}'</li>
+                    <li><strong>Mag Var:</strong> ${declination.toFixed(2)}°</li>
                 </ul>
             </div>
             <div class="info-card">
-                <h3>Runways</h3>
+                <h3>Runways 🧭</h3>
                 ${runwaysHTML}
             </div>`;
 
         const panel = createFloatingPanel('airport-info-panel', `<h2>${panelTitle}</h2>`, '20px', '360px', content);
-        
+
         panel.querySelectorAll('[data-runway-id]').forEach(row => {
             const runwayId = row.dataset.runwayId;
             row.addEventListener('mouseover', () => highlightRunway(runwayId));
@@ -1083,7 +1118,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!planContainer) return;
 
-        // --- ACCORDION LOGIC ON ADD ---
         const allContentAreas = document.querySelectorAll('.plan-section-content');
         allContentAreas.forEach(area => {
             if (area.id !== planContainerId) {
@@ -1091,7 +1125,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         planContainer.style.display = 'block';
-        // --- END ACCORDION LOGIC ---
 
         const distanceNM = (distanceMeters / 1852).toFixed(1);
         const stepDiv = document.createElement('div');
@@ -1402,27 +1435,34 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
+    
+    // ** UPDATED to get both Elevation and Magnetic Declination **
+    async function getElevationAndMag(latlng) {
+        let magVarText = "Mag Var: N/A";
+        if (wmmModel) {
+             const point = wmmModel.point({ lat: latlng.lat, lon: latlng.lng });
+             magVarText = `Mag Var: ${point.decl.toFixed(2)}°`;
+        }
 
-    async function getElevationForPoint(latlng) {
         try {
             const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
             if (!response.ok) throw new Error(`API error`);
             const data = await response.json();
             const elevationMeters = data.elevation[0];
-            if (elevationMeters === null || elevationMeters <= 0) {
-                mslPopup.innerHTML = `MSL: Sea Level`;
-                return;
+            let mslText = "MSL: Sea Level";
+            if (elevationMeters !== null && elevationMeters > 0) {
+                let elevationFeet = Math.round(elevationMeters * 3.28084);
+                const rounded = Math.round(elevationFeet / 100) * 100;
+                mslText = `MSL: ${rounded.toLocaleString()}'`;
             }
-            let elevationFeet = Math.round(elevationMeters * 3.28084);
-            elevationFeet += 2000;
-            const rounded = Math.round(elevationFeet / 500) * 500;
-            const mslK = rounded / 1000;
-            mslPopup.innerHTML = `MSL: ${mslK.toFixed(1)}k'`;
+             mslPopup.innerHTML = `${mslText}<br>${magVarText}`;
+
         } catch (error) {
             console.error("Failed to fetch elevation data:", error);
-            mslPopup.innerHTML = `MSL: Unavailable`;
+            mslPopup.innerHTML = `MSL: Unavailable<br>${magVarText}`;
         }
     }
+
     function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         if (!currentAirportCoords || midPoint.distanceTo(currentAirportCoords) > 3000) { return midPoint; }
@@ -1464,17 +1504,14 @@ document.addEventListener('DOMContentLoaded', () => {
         L.polyline([[le_lat, le_lon], [he_lat, he_lon]], clStyle).addTo(polygonGroup);
         addRunwayLabel(runwayData, [le_lon, le_lat], [he_lon, he_lat], labelGroup);
         
-        // --- Draw final approach paths ---
         const le_point = turf.point([le_lon, le_lat]);
         const he_point = turf.point([he_lon, he_lat]);
         
-        // For 'le' end
         if (runwayData.le_ident) {
             const bearing_he_to_le = turf.bearing(he_point, le_point);
             drawFinalApproachCone(le_point, bearing_he_to_le, finalApproachGroup);
         }
 
-        // For 'he' end
         if (runwayData.he_ident) {
             const bearing_le_to_he = turf.bearing(le_point, he_point);
             drawFinalApproachCone(he_point, bearing_le_to_he, finalApproachGroup);
@@ -1485,13 +1522,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const finalDistNM = 10;
         const finalWidthNM = 1.0; 
 
-        // The tip of the cone is the runway threshold.
         const apex = runwayEnd;
-
-        // Find the center of the wide base, 10nm out from the runway.
         const baseCenter = turf.destination(runwayEnd, finalDistNM, bearing, { units: 'nauticalmiles' });
-
-        // Calculate the corners of the wide base.
         const p1 = turf.destination(baseCenter, finalWidthNM, bearing - 90, { units: 'nauticalmiles' });
         const p2 = turf.destination(baseCenter, finalWidthNM, bearing + 90, { units: 'nauticalmiles' });
         
@@ -1505,7 +1537,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const conePoly = turf.polygon(coneCoords);
         L.geoJSON(conePoly, { style: FINAL_APPROACH_STYLE }).addTo(group);
 
-        // Draw the centerline from the runway end to the 10nm point.
         const centerline = L.polyline([
             [apex.geometry.coordinates[1], apex.geometry.coordinates[0]],
             [baseCenter.geometry.coordinates[1], baseCenter.geometry.coordinates[0]]
@@ -1534,7 +1565,6 @@ document.addEventListener('DOMContentLoaded', () => {
         createLabel(runwayData.he_ident, he_point, bearing_le_to_he);
     }
 
-    // -- START: FIXED CODE --
     function segmentsIntersect(p1, p2, p3, p4) {
         const toPoint = (p) => ({ x: p.x, y: p.y });
         const det = (a, b) => a.x * b.y - a.y * b.x;
@@ -1545,7 +1575,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const B_A = { x: b.x - a.x, y: b.y - a.y };
 
         const det_D_C_B_A = det(D_C, B_A);
-        if (det_D_C_B_A === 0) return false; // Parallel lines
+        if (det_D_C_B_A === 0) return false;
 
         const t = det(C_A, D_C) / det_D_C_B_A;
         const u = det(C_A, B_A) / det_D_C_B_A;
@@ -1566,7 +1596,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return false;
     }
-    // -- END: FIXED CODE --
 
     function createDistanceRings(lat, lon, planLayers, speedKts = 240) {
         const ringSpecs = [{ nm: 10 }, { nm: 20 }, { nm: 30 }];
@@ -1642,4 +1671,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getMidPoint = (start, end) => L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
 	
-	});
+});
