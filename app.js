@@ -1534,6 +1534,25 @@ document.addEventListener('DOMContentLoaded', () => {
         createLabel(runwayData.he_ident, he_point, bearing_le_to_he);
     }
 
+    // -- START: FIXED CODE --
+    function segmentsIntersect(p1, p2, p3, p4) {
+        const toPoint = (p) => ({ x: p.x, y: p.y });
+        const det = (a, b) => a.x * b.y - a.y * b.x;
+
+        const a = toPoint(p1), b = toPoint(p2), c = toPoint(p3), d = toPoint(p4);
+        const C_A = { x: c.x - a.x, y: c.y - a.y };
+        const D_C = { x: d.x - c.x, y: d.y - c.y };
+        const B_A = { x: b.x - a.x, y: b.y - a.y };
+
+        const det_D_C_B_A = det(D_C, B_A);
+        if (det_D_C_B_A === 0) return false; // Parallel lines
+
+        const t = det(C_A, D_C) / det_D_C_B_A;
+        const u = det(C_A, B_A) / det_D_C_B_A;
+
+        return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+    }
+
     function doesArcIntersectPlanLines(arcPoints, planLayers) {
         for (const key in planLayers) {
             const line = planLayers[key].line;
@@ -1541,12 +1560,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const linePoints = line.getLatLngs();
             for (let i = 0; i < linePoints.length - 1; i++) {
                 for (let j = 0; j < arcPoints.length - 1; j++) {
-                    if (L.LineUtil.segmentsIntersect( map.latLngToLayerPoint(linePoints[i]), map.latLngToLayerPoint(linePoints[i+1]), map.latLngToLayerPoint(arcPoints[j]), map.latLngToLayerPoint(arcPoints[j+1]) )) return true;
+                    if (segmentsIntersect( map.latLngToLayerPoint(linePoints[i]), map.latLngToLayerPoint(linePoints[i+1]), map.latLngToLayerPoint(arcPoints[j]), map.latLngToLayerPoint(arcPoints[j+1]) )) return true;
                 }
             }
         }
         return false;
     }
+    // -- END: FIXED CODE --
 
     function createDistanceRings(lat, lon, planLayers, speedKts = 240) {
         const ringSpecs = [{ nm: 10 }, { nm: 20 }, { nm: 30 }];
