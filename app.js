@@ -1019,11 +1019,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const panelTitle = `INFO: ${airport.ident}`;
 
         let declination = 0;
-        if (wmmModel) {
-            const point = wmmModel.field(lat, lon); // field returns declination etc.
-            });
-            declination = point.decl;
-        }
+        if (wmmModel) { 
+    const point = wmmModel.field(lat, lon); // field returns declination etc.
+    declination = point.decl;
+}
+
 
         let runwaysHTML = `
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
