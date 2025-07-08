@@ -187,17 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ** NEW: Load WMM data on startup **
     async function initializeWMM() {
-        try {
-            const response = await fetch('wmm2025.json');
-            if (!response.ok) throw new Error('WMM data could not be loaded.');
-            const wmm_data = await response.json();
-            wmmModel = geomag.field(lat, lon)
-            console.log("World Magnetic Model for 2025 loaded successfully.");
-        } catch (error) {
-            console.error("Fatal Error: Could not initialize WMM.", error);
-            mslPopup.innerHTML = "Mag Var: Error";
-        }
+    try {
+        wmmModel = geomag; // Just assign the object
+        console.log("World Magnetic Model loaded (built-in in geomag.min.js).");
+    } catch (error) {
+        console.error("Fatal Error: Could not initialize WMM.", error);
+        mslPopup.innerHTML = "Mag Var: Error";
     }
+}
 
 
     // --- INITIALIZATION ---
