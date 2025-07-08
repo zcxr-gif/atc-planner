@@ -1,4 +1,4 @@
-// app.js (updated for real-time magnetic declination)
+// app.js (updated for real-time magnetic declination in drawing tool)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     // The API key is now removed from the client-side code.
@@ -187,14 +187,14 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // ** NEW: Load WMM data on startup **
     async function initializeWMM() {
-    try {
-        wmmModel = geomag; // Just assign the object
-        console.log("World Magnetic Model loaded (built-in in geomag.min.js).");
-    } catch (error) {
-        console.error("Fatal Error: Could not initialize WMM.", error);
-        mslPopup.innerHTML = "Mag Var: Error";
+        try {
+            wmmModel = geomag; // Assign the global geomag object from geomag.min.js
+            console.log("World Magnetic Model loaded (from geomag.min.js).");
+        } catch (error) {
+            console.error("Fatal Error: Could not initialize WMM. The geomag.min.js library might be missing.", error);
+            mslPopup.innerHTML = "Mag Var: Error";
+        }
     }
-}
 
 
     // --- INITIALIZATION ---
@@ -244,7 +244,6 @@ document.addEventListener('DOMContentLoaded', () => {
             navaidRequestTimeout = setTimeout(updateNavaids, 500); 
         });
         
-        // ** UPDATED to include Magnetic Declination **
         map.on('mousemove', (e) => {
             if (isDrawingEnabled || !mslPopup) return;
             mslPopup.style.left = `${e.containerPoint.x + 15}px`;
@@ -253,10 +252,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let magVarText = "Mag Var: N/A";
             if (wmmModel) {
-    const point = wmmModel.field(e.latlng.lat, e.latlng.lng);
-    const declination = point.declination;
-    magVarText = `Mag Var: ${declination.toFixed(2)}°`;
-}
+                const point = wmmModel.field(e.latlng.lat, e.latlng.lng);
+                const declination = point.declination;
+                magVarText = `Mag Var: ${declination.toFixed(2)}°`;
+            }
 
             mslPopup.innerHTML = 'MSL: Loading...<br>' + magVarText;
             
@@ -605,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label>
                 <input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label>
             </div>
-            <div id="drawing-heading-indicator" style="font-size: 12px; color: #aaa; margin-top: 4px; padding-left: 2px;">Drawing Tool: (True Hdg)</div>
+            <div id="drawing-heading-indicator" style="font-size: 12px; color: #aaa; margin-top: 4px; padding-left: 2px;">Drawing: ---</div>
             <div id="final-approach-toggle" style="margin-top: 10px;">
                 <input type="checkbox" id="enable-final-approach" checked>
                 <label for="enable-final-approach" style="color: #fff; font-weight: normal;">Show 10nm Final</label>
@@ -884,7 +883,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const speed = legData.speed || '---';
         const heading = legData.heading.text;
         const fullHtml = `<div class="flight-data-block" style="transform: translate(-50%, -50%) scale(${appSettings.dataBlockScale});">
-                            <div class="fdb-heading">${heading}°</div>
+                            <div class="fdb-heading">${heading}° M</div>
                             <div class="fdb-row">
                                 <div class="fdb-data-item fdb-airspeed"><span class="fdb-value">${speed}</span><span class="fdb-unit">kts</span></div>
                                 ${altitudeHtml}
@@ -988,7 +987,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const airportRunways = await getRunwaysForAirport(icao);
 
             airportRunways.forEach(runway => drawRunway(runway, airportDetailsGroup, runwayLabelsGroup, finalApproachGroup));
-            updateAirportInfoPanel(airport, airportRunways); // This is now async
+            updateAirportInfoPanel(airport, airportRunways);
 
             createDistanceRings(lat, lon, planLayers).forEach(ring => ring.addTo(airportDetailsGroup));
             if(map.getZoom() < 13) map.setView([lat, lon], 13);
@@ -1006,7 +1005,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // ** UPDATED to be async and calculate magnetic headings **
     async function updateAirportInfoPanel(airport, runways) {
         let airspaceClass = 'N/A';
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
@@ -1014,12 +1012,14 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (airport.type === 'small_airport') airspaceClass = 'Other';
 
         const panelTitle = `INFO: ${airport.ident}`;
+        const lat = parseFloat(airport.latitude_deg);
+        const lon = parseFloat(airport.longitude_deg);
 
         let declination = 0;
         if (wmmModel) { 
-    const point = wmmModel.field(lat, lon); // field returns declination etc.
-    declination = point.decl;
-}
+            const point = wmmModel.field(lat, lon);
+            declination = point.declination;
+        }
 
 
         let runwaysHTML = `
@@ -1127,7 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stepDiv.id = stepId;
         stepDiv.innerHTML = `
             <div class="plan-step-details" title="Right-click to edit altitude profile">
-                <span class="plan-leg-info"><b>Leg:</b> <span class="plan-heading-text" style="cursor: pointer; font-weight: bold;" title="Click to edit heading">Hdg ${heading.text}°</span> / ${distanceNM} NM</span>
+                <span class="plan-leg-info"><b>Leg:</b> <span class="plan-heading-text" style="cursor: pointer; font-weight: bold;" title="Click to edit heading">Hdg ${heading.text}° M</span> / ${distanceNM} NM</span>
                 <button class="delete-step-btn" data-step-id="${stepId}">X</button>
             </div>
             <div class="plan-step-inputs">
@@ -1254,18 +1254,37 @@ document.addEventListener('DOMContentLoaded', () => {
         isDrawing = true;
         const startPoint = e.latlng;
         tempLine = L.polyline([startPoint, startPoint], { color: '#007bff', weight: 3, dashArray: '10, 10' }).addTo(map);
-        tempLabel = L.marker(startPoint, { icon: L.divIcon({ className: 'map-label', html: '000°' }) }).addTo(map);
+        tempLabel = L.marker(startPoint, { icon: L.divIcon({ className: 'map-label', html: '---°' }) }).addTo(map);
     }
     
     function handleMouseMove(e) {
         if (!isDrawing || !tempLine) return;
         
         const startPoint = tempLine.getLatLngs()[0];
-        tempLine.setLatLngs([startPoint, e.latlng]);
-        const midPoint = getMidPoint(startPoint, e.latlng);
+        const currentPoint = e.latlng;
+        tempLine.setLatLngs([startPoint, currentPoint]);
+
+        const midPoint = getMidPoint(startPoint, currentPoint);
         tempLabel.setLatLng(midPoint);
-        const heading = calculateHeading(startPoint, e.latlng);
-        tempLabel.getElement().innerHTML = `<b>${heading.text}°</b>`;
+
+        const trueHeading = calculateHeading(startPoint, currentPoint);
+        let magneticHeading = trueHeading;
+        let declination = 0;
+
+        if (wmmModel) {
+            declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+            magneticHeading = (trueHeading - declination + 360) % 360;
+        }
+
+        const headingText = Math.round(magneticHeading).toString().padStart(3, '0');
+        const trueHeadingText = Math.round(trueHeading).toString().padStart(3, '0');
+
+        tempLabel.getElement().innerHTML = `<b style="color: white; -webkit-text-stroke: 1px black;">${headingText}° M</b><br><span style='font-size: 10px; color: white; -webkit-text-stroke: 0.5px black;'>(${trueHeadingText}° T)</span>`;
+        
+        const headingIndicator = document.getElementById('drawing-heading-indicator');
+        if (headingIndicator) {
+             headingIndicator.innerHTML = `Drawing: ${headingText}° M / ${trueHeadingText}° T`;
+        }
     }
     
     function handleMouseUp(e) {
@@ -1275,9 +1294,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
         if (tempLine) {
             const startPoint = tempLine.getLatLngs()[0];
-            if (startPoint.distanceTo(e.latlng) > 50) {
+            const endPoint = e.latlng;
+
+            if (startPoint.distanceTo(endPoint) > 50) { // minimum distance to draw
                 const lineType = currentLineType;
-                createFinalLine(startPoint, e.latlng, `step-${Date.now()}`, '', '', true, lineType);
+
+                const trueHeading = calculateHeading(startPoint, endPoint);
+                let magneticHeading = trueHeading;
+                if (wmmModel) {
+                    const midPoint = getMidPoint(startPoint, endPoint);
+                    const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+                    magneticHeading = (trueHeading - declination + 360) % 360;
+                }
+                const finalHeading = { text: Math.round(magneticHeading).toString().padStart(3, '0') };
+
+                createFinalLine(startPoint, endPoint, `step-${Date.now()}`, '', '', true, lineType, null, null, finalHeading);
                 savePlanToLocalStorage();
             }
             map.removeLayer(tempLine);
@@ -1286,12 +1317,17 @@ document.addEventListener('DOMContentLoaded', () => {
             tempLabel = null;
         }
         
+        const headingIndicator = document.getElementById('drawing-heading-indicator');
+        if (headingIndicator) {
+             headingIndicator.innerHTML = `Drawing: ---`;
+        }
+
         Object.values(planLayers).forEach(layer => {
             if (layer.label && layer.label.dragging) { layer.label.dragging.enable(); }
         });
     }
 
-    function createFinalLine(start, end, stepId, altitude = '', speed = '', performCollisionCheck = false, lineType = 'standard', startAltitude, endAltitude) {
+    function createFinalLine(start, end, stepId, altitude = '', speed = '', performCollisionCheck = false, lineType = 'standard', startAltitude, endAltitude, heading) {
         let line, outline;
         if (lineType === 'standard' && currentMapMode === "regular") {
             outline = L.polyline([start, end], { color: '#000', weight: 6, opacity: 1 }).addTo(planItemsGroup);
@@ -1301,11 +1337,21 @@ document.addEventListener('DOMContentLoaded', () => {
             line = L.polyline([start, end], style).addTo(planItemsGroup);
         }
         
-        const heading = calculateHeading(start, end);
+        if (!heading) {
+             const trueHeading = calculateHeading(start, end);
+             let magneticHeading = trueHeading;
+             if (wmmModel) {
+                 const midPoint = getMidPoint(start, end);
+                 const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+                 magneticHeading = (trueHeading - declination + 360) % 360;
+             }
+             heading = { text: Math.round(magneticHeading).toString().padStart(3, '0') };
+        }
+
         let labelPos = getOptimalLabelPosition(start, end);
         if (performCollisionCheck) { labelPos = findNonCollidingPosition(labelPos); }
 
-        const initialHtml = `<div class="flight-data-block"><div class="fdb-heading">${heading.text}°</div><div class="fdb-row"><div class="fdb-data-item fdb-airspeed"><span class="fdb-value">---</span><span class="fdb-unit">kts</span></div><div class="fdb-data-item fdb-altitude"><span class="fdb-value">---</span><span class="fdb-unit">ft</span></div></div></div>`;
+        const initialHtml = `<div class="flight-data-block"><div class="fdb-heading">${heading.text}° M</div><div class="fdb-row"><div class="fdb-data-item fdb-airspeed"><span class="fdb-value">---</span><span class="fdb-unit">kts</span></div><div class="fdb-data-item fdb-altitude"><span class="fdb-value">---</span><span class="fdb-unit">ft</span></div></div></div>`;
 
         const label = L.marker(labelPos, {
             draggable: true,
@@ -1409,13 +1455,11 @@ document.addEventListener('DOMContentLoaded', () => {
             planData.forEach(data => {
                 const start = L.latLng(data.start.lat, data.start.lng);
                 const end = L.latLng(data.end.lat, data.end.lng);
-                createFinalLine(start, end, data.stepId, data.altitude, data.speed, false, data.lineType, data.startAltitude, data.endAltitude);
-                if (data.headingText && planLayers[data.stepId]) {
-                    planLayers[data.stepId].heading.text = data.headingText;
-                    const planHeading = document.getElementById(data.stepId)?.querySelector('.plan-heading-text');
-                    if (planHeading) planHeading.textContent = `Hdg ${data.headingText}°`;
-                    updateDataBlock(data.stepId);
-                }
+                
+                const heading = data.headingText ? { text: data.headingText } : null;
+
+                createFinalLine(start, end, data.stepId, data.altitude, data.speed, false, data.lineType, data.startAltitude, data.endAltitude, heading);
+                
                 if (data.labelPosition) {
                     const labelPos = L.latLng(data.labelPosition.lat, data.labelPosition.lng);
                     planLayers[data.stepId].label.setLatLng(labelPos);
@@ -1431,12 +1475,11 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllFlightDataBlockStyles();
     }
     
-    // ** UPDATED to get both Elevation and Magnetic Declination **
     async function getElevationAndMag(latlng) {
         let magVarText = "Mag Var: N/A";
         if (wmmModel) {
-             const point = wmmModel.field(lat, lon); // field returns declination etc.
-             magVarText = `Mag Var: ${point.decl.toFixed(2)}°`;
+             const point = wmmModel.field(latlng.lat, latlng.lng);
+             magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
         }
 
         try {
@@ -1661,7 +1704,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const radians = Math.atan2(p2.y - p1.y, p2.x - p1.x);
         const degrees = radians * (180 / Math.PI);
         const trueBearing = (degrees + 90 + 360) % 360;
-        return { text: Math.round(trueBearing).toString().padStart(3, '0') };
+        return trueBearing;
     }
 
     const getMidPoint = (start, end) => L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
