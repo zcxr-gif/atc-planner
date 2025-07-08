@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('wmm2025.json');
             if (!response.ok) throw new Error('WMM data could not be loaded.');
             const wmm_data = await response.json();
-            wmmModel = geomag.model(wmm_data);
+            wmmModel = geomag.field(lat, lon)
             console.log("World Magnetic Model for 2025 loaded successfully.");
         } catch (error) {
             console.error("Fatal Error: Could not initialize WMM.", error);
@@ -256,10 +256,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let magVarText = "Mag Var: N/A";
             if (wmmModel) {
-                 const point = wmmModel.point({ lat: e.latlng.lat, lon: e.latlng.lng });
-                 const declination = point.decl;
-                 magVarText = `Mag Var: ${declination.toFixed(2)}°`;
-            }
+    const point = wmmModel.field(e.latlng.lat, e.latlng.lng);
+    const declination = point.declination;
+    magVarText = `Mag Var: ${declination.toFixed(2)}°`;
+}
 
             mslPopup.innerHTML = 'MSL: Loading...<br>' + magVarText;
             
@@ -1020,9 +1020,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let declination = 0;
         if (wmmModel) {
-            const point = wmmModel.point({
-                lat: parseFloat(airport.latitude_deg),
-                lon: parseFloat(airport.longitude_deg)
+            const point = wmmModel.field(lat, lon); // field returns declination etc.
             });
             declination = point.decl;
         }
@@ -1440,7 +1438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getElevationAndMag(latlng) {
         let magVarText = "Mag Var: N/A";
         if (wmmModel) {
-             const point = wmmModel.point({ lat: latlng.lat, lon: latlng.lng });
+             const point = wmmModel.field(lat, lon); // field returns declination etc.
              magVarText = `Mag Var: ${point.decl.toFixed(2)}°`;
         }
 
