@@ -210,17 +210,19 @@
             color: #f5f5f5; padding: 5px 10px; border-radius: 5px; font-family: 'Roboto Mono', monospace;
             font-size: 12px; z-index: 2000; pointer-events: none;
         }
-        .custom-map-marker .leaflet-div-icon { background: transparent; border: none; }
-        
-        /* New class for the temporary drawing label */
-        .drawing-temp-label {
-            color: white;
-            font-weight: bold;
+        .custom-map-marker { background: transparent; border: none; }
+        .leaflet-div-icon { background: transparent; border: none; }
+
+        /* UPDATED: This class now provides a clean "halo" effect for the text */
+        .drawing-temp-heading {
+            color: #FFFFFF;
             font-family: 'Roboto Mono', monospace;
-            font-size: 18px; /* Increased font size */
-            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
             white-space: nowrap;
-            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000; /* Bolder shadow */
+            text-align: center;
+            /* This creates a black outline for high visibility on any background */
+            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000;
         }
         
         .flight-data-block {
@@ -254,6 +256,12 @@
 
         h3 {
              color: var(--accent);
+        }
+
+        #line-type-selector > div {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
     </style>
 </head>

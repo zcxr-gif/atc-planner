@@ -74,7 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeAirportIcao = null;
     let currentMapMode = "regular";
     let runwayLayers = {};
-    let appSettings = { dataBlockScale: 1.0, showDataBlocks: true };
+    // UPDATED: Added useTrueHeading setting
+    let appSettings = { dataBlockScale: 1.0, showDataBlocks: true, useTrueHeading: false };
     let altitudeChart = null;
     let wmmModel = null; // Holds the loaded World Magnetic Model
 
@@ -575,6 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (reopenButton) reopenButton.style.display = 'none';
+        // UPDATED: Main panel content with layout fixes and removed elements
         const content = `
             <form id="airport-form">
                 <input type="text" id="airport-input" placeholder="e.g., KLAX">
@@ -599,12 +601,13 @@ document.addEventListener('DOMContentLoaded', () => {
                  <span id="drawing-mode-text" style="font-size: 11px; color: #ccc; display: none; padding-left: 18px;">Uncheck to move the map</span>
             </div>
             <div id="line-type-selector" style="margin-top: 10px;">
-                <label style="color: #fff; font-weight: normal;">Line Type:</label><br>
-                <input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label>
-                <input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label>
-                <input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label>
+                <label style="color: #fff; font-weight: normal; width: 100%; margin-bottom: 5px;">Line Type:</label>
+                <div>
+                    <span><input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label></span>
+                    <span><input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label></span>
+                    <span><input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label></span>
+                </div>
             </div>
-            <div id="drawing-heading-indicator" style="font-size: 12px; color: #aaa; margin-top: 4px; padding-left: 2px;">Drawing: ---</div>
             <div id="final-approach-toggle" style="margin-top: 10px;">
                 <input type="checkbox" id="enable-final-approach" checked>
                 <label for="enable-final-approach" style="color: #fff; font-weight: normal;">Show 10nm Final</label>
@@ -678,10 +681,19 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
     }
     
+    // UPDATED: Settings panel now includes the heading type toggle
     function createSettingsPanel() {
         const content = `
             <div class="info-card">
-                <h3>Flight Data Blocks</h3>
+                <h3>Display</h3>
+                <div style="padding-bottom: 10px;">
+                     <label for="heading-type-toggle" style="display: flex; align-items: center; justify-content: space-between;">
+                        Use True Heading
+                        <input type="checkbox" id="heading-type-toggle" ${appSettings.useTrueHeading ? 'checked' : ''}>
+                    </label>
+                    <p style="font-size: 11px; color: #bbb; margin: 4px 0 0 0;">Toggles the primary heading on data blocks between Magnetic and True.</p>
+                </div>
+                <hr style="border-color: var(--border-color); margin: 10px 0;">
                 <div style="padding-bottom: 10px;">
                     <label for="show-data-blocks-toggle" style="display: flex; align-items: center; justify-content: space-between;">
                         Show Data Blocks
@@ -703,6 +715,12 @@ document.addEventListener('DOMContentLoaded', () => {
         createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
         
         const settingsPanel = document.getElementById('settings-panel');
+
+        settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
+            appSettings.useTrueHeading = e.target.checked;
+            updateAllFlightDataBlockStyles();
+            saveSettings();
+        });
         
         settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
             appSettings.showDataBlocks = e.target.checked;
@@ -759,7 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const legData = planLayers[stepId];
-        const title = `Altitude Profile: Leg ${legData.heading.text}°`;
+        const title = `Altitude Profile: Leg ${legData.heading.magnetic}°`;
 
         const content = `
             <div style="display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px;">
@@ -850,6 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
         endAltInput.addEventListener('input', updateFromInput);
     }
     
+    // UPDATED: Now respects the useTrueHeading setting
     function updateDataBlock(stepId) {
         const legData = planLayers[stepId];
         if (!legData || !legData.label) return;
@@ -881,9 +900,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const speed = legData.speed || '---';
-        const heading = legData.heading.text;
+        
+        const headingToShow = appSettings.useTrueHeading ? legData.heading.true : legData.heading.magnetic;
+        const headingUnit = appSettings.useTrueHeading ? '° T' : '° M';
+
         const fullHtml = `<div class="flight-data-block" style="transform: translate(-50%, -50%) scale(${appSettings.dataBlockScale});">
-                            <div class="fdb-heading">${heading}° M</div>
+                            <div class="fdb-heading">${headingToShow}${headingUnit}</div>
                             <div class="fdb-row">
                                 <div class="fdb-data-item fdb-airspeed"><span class="fdb-value">${speed}</span><span class="fdb-unit">kts</span></div>
                                 ${altitudeHtml}
@@ -1105,6 +1127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // UPDATED: Now uses the heading object {magnetic, true}
     function addPlanStep(stepId, heading, distanceMeters, altitude = '', speed = '', lineType = 'standard') {
         createOrShowPlanPanel();
         const sectionMap = { standard: 'standard-steps', arrival: 'arrival-steps', departure: 'departure-steps' };
@@ -1127,7 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
         stepDiv.id = stepId;
         stepDiv.innerHTML = `
             <div class="plan-step-details" title="Right-click to edit altitude profile">
-                <span class="plan-leg-info"><b>Leg:</b> <span class="plan-heading-text" style="cursor: pointer; font-weight: bold;" title="Click to edit heading">Hdg ${heading.text}° M</span> / ${distanceNM} NM</span>
+                <span class="plan-leg-info"><b>Leg:</b> <span class="plan-heading-text" style="cursor: pointer; font-weight: bold;" title="Click to edit heading">Hdg ${heading.magnetic}° M</span> / ${distanceNM} NM</span>
                 <button class="delete-step-btn" data-step-id="${stepId}">X</button>
             </div>
             <div class="plan-step-inputs">
@@ -1144,7 +1167,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const headingSpan = stepDiv.querySelector('.plan-heading-text');
         headingSpan.addEventListener('click', () => {
-            const currentHeading = planLayers[stepId].heading.text;
+            const currentHeading = planLayers[stepId].heading.magnetic;
             const input = document.createElement('input');
             input.type = 'number';
             input.value = currentHeading;
@@ -1164,7 +1187,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!isNaN(newHeading)) {
                     newHeading = (newHeading + 360) % 360; 
                     const newHeadingText = newHeading.toString().padStart(3, '0');
-                    planLayers[stepId].heading.text = newHeadingText;
+                    planLayers[stepId].heading.magnetic = newHeadingText; // Only update magnetic part
+                    headingSpan.textContent = `Hdg ${newHeadingText}° M`;
                     updateDataBlock(stepId);
                 }
                 input.parentElement.replaceChild(headingSpan, input);
@@ -1241,6 +1265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.keys(planLayers).forEach(stepId => updateDataBlock(stepId));
     }
 
+    // UPDATED: Temporary label creation and styling
     function handleMouseDown(e) {
         if (!isDrawingEnabled || e.originalEvent.button !== 0 || e.originalEvent.target.closest('.floating-panel')) { return; }
         
@@ -1254,9 +1279,15 @@ document.addEventListener('DOMContentLoaded', () => {
         isDrawing = true;
         const startPoint = e.latlng;
         tempLine = L.polyline([startPoint, startPoint], { color: '#007bff', weight: 3, dashArray: '10, 10' }).addTo(map);
-        tempLabel = L.marker(startPoint, { icon: L.divIcon({ className: 'map-label', html: '---°' }) }).addTo(map);
+        tempLabel = L.marker(startPoint, { 
+            icon: L.divIcon({ 
+                className: 'custom-map-marker', // Use a transparent container class
+                html: `<div class="drawing-temp-heading">---</div>` 
+            }) 
+        }).addTo(map);
     }
     
+    // UPDATED: Logic for updating the temporary heading label
     function handleMouseMove(e) {
         if (!isDrawing || !tempLine) return;
         
@@ -1277,16 +1308,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const headingText = Math.round(magneticHeading).toString().padStart(3, '0');
-        const trueHeadingText = Math.round(trueHeading).toString().padStart(3, '0');
-
-        tempLabel.getElement().innerHTML = `<b style="color: white; -webkit-text-stroke: 1px black;">${headingText}° M</b><br><span style='font-size: 10px; color: white; -webkit-text-stroke: 0.5px black;'>(${trueHeadingText}° T)</span>`;
         
-        const headingIndicator = document.getElementById('drawing-heading-indicator');
-        if (headingIndicator) {
-             headingIndicator.innerHTML = `Drawing: ${headingText}° M / ${trueHeadingText}° T`;
+        // Only show magnetic heading now with the new style
+        if(tempLabel.getElement()) {
+            tempLabel.getElement().innerHTML = `<div class="drawing-temp-heading">${headingText}° M</div>`;
         }
     }
     
+    // UPDATED: Now creates a full heading object {magnetic, true}
     function handleMouseUp(e) {
         if (!isDrawing) return;
     
@@ -1306,7 +1335,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
                     magneticHeading = (trueHeading - declination + 360) % 360;
                 }
-                const finalHeading = { text: Math.round(magneticHeading).toString().padStart(3, '0') };
+                
+                const finalHeading = { 
+                    magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
+                    true: Math.round(trueHeading).toString().padStart(3, '0')
+                };
 
                 createFinalLine(startPoint, endPoint, `step-${Date.now()}`, '', '', true, lineType, null, null, finalHeading);
                 savePlanToLocalStorage();
@@ -1316,17 +1349,13 @@ document.addEventListener('DOMContentLoaded', () => {
             tempLine = null;
             tempLabel = null;
         }
-        
-        const headingIndicator = document.getElementById('drawing-heading-indicator');
-        if (headingIndicator) {
-             headingIndicator.innerHTML = `Drawing: ---`;
-        }
 
         Object.values(planLayers).forEach(layer => {
             if (layer.label && layer.label.dragging) { layer.label.dragging.enable(); }
         });
     }
 
+    // UPDATED: Now expects a heading object {magnetic, true}
     function createFinalLine(start, end, stepId, altitude = '', speed = '', performCollisionCheck = false, lineType = 'standard', startAltitude, endAltitude, heading) {
         let line, outline;
         if (lineType === 'standard' && currentMapMode === "regular") {
@@ -1345,13 +1374,16 @@ document.addEventListener('DOMContentLoaded', () => {
                  const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
                  magneticHeading = (trueHeading - declination + 360) % 360;
              }
-             heading = { text: Math.round(magneticHeading).toString().padStart(3, '0') };
+             heading = { 
+                magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
+                true: Math.round(trueHeading).toString().padStart(3, '0')
+             };
         }
 
         let labelPos = getOptimalLabelPosition(start, end);
         if (performCollisionCheck) { labelPos = findNonCollidingPosition(labelPos); }
-
-        const initialHtml = `<div class="flight-data-block"><div class="fdb-heading">${heading.text}° M</div><div class="fdb-row"><div class="fdb-data-item fdb-airspeed"><span class="fdb-value">---</span><span class="fdb-unit">kts</span></div><div class="fdb-data-item fdb-altitude"><span class="fdb-value">---</span><span class="fdb-unit">ft</span></div></div></div>`;
+        
+        const initialHtml = `<div class="flight-data-block"><div class="fdb-heading">${heading.magnetic}° M</div><div class="fdb-row"><div class="fdb-data-item fdb-airspeed"><span class="fdb-value">---</span><span class="fdb-unit">kts</span></div><div class="fdb-data-item fdb-altitude"><span class="fdb-value">---</span><span class="fdb-unit">ft</span></div></div></div>`;
 
         const label = L.marker(labelPos, {
             draggable: true,
@@ -1428,6 +1460,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // UPDATED: Now saves the full heading object
     function savePlanToLocalStorage() {
         const planData = Object.keys(planLayers).map(key => {
             const layer = planLayers[key];
@@ -1440,7 +1473,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 speed: layer.speed,
                 lineType: layer.lineType,
                 hasBeenDragged: layer.hasBeenDragged,
-                headingText: layer.heading.text,
+                heading: layer.heading, // Save the whole heading object
                 startAltitude: layer.startAltitude,
                 endAltitude: layer.endAltitude
             };
@@ -1448,6 +1481,7 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('flightPlan', JSON.stringify(planData));
     }
 
+    // UPDATED: Handles both old and new saved plan formats
     function loadPlanFromLocalStorage() {
         const savedPlan = localStorage.getItem('flightPlan');
         if (savedPlan) {
@@ -1456,7 +1490,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const start = L.latLng(data.start.lat, data.start.lng);
                 const end = L.latLng(data.end.lat, data.end.lng);
                 
-                const heading = data.headingText ? { text: data.headingText } : null;
+                let heading;
+                if (data.heading) { // New format with heading object
+                    heading = data.heading;
+                } else if (data.headingText) { // Backwards compatibility for old format
+                    const trueHeading = calculateHeading(start, end);
+                    heading = {
+                        magnetic: data.headingText,
+                        true: Math.round(trueHeading).toString().padStart(3, '0')
+                    };
+                }
 
                 createFinalLine(start, end, data.stepId, data.altitude, data.speed, false, data.lineType, data.startAltitude, data.endAltitude, heading);
                 
