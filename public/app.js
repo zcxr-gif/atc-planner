@@ -694,21 +694,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateAtcList(atcFacilities) {
-        const atcList = document.getElementById('atc-list');
-        if (!atcList) return;
+    const atcList = document.getElementById('atc-list');
+    if (!atcList) return;
 
-        if (atcFacilities.length === 0) {
-            atcList.innerHTML = '<li>No active ATC on this server.</li>';
-            return;
-        }
+    if (atcFacilities.length === 0) {
+        atcList.innerHTML = '<li>No active ATC on this server.</li>';
+        return;
+    }
 
-        atcList.innerHTML = '';
-        atcFacilities.forEach(atc => {
+    atcList.innerHTML = '';
+    atcFacilities.forEach(atc => {
+        if (atc && atc.name) {
             const listItem = document.createElement('li');
             listItem.textContent = `${atc.name}: ${atc.username || 'System'}`;
             atcList.appendChild(listItem);
-        });
-    }
+        }
+    });
+}
 
     
    function createSettingsPanel() {
