@@ -1,0 +1,12 @@
+[build]
+  # This is the folder where your index.html, app.js, etc. are.
+  publish = "public/"
+
+  # This is the folder for your serverless functions.
+  functions = "netlify/functions/"
+
+[[redirects]]
+  # This rule forwards any request from /api/... to your serverless function.
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
