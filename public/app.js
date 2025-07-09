@@ -273,6 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
             checkPlanLabelVisibility();
             checkRunwayLabelVisibility();
             updateAirports();
+            updateWaypoints(); 
             adjustAllLabelPositions();
 
             clearTimeout(navaidRequestTimeout);
@@ -502,7 +503,9 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
         mainPanel.querySelector('#navaid-filters').addEventListener('change', (e) => {
             updateNavaids();
+            updateWaypoints();
         });
+				
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
             isDrawingEnabled = e.target.checked;
             const drawingText = document.getElementById('drawing-mode-text');
@@ -1170,6 +1173,41 @@ document.addEventListener('DOMContentLoaded', () => {
             row.addEventListener('mouseout', () => unhighlightRunway(runwayId));
         });
     }
+	
+	 function updateWaypoints() {
+        const showWaypoints = document.getElementById('filter-waypoints')?.checked;
+        const zoom = map.getZoom();
+        waypointsGroup.clearLayers();
+
+        if (!showWaypoints || zoom < 8) {
+            return; // Only show waypoints at zoom level 8 or higher
+        }
+
+        if (!waypointsDataCache) return;
+
+        const bounds = map.getBounds();
+
+        waypointsDataCache.forEach(waypoint => {
+            const lat = parseFloat(waypoint.lat);
+            const lon = parseFloat(waypoint.lon);
+
+            if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
+                return;
+            }
+
+            const waypointIcon = L.divIcon({
+                className: 'custom-map-marker',
+                html: `<svg width="10" height="10"><rect x="1" y="1" width="8" height="8" fill="#87CEEB" stroke="white" stroke-width="1"/></svg>`,
+                iconSize: [10, 10]
+            });
+
+            L.marker([lat, lon], { icon: waypointIcon })
+             .bindTooltip(waypoint.ident, { direction: 'top' })
+             .addTo(waypointsGroup);
+        });
+    }
+
+	function updateNavaids() {
 
     function highlightRunway(runwayId) {
         if (runwayLayers[runwayId]) {
