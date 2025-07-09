@@ -199,18 +199,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- INITIALIZATION ---
-    async function initializeApp() {
-        loadSettings();
-        createMainPanel();
-        await initializeWMM(); // Load the magnetic model
-        await getAirports();
-        await getRunways();
-        await getWaypoints(); 
-        updateAirports();
-        updateNavaids(); 
-        setupEventListeners();
-        loadPlanFromLocalStorage();
+async function initializeApp() {
+    loadSettings();
+    createMainPanel();
+    await initializeWMM();
+    
+    // Fetch all necessary data first
+    await getAirports();
+    await getRunways();
+    await getWaypoints(); 
+    
+    // Now set up the map and UI with the data
+    updateAirports();
+    updateNavaids(); 
+    setupEventListeners();
+    loadPlanFromLocalStorage();
+
+    // Hide the loader only after everything is finished
+    const loader = document.getElementById('loader');
+    if (loader) {
+        loader.classList.add('hidden');
     }
+}
     initializeApp();
 
     // --- EVENT HANDLERS ---
