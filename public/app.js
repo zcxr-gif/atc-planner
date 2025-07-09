@@ -1016,35 +1016,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 	
 	function updateNavaids() {
-    const showNavaids = document.getElementById('filter-navaids')?.checked;
+		const showNavaids = document.getElementById('filter-navaids')?.checked;
 
-    if (!showNavaids) {
-        navaidsGroup.clearLayers();
-        return;
-    }
+		if (!showNavaids) {
+			navaidsGroup.clearLayers();
+			return;
+		}
 
-    const bounds = map.getBounds();
-    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-    
-    // Clear existing navaids to prevent duplicates
-    navaidsGroup.clearLayers();
+		const bounds = map.getBounds();
+		const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+		
+		// Clear existing navaids to prevent duplicates
+		navaidsGroup.clearLayers();
 
-    getVORsFromOpenAIP(bbox).then(navaids => {
-        navaids.forEach(navaid => {
-            const lat = navaid.geometry.coordinates[1];
-            const lon = navaid.geometry.coordinates[0];
+		getVORsFromOpenAIP(bbox).then(navaids => {
+			navaids.forEach(navaid => {
+				const lat = navaid.geometry.coordinates[1];
+				const lon = navaid.geometry.coordinates[0];
 
-            const navaidIcon = L.divIcon({
-                className: 'custom-map-marker',
-                html: `<svg width="16" height="16" viewbox="0 0 16 16"><polygon points="8,1 15,15 1,15" fill="none" stroke="#EABFFF" stroke-width="1.5"/></svg>`
-            });
+				const navaidIcon = L.divIcon({
+					className: 'custom-map-marker',
+					html: `<svg width="16" height="16" viewbox="0 0 16 16"><polygon points="8,1 15,15 1,15" fill="none" stroke="#EABFFF" stroke-width="1.5"/></svg>`
+				});
 
-            L.marker([lat, lon], { icon: navaidIcon })
-             .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
-             .addTo(navaidsGroup);
-        });
-    });
-}
+				L.marker([lat, lon], { icon: navaidIcon })
+				 .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
+				 .addTo(navaidsGroup);
+			});
+		});
+	}
 
     async function displayAirportDetails(icao) {
         airportDetailsGroup.clearLayers();
@@ -1174,7 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 	
-	 function updateWaypoints() {
+	function updateWaypoints() {
         const showWaypoints = document.getElementById('filter-waypoints')?.checked;
         const zoom = map.getZoom();
         waypointsGroup.clearLayers();
@@ -1206,8 +1206,6 @@ document.addEventListener('DOMContentLoaded', () => {
              .addTo(waypointsGroup);
         });
     }
-
-	function updateNavaids() {
 
     function highlightRunway(runwayId) {
         if (runwayLayers[runwayId]) {
