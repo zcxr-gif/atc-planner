@@ -193,14 +193,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function initializeWMM() {
-        try {
-            wmmModel = geomag; // Assign the global geomag object from geomag.min.js
-            console.log("World Magnetic Model loaded (from geomag.min.js).");
-        } catch (error) {
-            console.error("Fatal Error: Could not initialize WMM. The geomag.min.js library might be missing.", error);
-            mslPopup.innerHTML = "Mag Var: Error";
+    try {
+        const response = await fetch('wmm2025.json');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        const wmmData = await response.json();
+        geomag.setModel(wmmData); // Manually set the data model for the library
+        wmmModel = geomag;
+        console.log("World Magnetic Model initialized successfully.");
+    } catch (error) {
+        console.error("Fatal Error: Could not initialize WMM.", error);
+        mslPopup.innerHTML = "Mag Var: Error";
     }
+}
 
 
     // --- INITIALIZATION ---
