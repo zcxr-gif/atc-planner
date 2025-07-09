@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virtual Vectors</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23493D71' /><path d='M 50 50 L 85 25' stroke='%23EABFFF' stroke-width='4'/><circle cx='65' cy='70' r='5' fill='%23EABFFF' /></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background-dark: #201838;
+            --background-light: #493D71;
+            --text-primary: #EAEAEA;
+            --text-secondary: #A0A0A0;
+            --accent: #EABFFF;
+            --accent-glow: rgba(234, 191, 255, 0.25);
+            --border-color: #544880;
+        }
+
+        /* Basic Reset & Smooth Scrolling */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+        
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        /* --- Navigation --- */
+        .navbar {
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background-color: rgba(32, 24, 56, 0.85);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .navbar .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-placeholder a { display: flex; align-items: center; }
+        .logo-placeholder img { height: 40px; vertical-align: middle; }
+        
+        .nav-links { display: flex; align-items: center; gap: 1.5rem; }
+        .nav-links a { font-weight: 500; transition: color 0.3s ease; }
+        .nav-links a:not(.cta-button):hover { color: var(--accent); }
+
+        .cta-button {
+            display: inline-block;
+            background-color: var(--accent);
+            color: var(--background-dark);
+            padding: 0.75rem 1.75rem;
+            font-size: 1rem;
+            font-weight: 700;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        .cta-button:hover { transform: translateY(-3px); box-shadow: 0 4px 30px var(--accent-glow); }
+
+        /* --- Hero Section --- */
+        .hero {
+            position: relative;
+            padding: 8rem 2rem;
+            text-align: center;
+            background-image: linear-gradient(rgba(32, 24, 56, 0.7), rgba(32, 24, 56, 0.7)), url('https://media.discordapp.net/attachments/1382906333107589181/1390826155082518669/image.png?ex=6869ab4b&is=686859cb&hm=473732663c61fe49d3427a9995d2297527fcbd4a4774e0d2ce596aa1d096efff&=&format=webp&quality=lossless&width=1128&height=747');
+            background-size: cover;
+            background-position: center center;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 1rem;
+        }
+        
+        .hero-content h1 { font-size: 3.8rem; font-weight: 800; line-height: 1.1; letter-spacing: -2px; margin-bottom: 1.5rem; color: var(--accent); }
+        .hero-content p { font-size: 1.1rem; color: var(--text-primary); margin-bottom: 2.5rem; line-height: 1.7; max-width: 600px; margin-left: auto; margin-right: auto; }
+        
+        /* --- Content Sections (About, Features, Contact) --- */
+        .content-section {
+            padding: 5rem 0;
+            border-top: 1px solid var(--border-color);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .content-section.visible { opacity: 1; transform: translateY(0); }
+        #about { border-top: none; }
+
+        .section-title { font-size: 2.5rem; font-weight: 700; text-align: center; margin-bottom: 3rem; color: var(--accent); }
+        .about-content p { font-size: 1.1rem; color: var(--text-secondary); line-height: 1.8; max-width: 800px; margin: 0 auto; text-align: center; }
+
+        /* Features Section */
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; }
+        .feature-card { background-color: var(--background-light); padding: 2rem; border-radius: 12px; border: 1px solid var(--border-color); transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .feature-card:hover { transform: translateY(-5px); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .feature-card h3 { font-size: 1.5rem; margin-bottom: 1rem; }
+        .feature-card p { color: var(--text-secondary); line-height: 1.6; }
+
+        /* Contact Section */
+        .contact-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 3rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .contact-form label { display: block; margin-bottom: 0.5rem; font-weight: 500; }
+        .contact-form input, .contact-form textarea {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--background-light);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+        }
+        .contact-form button { width: 100%; }
+        .alternative-contact h3 { color: var(--accent); margin-bottom: 1rem; }
+        .alternative-contact p { color: var(--text-secondary); margin-bottom: 1.5rem; }
+        .contact-method { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        .contact-method span { font-weight: 500; font-family: monospace; background-color: var(--background-light); padding: 0.25rem 0.5rem; border-radius: 4px; }
+
+
+        /* --- Footer --- */
+        .footer { padding: 3rem 0; text-align: center; font-size: 0.9rem; color: var(--text-secondary); border-top: 1px solid var(--border-color); margin-top: 4rem; }
+        .footer-links { margin-bottom: 1.5rem; }
+        .footer-links a { margin: 0 1rem; font-weight: 500; }
+        .footer-disclaimer { font-size: 0.8rem; margin-top: 1.5rem; color: #888; }
+        
+        /* --- Responsive --- */
+        @media(max-width: 768px) {
+            .contact-container { grid-template-columns: 1fr; }
+            .nav-links a:not(.cta-button) { display: none; }
+        }
+        @media(max-width: 500px) {
+             .navbar .container { flex-direction: column; gap: 1rem; }
+             .hero-content h1 { font-size: 2.5rem; }
+             .section-title { font-size: 2rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="container">
+            <div class="logo-placeholder">
+                <a href="#"><img src="image_4a1efb.png" alt="Virtual Vectors Logo"></a>
+            </div>
+            <div class="nav-links">
+                <a href="#about">About</a>
+                <a href="#features">Features</a>
+                <a href="#contact">Contact</a>
+                <a href="index.html" class="cta-button">Launch Planner</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Precision Control at Your Fingertips.</h1>
+                <p>Design, manage, and execute flawless approach sequences with an interactive tool built for the virtual skies.</p>
+                <a href="index.html" class="cta-button">Launch Planner</a>
+            </div>
+        </section>
+
+        <section class="content-section" id="about">
+            <h2 class="section-title">About Virtual Vectors</h2>
+            <div class="about-content">
+                <p>Virtual Vectors was born from a passion for realistic flight simulation. I saw a need for a dedicated, powerful tool that allows virtual air traffic controllers to plan and visualize complex approach patterns with ease and precision. The planner is designed to be intuitive for beginners while offering the depth and flexibility demanded by seasoned enthusiasts. I am committed to providing a high-quality, free-to-use tool for the entire community.</p>
+            </div>
+        </section>
+
+        <section class="content-section" id="features">
+            <h2 class="section-title">Features</h2>
+            <div class="features-grid">
+                <div class="feature-card"><h3>Advanced Drawing & Vectoring</h3><p>Draw flight paths with a live vector line showing precise heading and distance. A dynamic tooltip displays your cursor's current MSL altitude and magnetic variation for unparalleled situational awareness.</p></div>
+                <div class="feature-card"><h3>True & Magnetic Headings</h3><p>Powered by the World Magnetic Model for ultimate accuracy. Instantly toggle the primary heading display between Magnetic (default) and True to match your aircraft and procedures.</p></div>
+                <div class="feature-card"><h3>Detailed Airport Data</h3><p>View detailed data for any airport, including runway layouts with calculated true **and** magnetic headings. Access elevation, airspace class, and dynamic distance rings to aid in spacing and awareness.</p></div>
+                <div class="feature-card"><h3>Full Flight Plan Control</h3><p>Every vector is added to a persistent flight plan saved in your browser. Edit altitudes, speeds, and fine-tune the vertical profile of any leg with a graphical editor for precise descents.</p></div>
+                <div class="feature-card"><h3>Navaid & Waypoint Overlay</h3><p>Enhance realism by overlaying a filterable map of VORs and waypoints. Use real-world navigation aids to construct and visualize complex, true-to-life procedures.</p></div>
+                <div class="feature-card"><h3>Interactive Global Map</h3><p>Load and explore thousands of airports worldwide on a dynamic and responsive map interface, complete with multiple terrain and map style options.</p></div>
+            </div>
+        </section>
+
+        <section class="content-section" id="contact">
+            <h2 class="section-title">Get In Touch</h2>
+            <div class="contact-container">
+                <form class="contact-form" action="https://formspree.io/f/xzzgqzzy" method="POST">
+                    <div>
+                        <label for="name">Your Name</label>
+                        <input type="text" name="name" id="name" required>
+                    </div>
+                    <div>
+                        <label for="email">Your Email</label>
+                        <input type="email" name="email" id="email" required>
+                    </div>
+                    <div>
+                        <label for="message">Message</label>
+                        <textarea name="message" id="message" rows="5" required></textarea>
+                    </div>
+                    <button type="submit" class="cta-button">Send Message</button>
+                </form>
+                <div class="alternative-contact">
+                    <h3>Other Ways to Reach Me</h3>
+                    <p>If you prefer, you can also find me on these platforms:</p>
+                    <div class="contact-method">
+                        <strong>Discord:</strong>
+                        <span>z_cxr</span>
+                    </div>
+                    <div class="contact-method">
+                        <strong>IFC:</strong>
+                        <span>_ServerNoob</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="footer">
+        <div class="footer-links">
+            <a href="#contact">Contact</a>
+            <a href="#">Back to Top</a>
+        </div>
+        <p>&copy; 2025 Virtual Vectors. Your virtual airspace, perfected.</p>
+        <p class="footer-disclaimer">Virtual Vectors is an independent project and is not affiliated with, endorsed by, or sponsored by Infinite Flight LLC.</p>
+    </footer>
+
+    <script>
+        // JavaScript for fade-in animation on scroll
+        const sections = document.querySelectorAll('.content-section');
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+        sections.forEach(section => { observer.observe(section); });
+    </script>
+
+</body>
+</html>
