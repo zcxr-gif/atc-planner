@@ -1,51 +1,61 @@
-// File: netlify/functions/navaids.js
+// /netlify/functions/navaids.js
+
+// Use require for node-fetch in Node.js environments
 const fetch = require('node-fetch');
 
-exports.handler = async (event, context) => {
-  // Get the API key from Netlify's environment variables
-  const OPENAIP_API_KEY = process.env.OPENAIP_API_KEY;
+exports.handler = async function(event) {
+    // 1. Get the API Key from Netlify's environment variables
+    const apiKey = process.env.OPENAIP_API_KEY;
 
-  if (!OPENAIP_API_KEY) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'API key not configured on the server.' })
-    };
-  }
+    // 2. Check if the API key exists
+    if (!apiKey) {
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: "API key is missing. Please set OPENAIP_API_KEY in your Netlify environment." })
+        };
+    }
 
-  try {
-    // Get the 'bbox' query parameter from the event object
-    const { bbox } = event.queryStringParameters;
+    // 3. Get the bounding box from the query parameters
+    const bbox = event.queryStringParameters.bbox;
     if (!bbox) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Bbox parameter is required.' })
-      };
+        return {
+            statusCode: 400, // Bad Request
+            body: JSON.stringify({ error: "Bounding box (bbox) query parameter is required." })
+        };
     }
 
-    const apiUrl = `https://api.core.openaip.net/api/navaids?bbox=${bbox}&page=1&limit=500`;
+    // 4. Construct the secure URL to the openAIP API
+    const apiUrl = `https://api.openaip.net/api/navdata?type=VOR&bbox=${bbox}&apiKey=${apiKey}`;
 
-    const apiResponse = await fetch(apiUrl, {
-      headers: {
-        'x-openaip-api-key': OPENAIP_API_KEY,
-      },
-    });
+    try {
+        // 5. Fetch data from the openAIP API
+        const response = await fetch(apiUrl);
+        
+        // Handle non-successful responses from openAIP
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("openAIP API Error:", errorText);
+            return {
+                statusCode: response.status,
+                body: JSON.stringify({ error: `Failed to fetch from openAIP: ${errorText}` })
+            };
+        }
+        
+        const data = await response.json();
 
-    if (!apiResponse.ok) {
-      throw new Error(`OpenAIP API responded with status: ${apiResponse.status}`);
+        // 6. Return the successful response to the browser
+        return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        };
+
+    } catch (error) {
+        // 7. Catch any other network or runtime errors
+        console.error("Serverless function error:", error);
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ error: "An internal error occurred while fetching VOR data." })
+        };
     }
-
-    const data = await apiResponse.json();
-
-    // Return a success response
-    return {
-      statusCode: 200,
-      body: JSON.stringify(data)
-    };
-  } catch (error) {
-    console.error('Function error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'An error occurred while fetching data.' })
-    };
-  }
 };
