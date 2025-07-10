@@ -252,8 +252,11 @@
             color: #f5f5f5; padding: 5px 10px; border-radius: 5px; font-family: 'Roboto Mono', monospace;
             font-size: 12px; z-index: 2000; pointer-events: none;
         }
-        .custom-map-marker { background: transparent; border: none; }
-        .leaflet-div-icon { background: transparent; border: none; }
+        .leaflet-marker-icon.custom-map-marker {
+  background: transparent;
+  border: none;
+  box-shadow: none; /* This removes the default shadow too */
+}
 
         /* UPDATED: This class now provides a clean "halo" effect for the text */
         .drawing-temp-heading {
