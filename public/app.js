@@ -882,12 +882,19 @@ async function fetchAndDisplayFlightPlan(flightId, callsign) {
 
         // Add a small circle marker for each waypoint
         waypoints.forEach(wp => {
-            L.circleMarker([wp.latitude, wp.longitude], {
+            // FIX APPLIED HERE: Check for malformed waypoint data
+            if (!wp || isNaN(Number(wp.latitude)) || isNaN(Number(wp.longitude))) return;
+
+            const lat = Number(wp.latitude);
+            const lon = Number(wp.longitude);
+            const name = wp.name || 'Waypoint'; // Provide a fallback for the name
+
+            L.circleMarker([lat, lon], {
                 radius: 4,
                 color: '#FFD600',
                 fillColor: '#1a1a1a',
                 fillOpacity: 1
-            }).bindTooltip(wp.name, { // Show waypoint name on hover
+            }).bindTooltip(name, { // Use the safe name variable
                 direction: 'top',
                 className: 'waypoint-tooltip'
             }).addTo(flightPlanRouteGroup);
