@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusIndicator = panel.querySelector('#live-status-indicator');
 
         try {
-            const response = await fetch('/api/sessions');
+            const response = await fetch('/netlify/functions/sessions');
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const sessions = await response.json();
             
