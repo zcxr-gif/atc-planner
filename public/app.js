@@ -646,17 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateFlightMarkers(flights) {
-        const existingFlightIds = Object.keys(liveFlightMarkers);
-        const incomingFlightIds = flights.map(f => f.flightId);
-
-        // Remove markers for flights that are no longer present
-        existingFlightIds.forEach(flightId => {
-            if (!incomingFlightIds.includes(flightId)) {
-                map.removeLayer(liveFlightMarkers[flightId]);
-                delete liveFlightMarkers[flightId];
-            }
-        });
+    updateFlightMarkers
         
         flights.forEach(flight => {
             const lat = flight.latitude;
@@ -664,7 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const heading = flight.heading;
             const callsign = flight.callsign;
             const altitude = Math.round(flight.altitude);
-            const speed = Math.round(flight.speed);
+            const speed = (typeof flight.speed === "number" && !isNaN(flight.speed)) ? Math.round(flight.speed) : "---";
 
             const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
             const aircraftIcon = L.divIcon({
