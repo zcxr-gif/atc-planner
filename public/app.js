@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (flights.result) updateFlightMarkers(flights.result);
 
             // Fetch ATC
-            const atcResponse = await fetch(`fetch(`/.netlify/functions/atc/${sessionId}`);
+            const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
             const atc = await atcResponse.json();
             if (atc.result) updateAtcList(atc.result);
 
