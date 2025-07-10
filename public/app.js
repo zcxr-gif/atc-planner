@@ -357,9 +357,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const reopenPlanButton = document.getElementById('reopen-plan-panel');
                 if(reopenPlanButton) reopenPlanButton.style.display = 'block';
             } else if (panel.id === 'live-control-panel') {
-                 stopLiveUpdates(); // Stop updates when closing the live panel
-                 panel.remove();
-            }
+    panel.style.display = 'none';
+}
             else {
                 panel.remove();
             }
@@ -605,6 +604,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusIndicator.style.backgroundColor = '#777';
             }
         });
+		serverSelect.addEventListener('change', (e) => {
+    const newSessionId = e.target.value;
+
+    // Check if we are currently connected to a server
+    if (connectBtn.textContent === 'Disconnect') {
+        if (newSessionId) {
+            // If a new server is selected, automatically switch
+            stopLiveUpdates();
+            startLiveUpdates(newSessionId);
+        } else {
+            // If the user chose the blank "Select a Server", disconnect
+            stopLiveUpdates();
+            connectBtn.textContent = 'Connect';
+            connectBtn.style.backgroundColor = 'var(--accent)';
+            statusIndicator.textContent = "Disconnected";
+            statusIndicator.style.backgroundColor = '#777';
+        }
+    }
+});
     }
     
     // --- LIVE MODE: DATA FETCHING AND DISPLAY ---
