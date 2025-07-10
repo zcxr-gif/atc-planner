@@ -174,9 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function getVORsFromOpenAIP(bbox) {
-        // This function might need updating depending on final proxy implementation
-        // For now, assuming a simple proxy structure
-        const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
+        const url = `/api/navaids?bbox=${bbox.join(',')}`;
 
         try {
             const response = await fetch(url);
@@ -190,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to fetch VORs via proxy:", error);
             return [];
-        }
+        }   
     }
     
    async function initializeWMM() {
@@ -1303,37 +1301,86 @@ async function updateAtcList(atcFacilities, allFlights) {
         });
     }
 	
-	function updateNavaids() {
-    const showNavaids = document.getElementById('filter-navaids')?.checked;
+	async function updateNavaids() {
+        const navaidsCheckbox = document.getElementById('filter-navaids');
+        const waypointsCheckbox = document.getElementById('filter-waypoints');
+        const zoom = map.getZoom();
+        const bounds = map.getBounds();
 
-    if (!showNavaids) {
         navaidsGroup.clearLayers();
-        return;
+        waypointsGroup.clearLayers();
+
+        if (zoom < 7) return;
+
+        if (navaidsCheckbox.checked) {
+            const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+            const navaids = await getVORsFromOpenAIP(bbox);
+            navaids.forEach(navaid => {
+                const VOR_TYPES = [3, 4, 5, 6, 7];
+                if (VOR_TYPES.includes(navaid.type) && navaid.geometry && navaid.geometry.coordinates) {
+                    const coords = [navaid.geometry.coordinates[1], navaid.geometry.coordinates[0]];
+                    createNavaidMarker(coords, navaid).addTo(navaidsGroup);
+                }
+            });
+        }
+
+        if (waypointsCheckbox.checked) {
+            const waypoints = await getWaypoints();
+            if(waypoints){
+                waypoints.forEach(waypoint => {
+                    const coords = [waypoint.coords[1], waypoint.coords[0]];
+                    if (bounds.contains(coords)) {
+                        createWaypointMarker(coords, waypoint).addTo(waypointsGroup);
+                    }
+                });
+            }
+        }
     }
 
-    const bounds = map.getBounds();
-    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-    
-    navaidsGroup.clearLayers();
+    function createCompassRoseSVG(navaid) {
+        const magVar = navaid.declination || 0;
+        const rotation = `transform="rotate(${-magVar}, 50, 50)"`;
 
-    getVORsFromOpenAIP(bbox).then(navaids => {
-        navaids.forEach(navaid => {
-            const lat = navaid.geometry.coordinates[1];
-            const lon = navaid.geometry.coordinates[0];
+        const vorSymbol = `<g>
+            <circle cx="50" cy="50" r="6" stroke="white" stroke-width="1.5" fill="black"/>
+            <path d="M50 44 L53.5 38 M50 44 L46.5 38 M50 56 L53.5 62 M50 56 L46.5 62 M44 50 L38 53.5 M44 50 L38 46.5" stroke="white" stroke-width="1.5"/>
+        </g>`;
 
-            const navaidIcon = L.divIcon({
-                className: 'custom-map-marker',
-                // Corrected "viewbox" to "viewBox" (capital B)
-                html: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
-                iconSize: [16, 16]
-            });
+        const svg = `
+            <svg width="100" height="100" viewBox="0 0 100 100" class="vor-compass-rose">
+                <g class="rose-rotating-g" ${rotation}>
+                    <circle cx="50" cy="50" r="48" stroke="rgba(255,255,255,0.7)" stroke-width="1.5" fill="rgba(0,0,0,0.4)" />
+                    ${Array.from({length: 36}).map((_, i) => {
+                        const angle = i * 10;
+                        const isCardinal = angle % 90 === 0;
+                        const r1 = isCardinal ? 38 : 43;
+                        return `<line x1="50" y1="${50 - r1}" x2="50" y2="4" stroke="white" stroke-width="${isCardinal ? 1.5 : 0.75}" transform="rotate(${angle}, 50, 50)" />`;
+                    }).join('')}
+                    <text x="50" y="18" text-anchor="middle" alignment-baseline="middle" fill="white" font-size="10" font-family="Roboto Mono">0</text>
+                    <text x="85" y="50" text-anchor="middle" alignment-baseline="middle" fill="white" font-size="10" font-family="Roboto Mono">9</text>
+                    <text x="50" y="82" text-anchor="middle" alignment-baseline="middle" fill="white" font-size="10" font-family="Roboto Mono">18</text>
+                    <text x="15" y="50" text-anchor="middle" alignment-baseline="middle" fill="white" font-size="10" font-family="Roboto Mono">27</text>
+                </g>
+                ${vorSymbol}
+            </svg>`;
 
-            L.marker([lat, lon], { icon: navaidIcon })
-             .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
-             .addTo(navaidsGroup);
+        return svg;
+    }
+
+    function createNavaidMarker(latlng, navaid) {
+        const iconHtml = createCompassRoseSVG(navaid);
+        const tooltipContent = `<b>${navaid.name} (${navaid.identifier})</b><br>Type: ${navaid.typeName}<br>Freq: ${navaid.frequency ? navaid.frequency.value + ' ' + navaid.frequency.unit : 'N/A'}<br>Mag Var: ${navaid.declination || 0}°`;
+        const icon = L.divIcon({
+            html: iconHtml,
+            className: 'vor-compass-icon',
+            iconSize: [80, 80],
+            iconAnchor: [40, 40]
         });
-    });
-}
+
+        return L.marker(latlng, { icon: icon }).bindTooltip(tooltipContent, {
+            direction: 'top'
+        });
+    }
 
     async function displayAirportDetails(icao) {
         airportDetailsGroup.clearLayers();
