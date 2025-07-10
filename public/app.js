@@ -622,21 +622,6 @@ document.addEventListener('DOMContentLoaded', () => {
             statusIndicator.textContent = "Disconnected";
             statusIndicator.style.backgroundColor = '#777';
         }
-		
-		document.body.addEventListener('click', function(e) {
-        if (e.target.classList.contains('view-fpl-btn')) {
-            const flightId = e.target.dataset.flightId;
-            const callsign = e.target.closest('.leaflet-popup-content').querySelector('b').textContent.split(' ')[0];
-            
-            if (flightId) {
-                fetchAndDisplayFlightPlan(flightId, callsign);
-            }
-            
-            // Close the popup after clicking
-            const closeButton = e.target.closest('.leaflet-popup').querySelector('.leaflet-popup-close-button');
-            if (closeButton) {
-                closeButton.click();
-            }
       }
 });
     }
