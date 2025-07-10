@@ -718,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
         const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-        const iconHtml = `<img src="public/plane.png" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+        const iconHtml = `<img src="/plane.png" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
 const aircraftIcon = L.divIcon({
     html: iconHtml,
