@@ -654,11 +654,15 @@ document.addEventListener('DOMContentLoaded', () => {
             stopLiveUpdates();
         }
     }
-
-    // THIS FUNCTION IS CORRECTED
+    
+    // THIS FUNCTION IS CORRECTED AND INCLUDES DEBUGGING LOGS
     function updateFlightMarkers(flights) {
+        // --- DEBUGGING: Log what we received from the API ---
+        console.log(`Received ${flights.length} flights from the API.`);
+
         const existingFlightIds = Object.keys(liveFlightMarkers);
         const incomingFlightIds = flights.map(f => f.flightId);
+        let renderedCount = 0; // Counter for successfully rendered aircraft
 
         // Remove markers for flights that are no longer present
         existingFlightIds.forEach(flightId => {
@@ -670,10 +674,19 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        flights.forEach(flight => {
-            // FIX: First, check for valid location data to prevent crashes
-            if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number') {
-                return; // Skip this aircraft if it has no location
+        flights.forEach((flight, index) => {
+            // --- DEBUGGING: Log the first 3 flight objects to inspect their structure ---
+            if (index < 3) {
+                console.log(`Processing flight #${index}:`, flight);
+            }
+
+            // FIX: More robust check for valid data. This is the most likely reason aircraft are being skipped.
+            if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number' || !flight.flightId) {
+                // Log if we skip one of the first few flights so you can see why
+                if (index < 3) {
+                     console.log(`--> SKIPPING flight #${index} due to missing coordinates or flightId.`);
+                }
+                return; // Skip this aircraft if it has no location or ID
             }
 
             const lat = flight.latitude;
@@ -681,7 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const heading = flight.heading;
             const callsign = flight.callsign || 'N/A';
             
-            // FIX: Handle potentially null/invalid altitude and speed gracefully
             const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
             const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
 
@@ -691,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
             const aircraftIcon = L.divIcon({
                 html: iconHtml,
-                className: 'custom-map-marker', // This class makes the background transparent
+                className: 'custom-map-marker',
                 iconSize: [24, 24]
             });
 
@@ -712,9 +724,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 marker.addTo(liveAircraftGroup);
                 liveFlightMarkers[flight.flightId] = marker;
             }
+            renderedCount++; // Increment the counter for successful renders
         });
+
+        // --- DEBUGGING: Log the final count of rendered aircraft ---
+        console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
     }
-	
+
     function updateAtcList(atcFacilities) {
         const atcList = document.getElementById('atc-list');
         if (!atcList) return;
@@ -726,17 +742,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         atcList.innerHTML = '';
         atcFacilities.forEach(atc => {
-            // The API might return null for frequencies, so check for atc object
             if (atc && atc.frequencyId) { 
                 const listItem = document.createElement('li');
-                // Use frequency name as the primary identifier
                 listItem.textContent = `${atc.frequencyName}: ${atc.username || 'System'}`;
                 atcList.appendChild(listItem);
             }
         });
     }
 
-    
    function createSettingsPanel() {
         const content = `
             <div class="info-card">
