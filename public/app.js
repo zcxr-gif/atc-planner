@@ -681,12 +681,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // FIX: More robust check for valid data. This is the most likely reason aircraft are being skipped.
-            if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number' || !flight.flightId) {
-                // Log if we skip one of the first few flights so you can see why
-                if (index < 3) {
-                     console.log(`--> SKIPPING flight #${index} due to missing coordinates or flightId.`);
-                }
-                return; // Skip this aircraft if it has no location or ID
+            if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number' || flight.flightId == null) {
+    // Skip only if flightId is null or undefined
+    return;
+} 
             }
 
             const lat = flight.latitude;
