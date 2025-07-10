@@ -613,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isLiveModeActive = true;
 
         fetchAndDisplayData(sessionId);
-        liveUpdateInterval = setInterval(() => fetchAndDisplayData(sessionId), 30000); // Update every 30 seconds
+        liveUpdateInterval = setInterval(() => fetchAndDisplayData(sessionId), 10000); // Update every 10 seconds
 
         startInactivityTimer();
     }
@@ -718,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
         const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-        const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
+        const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(calc(${heading}deg - 90deg));">✈</span>`;
         const aircraftIcon = L.divIcon({
             html: iconHtml,
             className: 'custom-map-marker',
