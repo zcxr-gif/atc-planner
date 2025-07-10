@@ -777,53 +777,55 @@ const aircraftIcon = L.divIcon({
     console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
 }
 
-    function updateAtcList(atcFacilities) {
+function updateAtcList(atcFacilities) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
 
-    if (atcFacilities.length === 0) {
-        atcList.innerHTML = '<li>No active ATC on this server.</li>';
+    const atcByIcao = {};
+
+    // Group controllers by their airport ICAO
+    if (atcFacilities && atcFacilities.length > 0) {
+        atcFacilities.forEach(facility => {
+            const { icao, name, username, frequency } = facility;
+
+            // IMPORTANT: Only process controllers that have an airport ICAO
+            if (!icao) {
+                return;
+            }
+
+            if (!atcByIcao[icao]) {
+                atcByIcao[icao] = []; // Create an array for this airport if it's the first time we see it
+            }
+
+            atcByIcao[icao].push({ name, username, frequency });
+        });
+    }
+
+    // Check if there are any airports with active ATC after filtering
+    if (Object.keys(atcByIcao).length === 0) {
+        atcList.innerHTML = '<li>No active ATC at any airport.</li>';
         return;
     }
 
-    // Group controllers by airport ICAO
-    const airportsWithAtc = {};
-    atcFacilities.forEach(facility => {
-        const { icao, name, username } = facility;
-        if (!icao) return; // Skip facilities not tied to an airport
+    atcList.innerHTML = ''; // Clear the list
 
-        if (!airportsWithAtc[icao]) {
-            airportsWithAtc[icao] = {};
-        }
-        // Store the username by the facility type (e.g., "Ground", "Tower")
-        airportsWithAtc[icao][name] = username || 'System';
-    });
+    // Create the list structure for each airport
+    for (const icao in atcByIcao) {
+        const controllers = atcByIcao[icao];
+        const airportLi = document.createElement('li');
 
-    atcList.innerHTML = ''; // Clear the list before adding new items
+        // Create a sub-list for the controllers at this airport
+        let innerHtml = `<strong>${icao}</strong><ul style="margin-top: 5px; margin-bottom: 10px;">`;
 
-    // Define the order and styling for major ATC positions
-    const atcPositions = [
-        { key: 'ATIS', abbr: 'I', color: '#9E9E9E' },
-        { key: 'Ground', abbr: 'G', color: '#4CAF50' },
-        { key: 'Tower', abbr: 'T', color: '#F44336' },
-        { key: 'Departure', abbr: 'D', color: '#FF9800' },
-        { key: 'Approach', abbr: 'A', color: '#2196F3' }
-    ];
-
-    // Create and append list items for each airport with active ATC
-    for (const icao in airportsWithAtc) {
-        const controllers = airportsWithAtc[icao];
-        const listItem = document.createElement('li');
-        let airportHtml = `<strong>${icao}</strong>: `;
-
-        atcPositions.forEach(pos => {
-            if (controllers[pos.key]) {
-                airportHtml += `<span style="color:${pos.color}; font-weight:bold;">[${pos.abbr}]</span> ${controllers[pos.key]} `;
-            }
+        controllers.forEach(controller => {
+            // Format frequency from kHz to MHz (e.g., 121900 -> 121.90)
+            const formattedFrequency = (controller.frequency / 1000).toFixed(2);
+            innerHtml += `<li>${controller.name}: ${controller.username} (${formattedFrequency})</li>`;
         });
-        
-        listItem.innerHTML = airportHtml.trim();
-        atcList.appendChild(listItem);
+
+        innerHtml += `</ul>`;
+        airportLi.innerHTML = innerHtml;
+        atcList.appendChild(airportLi);
     }
 }
 
