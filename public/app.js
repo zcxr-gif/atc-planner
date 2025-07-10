@@ -215,7 +215,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await getWaypoints(); 
         
         updateAirports();
-        //updateNavaids(); 
+        // ★★★ FIX APPLIED HERE ★★★
+        updateNavaids(); 
         setupEventListeners();
         loadPlanFromLocalStorage();
 
@@ -1453,14 +1454,15 @@ async function updateAtcList(atcFacilities, allFlights) {
             row.addEventListener('mouseout', () => unhighlightRunway(runwayId));
         });
     }
-	
+
+    // ★★★ FIX APPLIED HERE ★★★
 	function updateWaypoints() {
         const showWaypoints = document.getElementById('filter-waypoints')?.checked;
         const zoom = map.getZoom();
         waypointsGroup.clearLayers();
 
         if (!showWaypoints || zoom < 8) {
-            return; // Only show waypoints at zoom level 8 or higher
+            return;
         }
 
         if (!waypointsDataCache) return;
@@ -1468,8 +1470,11 @@ async function updateAtcList(atcFacilities, allFlights) {
         const bounds = map.getBounds();
 
         waypointsDataCache.forEach(waypoint => {
-            const lat = parseFloat(waypoint.lat);
-            const lon = parseFloat(waypoint.lon);
+            // Ensure coords is a valid array with at least two numbers
+            if (!waypoint.coords || waypoint.coords.length < 2) return;
+            
+            const lon = parseFloat(waypoint.coords[0]); // Get longitude from index 0
+            const lat = parseFloat(waypoint.coords[1]); // Get latitude from index 1
 
             if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
                 return;
@@ -1482,7 +1487,7 @@ async function updateAtcList(atcFacilities, allFlights) {
             });
 
             L.marker([lat, lon], { icon: waypointIcon })
-             .bindTooltip(waypoint.ident, { direction: 'top' })
+             .bindTooltip(waypoint.name, { direction: 'top' }) // Use waypoint.name which exists in your JSON
              .addTo(waypointsGroup);
         });
     }
