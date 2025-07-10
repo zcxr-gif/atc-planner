@@ -945,7 +945,15 @@ async function updateAtcList(atcFacilities, allFlights) {
 
     for (const icao in atcByIcao) {
         const airportInfo = allAirports.find(a => a.ident === icao);
-        const airportName = airportInfo ? airportInfo.name : 'Unknown Airport';
+
+        // If the ICAO from the ATC data isn't in our airport list, skip this entry.
+        if (!airportInfo) {
+            console.warn(`ATC facility found for an unknown or filtered ICAO: ${icao}. Skipping.`);
+            continue; // Move to the next ICAO in the loop
+        }
+
+        // Since we checked for airportInfo, it's now safe to access its name.
+        const airportName = airportInfo.name;
         const activePositions = atcByIcao[icao];
 
         const row = document.createElement('div');
