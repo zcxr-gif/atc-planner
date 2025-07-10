@@ -637,6 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (closeButton) {
                 closeButton.click();
             }
+      }
 });
     }
     
