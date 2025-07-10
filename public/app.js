@@ -767,10 +767,14 @@ const aircraftIcon = L.divIcon({
 });
 
         const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
-                      User: ${flight.username || 'N/A'}<br>
-                      Altitude: ${altitudeText}<br>
-                      Speed: ${speedText}<br>
-                      <button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`;
+  User: ${flight.username || 'N/A'}<br>
+  Altitude: ${altitudeText}<br>
+  Speed: ${speedText}<br>
+  ${
+    flight.flightId
+      ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
+      : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
+  }`;
 
 if (liveFlightMarkers[flight.flightId]) {
     // Update existing marker
@@ -792,14 +796,15 @@ if (liveFlightMarkers[flight.flightId]) {
 }
 
 async function fetchAndDisplayFlightPlan(flightId, callsign) {
+    if (!flightId) {
+        alert(`No valid flight plan ID for ${callsign}.`);
+        return;
+    }
     flightPlanRouteGroup.clearLayers(); // Clear previous route
-
     try {
         const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
         if (!response.ok) throw new Error('Failed to load flight plan.');
-        
         const fplData = await response.json();
-        
         if (!fplData.result || fplData.result.waypoints.length === 0) {
             alert(`No flight plan filed for ${callsign}.`);
             return;
