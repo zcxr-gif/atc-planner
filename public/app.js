@@ -718,12 +718,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
         const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-        const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(calc(${heading}deg - 90deg));">✈</span>`;
-        const aircraftIcon = L.divIcon({
-            html: iconHtml,
-            className: 'custom-map-marker',
-            iconSize: [24, 24]
-        });
+        const iconHtml = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 32 32" 
+         style="transform: rotate(${heading}deg);">
+        <path fill="white" stroke="#333" stroke-width="1.5" 
+              d="M16 3 L4 29 L16 23 L28 29 Z" />
+    </svg>
+`;
+
+const aircraftIcon = L.divIcon({
+    html: iconHtml,
+    className: 'custom-map-marker', // This class ensures there is no background on the icon container
+    iconSize: [24, 24]
+});
 
         const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
                               User: ${flight.username || 'N/A'}<br>
