@@ -1,15 +1,9 @@
-// In a new file: /functions/flightplan.js
-
 const fetch = require('node-fetch');
 
 exports.handler = async function(event, context) {
   const apiKey = process.env.INFINITE_FLIGHT_API_KEY;
-  const flightId = event.path.split('/').pop(); // Get flightId from the URL
+  const flightId = event.path.split('/').pop();
   const url = `https://api.infiniteflight.com/public/v2/flights/${flightId}/flightplan`;
-
-  if (!flightId) {
-    return { statusCode: 400, body: JSON.stringify({ error: "Flight ID is required" }) };
-  }
 
   try {
     const res = await fetch(url, {
@@ -19,13 +13,16 @@ exports.handler = async function(event, context) {
     });
 
     if (!res.ok) {
-      return { statusCode: res.status, body: JSON.stringify({ error: "Failed to fetch flight plan" }) };
+      // Pass the error from the Infinite Flight API to the client
+      const errorBody = await res.text();
+      return { statusCode: res.status, body: JSON.stringify({ error: `Failed to fetch flight plan: ${errorBody}` }) };
     }
 
     const json = await res.json();
+    
     return {
       statusCode: 200,
-      body: JSON.stringify(json) // Send the raw flight plan data back
+      body: JSON.stringify(json) // The response is already in the correct shape
     };
   } catch (e) {
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };

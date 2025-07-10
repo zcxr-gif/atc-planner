@@ -19,7 +19,7 @@ exports.handler = async function(event, context) {
     const json = await res.json();
     // Map to frontend shape: show ICAO, frequency type, frequency, controller, and ATIS if available
     const atcList = json.result.map(atc => ({
-      icao: atc.airport?.icao || '',
+      icao: atc.airportIcao || '',
       name: atc.facilityType,
       frequency: atc.frequency,
       username: atc.username,
