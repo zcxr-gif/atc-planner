@@ -1,52 +1,61 @@
+// flightplan.js
 const fetch = require('node-fetch');
 
 exports.handler = async function(event, context) {
+  // --- 1. Get API Key and Flight ID ---
   const apiKey = process.env.INFINITE_FLIGHT_API_KEY;
-  const flightId = event.path.split('/').pop();
+  const flightId = event.path.split('/').pop(); // Extract flightId from the URL (e.g., /flightplan/some-id)
   const url = `https://api.infiniteflight.com/public/v2/flights/${flightId}/flightplan`;
 
-  console.log(`[flightplan.js] Attempting to fetch flight plan for flightId: ${flightId}`);
-  console.log(`[flightplan.js] Target URL: ${url}`);
-  // IMPORTANT: Do NOT log your API key in production logs!
-  // console.log(`[flightplan.js] Using API Key (first few chars): ${apiKey ? apiKey.substring(0, 5) + '...' : 'Not set'}`);
+  console.log(`[FPL Handler] Fetching FPL for flightId: ${flightId}`);
 
+  // --- 2. API Key Validation ---
   if (!apiKey) {
-    console.error("[flightplan.js] Error: INFINITE_FLIGHT_API_KEY environment variable is not set.");
+    console.error("[FPL Handler] CRITICAL: INFINITE_FLIGHT_API_KEY is not set in environment variables.");
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Server error: Infinite Flight API Key is not configured." })
+      body: JSON.stringify({ error: "Server configuration error: API key is missing." })
     };
   }
 
+  // --- 3. API Call ---
   try {
-    const res = await fetch(url, {
+    const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${apiKey}`
       }
     });
 
-    console.log(`[flightplan.js] Infinite Flight API Response Status: ${res.status}`);
-    console.log(`[flightplan.js] Infinite Flight API Response Status Text: ${res.statusText}`);
-
-    if (!res.ok) {
-      // Pass the error from the Infinite Flight API to the client
-      const errorBody = await res.text();
-      console.error(`[flightplan.js] Infinite Flight API returned an error: ${res.status} - ${errorBody}`);
+    // --- 4. Handle Non-OK Responses ---
+    // If the API returns a 404 (Not Found) or other error, handle it gracefully.
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[FPL Handler] Infinite Flight API returned an error. Status: ${response.status}. Body: ${errorText}`);
       return {
-        statusCode: res.status,
-        body: JSON.stringify({ error: `Failed to fetch flight plan from Infinite Flight API: ${errorBody}` })
+        statusCode: response.status, // Pass the original status code through
+        body: JSON.stringify({
+          error: `The Infinite Flight API returned an error.`,
+          details: errorText
+        })
       };
     }
 
-    const json = await res.json();
-    console.log("[flightplan.js] Successfully fetched flight plan.");
-    
+    // --- 5. Success Case ---
+    const flightPlanData = await response.json();
+    console.log(`[FPL Handler] Successfully fetched and returned flight plan for ${flightId}.`);
+
     return {
       statusCode: 200,
-      body: JSON.stringify(json) // The response is already in the correct shape
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(flightPlanData) // Forward the successful JSON response
     };
-  } catch (e) {
-    console.error(`[flightplan.js] Caught an exception: ${e.message}`);
-    return { statusCode: 500, body: JSON.stringify({ error: `Server error during flight plan fetch: ${e.message}` }) };
+
+  } catch (err) {
+    // --- 6. Handle Network or other unexpected errors ---
+    console.error(`[FPL Handler] An unexpected error occurred: ${err.message}`);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: `A server error occurred while trying to fetch the flight plan.` })
+    };
   }
 };

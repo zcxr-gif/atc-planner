@@ -818,88 +818,90 @@ if (liveFlightMarkers[flight.flightId]) {
     console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
 }
 
-	async function fetchAndDisplayFlightPlan(flightId, callsign) {
-    // Defensive: clear previous route
-    if (typeof flightPlanRouteGroup !== "undefined") {
-        flightPlanRouteGroup.clearLayers();
-    } else {
-        console.warn("flightPlanRouteGroup not defined.");
+	// app.js
+
+async function fetchAndDisplayFlightPlan(flightId, callsign) {
+    console.log(`[FPL] Initiating fetch for callsign: ${callsign} (Flight ID: ${flightId})`);
+
+    // --- 1. Clear Previous Route ---
+    // Ensure the layer group for the route exists and is cleared before drawing a new one.
+    if (!flightPlanRouteGroup) {
+        console.error("[FPL] Aborting: flightPlanRouteGroup is not defined on the map.");
+        return;
     }
+    flightPlanRouteGroup.clearLayers();
 
-    // Show loader/spinner if you have one
-    if (window.showLoader) showLoader("Loading Flight Plan...");
-
+    // --- 2. Call the Serverless Function ---
     try {
-        console.log(`[FPL] Fetching flight plan:`, { flightId, callsign });
+        const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+        const data = await response.json();
 
-        const url = `/.netlify/functions/flightplan/${encodeURIComponent(flightId)}`;
-        const response = await fetch(url);
-
-        // Check for HTTP errors
-        if (!response.ok) {
-            throw new Error(`API returned status ${response.status}`);
+        // --- 3. Handle Errors from the Serverless Function ---
+        if (!response.ok || data.error) {
+            console.error(`[FPL] Error response from server. Status: ${response.status}`, data);
+            alert(`Could not retrieve flight plan for ${callsign}. Reason: ${data.details || data.error || 'Unknown server error'}`);
+            return;
         }
+        
+        console.log(`[FPL] Received data for ${callsign}:`, data);
 
-        // Parse JSON
-        const fplData = await response.json();
-        console.log("[FPL] API response:", fplData);
-
-        // Validate data structure
-        if (!fplData || !fplData.result || !Array.isArray(fplData.result.waypoints) || fplData.result.waypoints.length === 0) {
-            alert(`No flight plan filed for ${callsign}.`);
+        // --- 4. Validate the Flight Plan Data ---
+        // Ensure the flight plan has a 'result' object with a non-empty 'waypoints' array.
+        if (!data.result || !Array.isArray(data.result.waypoints) || data.result.waypoints.length === 0) {
+            console.warn(`[FPL] No flight plan waypoints found for ${callsign}.`);
+            alert(`No flight plan has been filed for ${callsign}.`);
             return;
         }
 
-        const routeWaypoints = fplData.result.waypoints;
-        const latLngs = [];
-        for (const wp of routeWaypoints) {
-            // Defensive: Ensure lat/lon are numbers
+        const waypoints = data.result.waypoints;
+
+        // --- 5. Extract Coordinates ---
+        const latLngs = waypoints.map(wp => {
+            // Ensure latitude and longitude are valid numbers before adding them.
             const lat = Number(wp.latitude);
             const lon = Number(wp.longitude);
-            if (isNaN(lat) || isNaN(lon)) continue;
-            latLngs.push([lat, lon]);
+            if (isNaN(lat) || isNaN(lon)) {
+                return null;
+            }
+            return [lat, lon];
+        }).filter(coord => coord !== null); // Filter out any null entries
+
+        if (latLngs.length < 2) {
+             alert(`The flight plan for ${callsign} does not contain enough valid waypoints to draw a route.`);
+             return;
         }
 
-        if (latLngs.length === 0) {
-            alert(`Flight plan for ${callsign} contains no valid waypoints.`);
-            return;
-        }
-
-        // Draw polyline for route
+        // --- 6. Draw the Route and Markers on the Map ---
+        // Create the main flight path line
         L.polyline(latLngs, {
-            color: '#FFD600', // Use a visible color or your CSS var
+            color: '#FFD600', // A bright, visible color
             weight: 3,
-            opacity: 0.8,
-            dashArray: '5, 10'
+            opacity: 0.9,
+            dashArray: '8, 8'
         }).addTo(flightPlanRouteGroup);
 
-        // Add waypoint markers
-        for (const wp of routeWaypoints) {
-            const lat = Number(wp.latitude);
-            const lon = Number(wp.longitude);
-            if (isNaN(lat) || isNaN(lon)) continue;
-            L.circleMarker([lat, lon], {
+        // Add a small circle marker for each waypoint
+        waypoints.forEach(wp => {
+            L.circleMarker([wp.latitude, wp.longitude], {
                 radius: 4,
                 color: '#FFD600',
-                fillColor: '#333',
+                fillColor: '#1a1a1a',
                 fillOpacity: 1
-            }).bindTooltip(wp.name || '').addTo(flightPlanRouteGroup);
-        }
+            }).bindTooltip(wp.name, { // Show waypoint name on hover
+                direction: 'top',
+                className: 'waypoint-tooltip'
+            }).addTo(flightPlanRouteGroup);
+        });
 
-        // Fit map to bounds
-        if (typeof map !== "undefined" && latLngs.length > 1) {
-            map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
-        }
+        // --- 7. Fit Map to the New Route ---
+        // Adjust the map view to show the entire flight plan with some padding.
+        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
 
-        // Success log
-        console.log(`[FPL] Displayed flight plan for ${callsign}.`);
+        console.log(`[FPL] Successfully displayed flight plan for ${callsign}.`);
 
-    } catch (error) {
-        console.error("[FPL] Error fetching/displaying flight plan:", error);
-        alert(`Could not retrieve flight plan for ${callsign}. (${error.message || error})`);
-    } finally {
-        // Hide loader/spinner if you have one
-        if (window.hideLoader) hideLoader();
+    } catch (err) {
+        console.error("[FPL] A critical error occurred during the fetch/display process:", err);
+        alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
     }
 }
 	
