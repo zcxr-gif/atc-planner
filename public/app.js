@@ -657,76 +657,97 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // THIS FUNCTION IS CORRECTED AND INCLUDES DEBUGGING LOGS
     function updateFlightMarkers(flights) {
-        // --- DEBUGGING: Log what we received from the API ---
-        console.log(`Received ${flights.length} flights from the API.`);
+    // --- DEBUGGING: Log what we received from the API ---
+    console.log(`Received ${flights.length} flights from the API.`);
 
-        const existingFlightIds = Object.keys(liveFlightMarkers);
-        const incomingFlightIds = flights.map(f => f.flightId);
-        let renderedCount = 0; // Counter for successfully rendered aircraft
+    const existingFlightIds = Object.keys(liveFlightMarkers);
+    const incomingFlightIds = flights.map(f => f.flightId);
+    let renderedCount = 0; // Counter for successfully rendered aircraft
 
-        // Remove markers for flights that are no longer present
-        existingFlightIds.forEach(flightId => {
-            if (!incomingFlightIds.includes(flightId)) {
-                if (liveFlightMarkers[flightId]) {
-                    map.removeLayer(liveFlightMarkers[flightId]);
-                }
-                delete liveFlightMarkers[flightId];
+    // Remove markers for flights that are no longer present
+    existingFlightIds.forEach(flightId => {
+        if (!incomingFlightIds.includes(flightId)) {
+            if (liveFlightMarkers[flightId]) {
+                map.removeLayer(liveFlightMarkers[flightId]);
             }
-        });
+            delete liveFlightMarkers[flightId];
+        }
+    });
 
-        flights.forEach((flight, index) => {
-            // --- DEBUGGING: Log the first 3 flight objects to inspect their structure ---
-            if (index < 3) {
-                console.log(`Processing flight #${index}:`, flight);
-            }
-
-            // FIX: More robust check for valid data. This is the most likely reason aircraft are being skipped.
-            if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number' || flight.flightId == null) {
-    // Skip only if flightId is null or undefined
-    return;
-} // Skip this aircraft if it has no location or ID
-
-            const lat = flight.latitude;
-            const lon = flight.longitude;
-            const heading = flight.heading;
-            const callsign = flight.callsign || 'N/A';
-            
-            const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
-            const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
-
-            const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
-            const speedText = speed !== null ? `${speed} kts GS` : '---';
-
-            const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
-            const aircraftIcon = L.divIcon({
-                html: iconHtml,
-                className: 'custom-map-marker',
-                iconSize: [24, 24]
+    flights.forEach((flight, index) => {
+        // --- DEBUGGING: Log the actual values for the first 3 flights ---
+        if (index < 3) {
+            console.log(`Processing flight #${index}:`, {
+                id: flight.id,
+                flightId: flight.flightId,
+                latitude: flight.latitude,
+                longitude: flight.longitude,
+                heading: flight.heading,
+                callsign: flight.callsign,
+                aircraftName: flight.aircraftName,
+                username: flight.username,
+                altitude: flight.altitude,
+                speed: flight.speed
             });
+        }
 
-            const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
-                                  User: ${flight.username || 'N/A'}<br>
-                                  Altitude: ${altitudeText}<br>
-                                  Speed: ${speedText}`;
+        // Parse latitude and longitude as numbers (handles both string and number)
+        const lat = Number(flight.latitude);
+        const lon = Number(flight.longitude);
 
-            if (liveFlightMarkers[flight.flightId]) {
-                // Update existing marker
-                liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
-                liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
-                liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
-            } else {
-                // Create new marker
-                const marker = L.marker([lat, lon], { icon: aircraftIcon });
-                marker.bindPopup(popupContent);
-                marker.addTo(liveAircraftGroup);
-                liveFlightMarkers[flight.flightId] = marker;
+        // Only skip if lat/lon are not valid numbers or flightId is null/undefined
+        if (isNaN(lat) || isNaN(lon) || flight.flightId == null) {
+            if (index < 3) {
+                console.log(`--> SKIPPING flight #${index} due to missing/invalid coordinates or flightId.`, {
+                    flightId: flight.flightId,
+                    latitude: flight.latitude,
+                    longitude: flight.longitude
+                });
             }
-            renderedCount++; // Increment the counter for successful renders
+            return;
+        }
+
+        const heading = flight.heading;
+        const callsign = flight.callsign || 'N/A';
+
+        const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : 
+                         (typeof flight.altitude === 'string' && !isNaN(Number(flight.altitude))) ? Math.round(Number(flight.altitude)) : null;
+        const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) :
+                      (typeof flight.speed === 'string' && !isNaN(Number(flight.speed))) ? Math.round(Number(flight.speed)) : null;
+
+        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
+        const speedText = speed !== null ? `${speed} kts GS` : '---';
+
+        const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
+        const aircraftIcon = L.divIcon({
+            html: iconHtml,
+            className: 'custom-map-marker',
+            iconSize: [24, 24]
         });
 
-        // --- DEBUGGING: Log the final count of rendered aircraft ---
-        console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
-    }
+        const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
+                              User: ${flight.username || 'N/A'}<br>
+                              Altitude: ${altitudeText}<br>
+                              Speed: ${speedText}`;
+
+        if (liveFlightMarkers[flight.flightId]) {
+            // Update existing marker
+            liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
+            liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
+            liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
+        } else {
+            // Create new marker
+            const marker = L.marker([lat, lon], { icon: aircraftIcon });
+            marker.bindPopup(popupContent);
+            marker.addTo(liveAircraftGroup);
+            liveFlightMarkers[flight.flightId] = marker;
+        }
+        renderedCount++; // Increment the counter for successful renders
+    });
+
+    // --- DEBUGGING: Log the final count of rendered aircraft ---
+    console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
+}
 
     function updateAtcList(atcFacilities) {
         const atcList = document.getElementById('atc-list');
