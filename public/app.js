@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
         scrollWheelZoom: true,
         wheelPxPerZoomLevel: 150,
         maxBounds: [[-90, -180], [90, 180]],
-        minZoom: 2
+        minZoom: 2,
+        renderer: L.canvas() // MODIFICATION: Enable canvas renderer for better performance
     });
 
     const darkBaseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
@@ -66,6 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let tempLine, tempLabel;
     let elevationRequestTimeout;
     let navaidRequestTimeout;
+    let airportUpdateTimeout; // MODIFICATION: Added for debouncing
+    let waypointUpdateTimeout; // MODIFICATION: Added for debouncing
     let currentLineType = 'standard';
 
     const planLayers = {};
@@ -274,12 +277,18 @@ document.addEventListener('DOMContentLoaded', () => {
             checkAirportDetailsVisibility();
             checkPlanLabelVisibility();
             checkRunwayLabelVisibility();
-            updateAirports();
-            updateWaypoints(); 
             adjustAllLabelPositions();
 
+            // --- MODIFICATION START ---
+            clearTimeout(airportUpdateTimeout);
+            airportUpdateTimeout = setTimeout(updateAirports, 500);
+
+            clearTimeout(waypointUpdateTimeout);
+            waypointUpdateTimeout = setTimeout(updateWaypoints, 500);
+            
             clearTimeout(navaidRequestTimeout);
             navaidRequestTimeout = setTimeout(updateNavaids, 500); 
+            // --- MODIFICATION END ---
         });
         
         map.on('mousemove', (e) => {
@@ -913,6 +922,7 @@ async function fetchAndDisplayFlightPlan(flightId, callsign) {
     }
 }
 	
+// MODIFICATION: Replaced with more performant version
 async function updateAtcList(atcFacilities, allFlights) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
@@ -923,76 +933,77 @@ async function updateAtcList(atcFacilities, allFlights) {
             return;
         }
 
-        // This object will group ATC facilities by their ICAO code.
         const atcByIcao = {};
         const allAirports = await getAirports();
 
-        // 1. Group all unique ATC positions by airport ICAO
         atcFacilities.forEach(facility => {
             if (facility && facility.icao && facility.name) {
                 if (!atcByIcao[facility.icao]) {
-                    // Create a new entry for the airport if it's not already in our list
-                    atcByIcao[facility.icao] = new Set();
+                    atcByIcao[facility.icao] = { facilities: new Set(), airportInfo: allAirports.find(a => a.ident === facility.icao) };
                 }
-                // Add the facility type (e.g., "Tower", "Ground") to the airport's set
-                atcByIcao[facility.icao].add(facility.name);
+                atcByIcao[facility.icao].facilities.add(facility.name);
             }
         });
-
-        if (Object.keys(atcByIcao).length === 0) {
-            atcList.innerHTML = '<div class="atc-airport-row">No active ATC at any airport.</div>';
-            return;
-        }
-
-        // Clear the list before adding the corrected rows
-        atcList.innerHTML = '';
-
+        
         const atcPositionOrder = [
-            { key: 'ATIS', display: 'ATS' },
-            { key: 'Ground', display: 'GND' },
-            { key: 'Tower', display: 'TWR' },
-            { key: 'Approach', display: 'APP' },
+            { key: 'ATIS', display: 'ATS' }, { key: 'Ground', display: 'GND' },
+            { key: 'Tower', display: 'TWR' }, { key: 'Approach', display: 'APP' },
             { key: 'Departure', display: 'DEP' }
         ];
 
-        // 2. Loop through the grouped airports, which are now unique
-        for (const icao in atcByIcao) {
-            const airportInfo = allAirports.find(a => a.ident === icao);
+        const incomingIcaos = new Set(Object.keys(atcByIcao));
+        const existingIcaos = new Set(Array.from(atcList.querySelectorAll('[data-icao]')).map(el => el.dataset.icao));
 
-            if (!airportInfo) {
-                console.warn(`ATC facility found for an unknown or filtered ICAO: ${icao}. Skipping.`);
-                continue;
+        // 1. Remove airports that are no longer active
+        existingIcaos.forEach(icao => {
+            if (!incomingIcaos.has(icao)) {
+                atcList.querySelector(`[data-icao="${icao}"]`)?.remove();
             }
+        });
 
-            const airportName = airportInfo.name;
-            const activePositions = atcByIcao[icao];
+        // 2. Add or update active airports
+        for (const icao of incomingIcaos) {
+            const airportData = atcByIcao[icao];
+            if (!airportData.airportInfo) continue; // Skip if airport info not found
 
-            const row = document.createElement('div');
-            row.className = 'atc-airport-row';
+            const activePositions = airportData.facilities;
+            const airportName = airportData.airportInfo.name;
 
             let positionsHtml = '';
             atcPositionOrder.forEach(pos => {
                 const isActive = activePositions.has(pos.key);
                 positionsHtml += `<span class="${isActive ? 'atc-pos-active' : 'atc-pos-inactive'}">${pos.display}</span>`;
             });
-            
-            // 3. Create a single row for the airport with all its active positions
-            row.innerHTML = `
-                <div class="atc-airport-info">
-                    <strong>${icao}</strong>
-                    <span>${airportName}</span>
-                </div>
-                <div class="atc-arrivals-info">
-                    ✈ --
-                </div>
-                <div class="atc-positions">
-                    ${positionsHtml}
-                </div>
+
+            const rowContent = `
+                <div class="atc-airport-info"><strong>${icao}</strong><span>${airportName}</span></div>
+                <div class="atc-arrivals-info">✈ --</div>
+                <div class="atc-positions">${positionsHtml}</div>
             `;
-            atcList.appendChild(row);
+
+            let row = atcList.querySelector(`[data-icao="${icao}"]`);
+            if (row) {
+                // Update existing row
+                row.innerHTML = rowContent;
+            } else {
+                // Create new row
+                row = document.createElement('div');
+                row.className = 'atc-airport-row';
+                row.dataset.icao = icao;
+                row.innerHTML = rowContent;
+                atcList.appendChild(row);
+            }
         }
+        
+        // Handle case where list might become empty after filtering
+        if (atcList.children.length === 0 && Object.keys(atcByIcao).length > 0) {
+             atcList.innerHTML = '<div class="atc-airport-row">No active ATC at any known airport.</div>';
+        } else if(atcList.children.length === 0) {
+             atcList.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
+        }
+
     } catch (error) {
-        console.error("A critical error occurred in updateAtcList. This may be due to unexpected API data.", error);
+        console.error("A critical error occurred in updateAtcList:", error);
         if (atcList) {
             atcList.innerHTML = '<div class="atc-airport-row" style="color: red;">Error loading ATC data.</div>';
         }
