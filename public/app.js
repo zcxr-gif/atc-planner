@@ -646,43 +646,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    updateFlightMarkers
-        
-        flights.forEach(flight => {
-            const lat = flight.latitude;
-            const lon = flight.longitude;
-            const heading = flight.heading;
-            const callsign = flight.callsign;
-            const altitude = Math.round(flight.altitude);
-            const speed = (typeof flight.speed === "number" && !isNaN(flight.speed)) ? Math.round(flight.speed) : "---";
+    function updateFlightMarkers(flights) {
+    const existingFlightIds = Object.keys(liveFlightMarkers);
+    const incomingFlightIds = flights.map(f => f.flightId);
 
-            const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
-            const aircraftIcon = L.divIcon({
-                html: iconHtml,
-                className: 'custom-map-marker',
-                iconSize: [24, 24]
-            });
-            
-            const popupContent = `<b>${flight.callsign} (${flight.aircraftName})</b><br>
-                                  User: ${flight.username}<br>
-                                  Altitude: ${altitude.toLocaleString()} ft<br>
-                                  Speed: ${speed} kts GS`;
+    // Remove markers for flights that are no longer present
+    existingFlightIds.forEach(flightId => {
+        if (!incomingFlightIds.includes(flightId)) {
+            map.removeLayer(liveFlightMarkers[flightId]);
+            delete liveFlightMarkers[flightId];
+        }
+    });
 
-            if (liveFlightMarkers[flight.flightId]) {
-                // Update existing marker
-                liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
-                liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
-                liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
-            } else {
-                // Create new marker
-                const marker = L.marker([lat, lon], { icon: aircraftIcon });
-                marker.bindPopup(popupContent);
-                marker.addTo(liveAircraftGroup);
-                liveFlightMarkers[flight.flightId] = marker;
-            }
+    flights.forEach(flight => {
+        const lat = flight.latitude;
+        const lon = flight.longitude;
+        const heading = flight.heading;
+        const callsign = flight.callsign;
+        const altitude = Math.round(flight.altitude);
+        const speed = (typeof flight.speed === "number" && !isNaN(flight.speed)) ? Math.round(flight.speed) : "---";
+
+        const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
+        const aircraftIcon = L.divIcon({
+            html: iconHtml,
+            className: 'custom-map-marker',
+            iconSize: [24, 24]
         });
-    }
 
+        const popupContent = `<b>${callsign} (${flight.aircraftName})</b><br>
+                              User: ${flight.username}<br>
+                              Altitude: ${altitude.toLocaleString()} ft<br>
+                              Speed: ${speed} kts GS`;
+
+        if (liveFlightMarkers[flight.flightId]) {
+            // Update existing marker
+            liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
+            liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
+            liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
+        } else {
+            // Create new marker
+            const marker = L.marker([lat, lon], { icon: aircraftIcon });
+            marker.bindPopup(popupContent);
+            marker.addTo(liveAircraftGroup);
+            liveFlightMarkers[flight.flightId] = marker;
+        }
+    });
+}
+	
     function updateAtcList(atcFacilities) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
