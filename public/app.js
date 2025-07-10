@@ -802,7 +802,8 @@ async function fetchAndDisplayFlightPlan(flightId, callsign) {
     }
     flightPlanRouteGroup.clearLayers(); // Clear previous route
     try {
-        const response = await console.log('fetching flight plan for flightId:', flightId, 'callsign:', callsign); fetch(`/.netlify/functions/flightplan/<flightId>`);
+console.log('Fetching flight plan for flightId:', flightId, 'callsign:', callsign);
+const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
         if (!response.ok) throw new Error('Failed to load flight plan.');
         const fplData = await response.json();
         if (!fplData.result || fplData.result.waypoints.length === 0) {
