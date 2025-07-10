@@ -17,10 +17,15 @@ exports.handler = async function(event, context) {
     }
 
     const json = await res.json();
-    
-    // FINAL FIX: Map the flight data, using `f.id` for the flightId.
-    const flights = json.result.map(f => ({
-      flightId: f.id, // THIS IS THE FIX: The API uses 'id', not 'flightId'
+
+    // Debug: Log the first flight object for inspection (remove/comment out in production)
+    if (json.result && json.result.length > 0) {
+      console.log('[DEBUG] First flight object:', JSON.stringify(json.result[0], null, 2));
+    }
+
+    // Use the first available unique identifier for each flight
+    const flights = json.result.map((f, idx) => ({
+      flightId: f.flightId || f.id || f.callsign || `flight-${idx}`,
       latitude: f.latitude,
       longitude: f.longitude,
       heading: f.heading,
