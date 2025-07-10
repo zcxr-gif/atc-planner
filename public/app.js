@@ -923,14 +923,18 @@ async function updateAtcList(atcFacilities, allFlights) {
             return;
         }
 
+        // This object will group ATC facilities by their ICAO code.
         const atcByIcao = {};
         const allAirports = await getAirports();
 
+        // 1. Group all unique ATC positions by airport ICAO
         atcFacilities.forEach(facility => {
             if (facility && facility.icao && facility.name) {
                 if (!atcByIcao[facility.icao]) {
+                    // Create a new entry for the airport if it's not already in our list
                     atcByIcao[facility.icao] = new Set();
                 }
+                // Add the facility type (e.g., "Tower", "Ground") to the airport's set
                 atcByIcao[facility.icao].add(facility.name);
             }
         });
@@ -940,6 +944,7 @@ async function updateAtcList(atcFacilities, allFlights) {
             return;
         }
 
+        // Clear the list before adding the corrected rows
         atcList.innerHTML = '';
 
         const atcPositionOrder = [
@@ -950,6 +955,7 @@ async function updateAtcList(atcFacilities, allFlights) {
             { key: 'Departure', display: 'DEP' }
         ];
 
+        // 2. Loop through the grouped airports, which are now unique
         for (const icao in atcByIcao) {
             const airportInfo = allAirports.find(a => a.ident === icao);
 
@@ -969,7 +975,8 @@ async function updateAtcList(atcFacilities, allFlights) {
                 const isActive = activePositions.has(pos.key);
                 positionsHtml += `<span class="${isActive ? 'atc-pos-active' : 'atc-pos-inactive'}">${pos.display}</span>`;
             });
-
+            
+            // 3. Create a single row for the airport with all its active positions
             row.innerHTML = `
                 <div class="atc-airport-info">
                     <strong>${icao}</strong>
@@ -990,6 +997,7 @@ async function updateAtcList(atcFacilities, allFlights) {
             atcList.innerHTML = '<div class="atc-airport-row" style="color: red;">Error loading ATC data.</div>';
         }
     }
+}
 }
 
    function createSettingsPanel() {
