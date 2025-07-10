@@ -718,13 +718,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
         const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-        const iconHtml = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 32 32" 
-         style="transform: rotate(${heading}deg);">
-        <path fill="white" stroke="#333" stroke-width="1.5" 
-              d="M16 3 L4 29 L16 23 L28 29 Z" />
-    </svg>
-`;
+        const iconHtml = `<img src="public/plane.png" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+
+const aircraftIcon = L.divIcon({
+    html: iconHtml,
+    className: 'custom-map-marker',
+    iconSize: [24, 24]
+});
 
 const aircraftIcon = L.divIcon({
     html: iconHtml,
