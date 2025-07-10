@@ -1297,35 +1297,36 @@ async function updateAtcList(atcFacilities, allFlights) {
     }
 	
 	function updateNavaids() {
-		const showNavaids = document.getElementById('filter-navaids')?.checked;
+    const showNavaids = document.getElementById('filter-navaids')?.checked;
 
-		if (!showNavaids) {
-			navaidsGroup.clearLayers();
-			return;
-		}
+    if (!showNavaids) {
+        navaidsGroup.clearLayers();
+        return;
+    }
 
-		const bounds = map.getBounds();
-		const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-		
-		// Clear existing navaids to prevent duplicates
-		navaidsGroup.clearLayers();
+    const bounds = map.getBounds();
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    
+    navaidsGroup.clearLayers();
 
-		getVORsFromOpenAIP(bbox).then(navaids => {
-			navaids.forEach(navaid => {
-				const lat = navaid.geometry.coordinates[1];
-				const lon = navaid.geometry.coordinates[0];
+    getVORsFromOpenAIP(bbox).then(navaids => {
+        navaids.forEach(navaid => {
+            const lat = navaid.geometry.coordinates[1];
+            const lon = navaid.geometry.coordinates[0];
 
-				const navaidIcon = L.divIcon({
-					className: 'custom-map-marker',
-					html: `<svg width="16" height="16" viewbox="0 0 16 16"><polygon points="8,1 15,15 1,15" fill="none" stroke="#EABFFF" stroke-width="1.5"/></svg>`
-				});
+            const navaidIcon = L.divIcon({
+                className: 'custom-map-marker',
+                // This SVG creates a solid dark purple hexagon to match the original style
+                html: `<svg width="16" height="16" viewbox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
+                iconSize: [16, 16]
+            });
 
-				L.marker([lat, lon], { icon: navaidIcon })
-				 .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
-				 .addTo(navaidsGroup);
-			});
-		});
-	}
+            L.marker([lat, lon], { icon: navaidIcon })
+             .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
+             .addTo(navaidsGroup);
+        });
+    });
+}
 
     async function displayAirportDetails(icao) {
         airportDetailsGroup.clearLayers();
@@ -1455,42 +1456,41 @@ async function updateAtcList(atcFacilities, allFlights) {
         });
     }
 
-    // ★★★ FIX APPLIED HERE ★★★
 	function updateWaypoints() {
-        const showWaypoints = document.getElementById('filter-waypoints')?.checked;
-        const zoom = map.getZoom();
-        waypointsGroup.clearLayers();
+    const showWaypoints = document.getElementById('filter-waypoints')?.checked;
+    const zoom = map.getZoom();
+    waypointsGroup.clearLayers();
 
-        if (!showWaypoints || zoom < 8) {
+    if (!showWaypoints || zoom < 8) {
+        return;
+    }
+
+    if (!waypointsDataCache) return;
+
+    const bounds = map.getBounds();
+
+    waypointsDataCache.forEach(waypoint => {
+        if (!waypoint.coords || waypoint.coords.length < 2) return;
+        
+        const lon = parseFloat(waypoint.coords[0]);
+        const lat = parseFloat(waypoint.coords[1]);
+
+        if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
             return;
         }
 
-        if (!waypointsDataCache) return;
-
-        const bounds = map.getBounds();
-
-        waypointsDataCache.forEach(waypoint => {
-            // Ensure coords is a valid array with at least two numbers
-            if (!waypoint.coords || waypoint.coords.length < 2) return;
-            
-            const lon = parseFloat(waypoint.coords[0]); // Get longitude from index 0
-            const lat = parseFloat(waypoint.coords[1]); // Get latitude from index 1
-
-            if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
-                return;
-            }
-
-            const waypointIcon = L.divIcon({
-                className: 'custom-map-marker',
-                html: `<svg width="10" height="10"><rect x="1" y="1" width="8" height="8" fill="#87CEEB" stroke="white" stroke-width="1"/></svg>`,
-                iconSize: [10, 10]
-            });
-
-            L.marker([lat, lon], { icon: waypointIcon })
-             .bindTooltip(waypoint.name, { direction: 'top' }) // Use waypoint.name which exists in your JSON
-             .addTo(waypointsGroup);
+        const waypointIcon = L.divIcon({
+            className: 'custom-map-marker',
+            // This SVG creates a solid white triangle
+            html: `<svg width="12" height="12" viewbox="0 0 12 12"><polygon points="6,1 11,11 1,11" fill="white"/></svg>`,
+            iconSize: [12, 12]
         });
-    }
+
+        L.marker([lat, lon], { icon: waypointIcon })
+         .bindTooltip(waypoint.name, { direction: 'top' })
+         .addTo(waypointsGroup);
+    });
+}
 
     function highlightRunway(runwayId) {
         if (runwayLayers[runwayId]) {
