@@ -309,6 +309,45 @@
             justify-content: space-between;
             align-items: center;
         }
+		
+.atc-airport-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 5px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 14px;
+}
+.atc-airport-info {
+    flex: 1;
+}
+.atc-airport-info strong {
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+.atc-airport-info span {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.atc-arrivals-info {
+    width: 60px;
+    text-align: center;
+    font-weight: bold;
+}
+.atc-positions {
+    display: flex;
+    gap: 12px;
+    width: 180px;
+    justify-content: flex-end;
+    font-weight: bold;
+    font-family: 'Roboto Mono', monospace;
+}
+.atc-pos-active {
+    color: #4CAF50; /* Green */
+}
+.atc-pos-inactive {
+    color: #555; /* Dim Gray */
+}
     </style>
 </head>
 <body>

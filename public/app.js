@@ -777,52 +777,70 @@ const aircraftIcon = L.divIcon({
     console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
 }
 
-function updateAtcList(atcFacilities) {
+async function updateAtcList(atcFacilities) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
 
     if (!atcFacilities || atcFacilities.length === 0) {
-        atcList.innerHTML = '<li>No active ATC on this server.</li>';
+        atcList.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
         return;
     }
 
-    // This object will hold all controller groups
-    const atcGroups = {};
+    const atcByIcao = {};
+    const allAirports = await getAirports(); // We need the full airport list for names
 
     atcFacilities.forEach(facility => {
-        // Use the airport ICAO as a key, or a general key for airport-less controllers
-        const key = facility.icao || "UNICOM / Center";
-
-        if (!atcGroups[key]) {
-            atcGroups[key] = [];
+        if (facility.icao) {
+            if (!atcByIcao[facility.icao]) {
+                atcByIcao[facility.icao] = new Set();
+            }
+            atcByIcao[facility.icao].add(facility.name); // 'name' is the facilityType
         }
-        // Store the controller's details in the correct group
-        atcGroups[key].push({
-            name: facility.name || "Controller",
-            username: facility.username || "System",
-            frequency: facility.frequency
-        });
     });
 
-    atcList.innerHTML = ''; // Clear the list before repopulating
+    if (Object.keys(atcByIcao).length === 0) {
+        atcList.innerHTML = '<div class="atc-airport-row">No active ATC at any airport.</div>';
+        return;
+    }
 
-    // Create the list items for each group
-    for (const groupName in atcGroups) {
-        const controllers = atcGroups[groupName];
-        const groupLi = document.createElement('li');
+    atcList.innerHTML = ''; // Clear the list
 
-        // Create a sub-list for the controllers in this group
-        let innerHtml = `<strong style="color: var(--accent);">${groupName}</strong><ul style="margin: 5px 0 12px 0; padding-left: 15px;">`;
+    // Define the standard order of ATC positions to display
+    const atcPositionOrder = [
+        { key: 'ATIS', display: 'ATS' },
+        { key: 'Ground', display: 'GND' },
+        { key: 'Tower', display: 'TWR' },
+        { key: 'Approach', display: 'APP' },
+        { key: 'Departure', display: 'DEP' }
+    ];
 
-        controllers.forEach(controller => {
-            // Format frequency from kHz to MHz (e.g., 121900 -> 121.90)
-            const formattedFrequency = (controller.frequency / 1000).toFixed(2);
-            innerHtml += `<li style="padding: 2px 0;">${controller.name}: ${controller.username} (${formattedFrequency})</li>`;
+    for (const icao in atcByIcao) {
+        const airportInfo = allAirports.find(a => a.ident === icao);
+        const airportName = airportInfo ? airportInfo.name : 'Unknown Airport';
+        const activePositions = atcByIcao[icao];
+
+        const row = document.createElement('div');
+        row.className = 'atc-airport-row';
+
+        let positionsHtml = '';
+        atcPositionOrder.forEach(pos => {
+            const isActive = activePositions.has(pos.key);
+            positionsHtml += `<span class="${isActive ? 'atc-pos-active' : 'atc-pos-inactive'}">${pos.display}</span>`;
         });
 
-        innerHtml += `</ul>`;
-        groupLi.innerHTML = innerHtml;
-        atcList.appendChild(groupLi);
+        row.innerHTML = `
+            <div class="atc-airport-info">
+                <strong>${icao}</strong>
+                <span>${airportName}</span>
+            </div>
+            <div class="atc-arrivals-info">
+                ✈ --
+            </div>
+            <div class="atc-positions">
+                ${positionsHtml}
+            </div>
+        `;
+        atcList.appendChild(row);
     }
 }
 
