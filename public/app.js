@@ -47,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GLOBAL VARIABLES & LAYER GROUPS ---
     const hubDotsGroup = new L.FeatureGroup().addTo(map);
+	const flightPlanRouteGroup = new L.FeatureGroup().addTo(map);
     const airportDetailsGroup = new L.FeatureGroup().addTo(map);
     const runwayLabelsGroup = new L.FeatureGroup().addTo(map);
     const dynamicRunwaysGroup = new L.FeatureGroup().addTo(map);
@@ -175,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getVORsFromOpenAIP(bbox) {
         // This function might need updating depending on final proxy implementation
         // For now, assuming a simple proxy structure
-        const url = `/functions/navaids?bbox=${bbox.join(',')}`;
+        const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
 
         try {
             const response = await fetch(url);
@@ -621,7 +622,21 @@ document.addEventListener('DOMContentLoaded', () => {
             statusIndicator.textContent = "Disconnected";
             statusIndicator.style.backgroundColor = '#777';
         }
-    }
+		
+		document.body.addEventListener('click', function(e) {
+        if (e.target.classList.contains('view-fpl-btn')) {
+            const flightId = e.target.dataset.flightId;
+            const callsign = e.target.closest('.leaflet-popup-content').querySelector('b').textContent.split(' ')[0];
+            
+            if (flightId) {
+                fetchAndDisplayFlightPlan(flightId, callsign);
+            }
+            
+            // Close the popup after clicking
+            const closeButton = e.target.closest('.leaflet-popup').querySelector('.leaflet-popup-close-button');
+            if (closeButton) {
+                closeButton.click();
+            }
 });
     }
     
@@ -647,22 +662,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchAndDisplayData(sessionId) {
-        try {
-            // Fetch flights
-            const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
-            const flightsData = await flightsResponse.json();
-            if (flightsData.result) {
-                updateFlightMarkers(flightsData.result)
-            };
+    try {
+        // Fetch flights
+        const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
+        const flightsData = await flightsResponse.json();
+        if (flightsData.result) {
+            updateFlightMarkers(flightsData.result);
+        };
 
-            // Fetch ATC
-            const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
-            const atcData = await atcResponse.json();
-            if (atcData.result) {
-                updateAtcList(atcData.result)
-            };
+        // Fetch ATC
+        const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
+        const atcData = await atcResponse.json();
+        if (atcData.result) {
+            // MODIFICATION: Pass flightsData.result here
+            updateAtcList(atcData.result, flightsData.result || []); 
+        };
 
-        } catch (error) {
+    } catch (error) {
             console.error("Failed to fetch live data:", error);
             const statusIndicator = document.getElementById('live-status-indicator');
             if(statusIndicator){
@@ -754,22 +770,23 @@ const aircraftIcon = L.divIcon({
 });
 
         const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
-                              User: ${flight.username || 'N/A'}<br>
-                              Altitude: ${altitudeText}<br>
-                              Speed: ${speedText}`;
+                      User: ${flight.username || 'N/A'}<br>
+                      Altitude: ${altitudeText}<br>
+                      Speed: ${speedText}<br>
+                      <button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`;
 
-        if (liveFlightMarkers[flight.flightId]) {
-            // Update existing marker
-            liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
-            liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
-            liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
-        } else {
-            // Create new marker
-            const marker = L.marker([lat, lon], { icon: aircraftIcon });
-            marker.bindPopup(popupContent);
-            marker.addTo(liveAircraftGroup);
-            liveFlightMarkers[flight.flightId] = marker;
-        }
+if (liveFlightMarkers[flight.flightId]) {
+    // Update existing marker
+    liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
+    liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
+    liveFlightMarkers[flight.flightId].setPopupContent(popupContent); // Update the popup content
+} else {
+    // Create new marker
+    const marker = L.marker([lat, lon], { icon: aircraftIcon });
+    marker.bindPopup(popupContent);
+    marker.addTo(liveAircraftGroup);
+    liveFlightMarkers[flight.flightId] = marker;
+}
         renderedCount++; // Increment the counter for successful renders
     });
 
@@ -777,6 +794,50 @@ const aircraftIcon = L.divIcon({
     console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
 }
 
+async function fetchAndDisplayFlightPlan(flightId, callsign) {
+    flightPlanRouteGroup.clearLayers(); // Clear previous route
+
+    try {
+        const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+        if (!response.ok) throw new Error('Failed to load flight plan.');
+        
+        const fplData = await response.json();
+        
+        if (!fplData.result || fplData.result.waypoints.length === 0) {
+            alert(`No flight plan filed for ${callsign}.`);
+            return;
+        }
+
+        const routeWaypoints = fplData.result.waypoints;
+        const latLngs = routeWaypoints.map(wp => [wp.latitude, wp.longitude]);
+
+        // Draw the route on the map ✈️
+        L.polyline(latLngs, { 
+            color: 'var(--accent)', 
+            weight: 3, 
+            opacity: 0.8,
+            dashArray: '5, 10'
+        }).addTo(flightPlanRouteGroup);
+        
+        // Add waypoint markers 📍
+        routeWaypoints.forEach(wp => {
+            L.circleMarker([wp.latitude, wp.longitude], {
+                radius: 4,
+                color: 'var(--accent)',
+                fillColor: 'var(--background-dark)',
+                fillOpacity: 1
+            }).bindTooltip(wp.name).addTo(flightPlanRouteGroup);
+        });
+        
+        // Fit the map to the flight plan bounds
+        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
+
+    } catch (error) {
+        console.error("Flight Plan Error:", error);
+        alert(`Could not retrieve flight plan for ${callsign}.`);
+    }
+}	
+	
 async function updateAtcList(atcFacilities) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
