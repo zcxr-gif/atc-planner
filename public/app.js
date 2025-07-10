@@ -632,95 +632,109 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Fetch flights
             const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
-            const flights = await flightsResponse.json();
-            if (flights.result) updateFlightMarkers(flights.result);
+            const flightsData = await flightsResponse.json();
+            if (flightsData.result) {
+                updateFlightMarkers(flightsData.result)
+            };
 
             // Fetch ATC
             const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
-            const atc = await atcResponse.json();
-            if (atc.result) updateAtcList(atc.result);
+            const atcData = await atcResponse.json();
+            if (atcData.result) {
+                updateAtcList(atcData.result)
+            };
 
         } catch (error) {
             console.error("Failed to fetch live data:", error);
+            const statusIndicator = document.getElementById('live-status-indicator');
+            if(statusIndicator){
+                statusIndicator.textContent = "Error";
+                statusIndicator.style.backgroundColor = 'var(--danger-color)';
+            }
             stopLiveUpdates();
         }
     }
 
+    // THIS FUNCTION IS CORRECTED
     function updateFlightMarkers(flights) {
-    const existingFlightIds = Object.keys(liveFlightMarkers);
-    const incomingFlightIds = flights.map(f => f.flightId);
+        const existingFlightIds = Object.keys(liveFlightMarkers);
+        const incomingFlightIds = flights.map(f => f.flightId);
 
-    // Remove markers for flights that are no longer present
-    existingFlightIds.forEach(flightId => {
-        if (!incomingFlightIds.includes(flightId)) {
-            map.removeLayer(liveFlightMarkers[flightId]);
-            delete liveFlightMarkers[flightId];
-        }
-    });
-
-    flights.forEach(flight => {
-        // FIX: First, check for valid location data to prevent crashes
-        if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number') {
-            return; // Skip this aircraft if it has no location
-        }
-
-        const lat = flight.latitude;
-        const lon = flight.longitude;
-        const heading = flight.heading;
-        const callsign = flight.callsign;
-        
-        // FIX: Handle potentially null/invalid altitude and speed gracefully
-        const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
-        const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
-
-        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
-        const speedText = speed !== null ? `${speed} kts GS` : '--- kts GS';
-
-        const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
-        const aircraftIcon = L.divIcon({
-            html: iconHtml,
-            className: 'custom-map-marker',
-            iconSize: [24, 24]
+        // Remove markers for flights that are no longer present
+        existingFlightIds.forEach(flightId => {
+            if (!incomingFlightIds.includes(flightId)) {
+                if (liveFlightMarkers[flightId]) {
+                    map.removeLayer(liveFlightMarkers[flightId]);
+                }
+                delete liveFlightMarkers[flightId];
+            }
         });
 
-        const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
-                              User: ${flight.username || 'N/A'}<br>
-                              Altitude: ${altitudeText}<br>
-                              Speed: ${speedText}`;
+        flights.forEach(flight => {
+            // FIX: First, check for valid location data to prevent crashes
+            if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number') {
+                return; // Skip this aircraft if it has no location
+            }
 
-        if (liveFlightMarkers[flight.flightId]) {
-            // Update existing marker
-            liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
-            liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
-            liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
-        } else {
-            // Create new marker
-            const marker = L.marker([lat, lon], { icon: aircraftIcon });
-            marker.bindPopup(popupContent);
-            marker.addTo(liveAircraftGroup);
-            liveFlightMarkers[flight.flightId] = marker;
-        }
-    });
-}
+            const lat = flight.latitude;
+            const lon = flight.longitude;
+            const heading = flight.heading;
+            const callsign = flight.callsign || 'N/A';
+            
+            // FIX: Handle potentially null/invalid altitude and speed gracefully
+            const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
+            const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
+
+            const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
+            const speedText = speed !== null ? `${speed} kts GS` : '---';
+
+            const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
+            const aircraftIcon = L.divIcon({
+                html: iconHtml,
+                className: 'custom-map-marker', // This class makes the background transparent
+                iconSize: [24, 24]
+            });
+
+            const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
+                                  User: ${flight.username || 'N/A'}<br>
+                                  Altitude: ${altitudeText}<br>
+                                  Speed: ${speedText}`;
+
+            if (liveFlightMarkers[flight.flightId]) {
+                // Update existing marker
+                liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
+                liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
+                liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
+            } else {
+                // Create new marker
+                const marker = L.marker([lat, lon], { icon: aircraftIcon });
+                marker.bindPopup(popupContent);
+                marker.addTo(liveAircraftGroup);
+                liveFlightMarkers[flight.flightId] = marker;
+            }
+        });
+    }
 	
     function updateAtcList(atcFacilities) {
-    const atcList = document.getElementById('atc-list');
-    if (!atcList) return;
+        const atcList = document.getElementById('atc-list');
+        if (!atcList) return;
 
-    if (atcFacilities.length === 0) {
-        atcList.innerHTML = '<li>No active ATC on this server.</li>';
-        return;
-    }
-
-    atcList.innerHTML = '';
-    atcFacilities.forEach(atc => {
-        if (atc && atc.name) {
-            const listItem = document.createElement('li');
-            listItem.textContent = `${atc.name}: ${atc.username || 'System'}`;
-            atcList.appendChild(listItem);
+        if (atcFacilities.length === 0) {
+            atcList.innerHTML = '<li>No active ATC on this server.</li>';
+            return;
         }
-    });
-}
+
+        atcList.innerHTML = '';
+        atcFacilities.forEach(atc => {
+            // The API might return null for frequencies, so check for atc object
+            if (atc && atc.frequencyId) { 
+                const listItem = document.createElement('li');
+                // Use frequency name as the primary identifier
+                listItem.textContent = `${atc.frequencyName}: ${atc.username || 'System'}`;
+                atcList.appendChild(listItem);
+            }
+        });
+    }
 
     
    function createSettingsPanel() {
