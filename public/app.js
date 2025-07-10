@@ -778,23 +778,54 @@ const aircraftIcon = L.divIcon({
 }
 
     function updateAtcList(atcFacilities) {
-        const atcList = document.getElementById('atc-list');
-        if (!atcList) return;
+    const atcList = document.getElementById('atc-list');
+    if (!atcList) return;
 
-        if (atcFacilities.length === 0) {
-            atcList.innerHTML = '<li>No active ATC on this server.</li>';
-            return;
+    if (atcFacilities.length === 0) {
+        atcList.innerHTML = '<li>No active ATC on this server.</li>';
+        return;
+    }
+
+    // Group controllers by airport ICAO
+    const airportsWithAtc = {};
+    atcFacilities.forEach(facility => {
+        const { icao, name, username } = facility;
+        if (!icao) return; // Skip facilities not tied to an airport
+
+        if (!airportsWithAtc[icao]) {
+            airportsWithAtc[icao] = {};
         }
+        // Store the username by the facility type (e.g., "Ground", "Tower")
+        airportsWithAtc[icao][name] = username || 'System';
+    });
 
-        atcList.innerHTML = '';
-        atcFacilities.forEach(atc => {
-            if (atc && atc.frequencyId) { 
-                const listItem = document.createElement('li');
-                listItem.textContent = `${atc.frequencyName}: ${atc.username || 'System'}`;
-                atcList.appendChild(listItem);
+    atcList.innerHTML = ''; // Clear the list before adding new items
+
+    // Define the order and styling for major ATC positions
+    const atcPositions = [
+        { key: 'ATIS', abbr: 'I', color: '#9E9E9E' },
+        { key: 'Ground', abbr: 'G', color: '#4CAF50' },
+        { key: 'Tower', abbr: 'T', color: '#F44336' },
+        { key: 'Departure', abbr: 'D', color: '#FF9800' },
+        { key: 'Approach', abbr: 'A', color: '#2196F3' }
+    ];
+
+    // Create and append list items for each airport with active ATC
+    for (const icao in airportsWithAtc) {
+        const controllers = airportsWithAtc[icao];
+        const listItem = document.createElement('li');
+        let airportHtml = `<strong>${icao}</strong>: `;
+
+        atcPositions.forEach(pos => {
+            if (controllers[pos.key]) {
+                airportHtml += `<span style="color:${pos.color}; font-weight:bold;">[${pos.abbr}]</span> ${controllers[pos.key]} `;
             }
         });
+        
+        listItem.innerHTML = airportHtml.trim();
+        atcList.appendChild(listItem);
     }
+}
 
    function createSettingsPanel() {
         const content = `
