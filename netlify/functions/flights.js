@@ -19,16 +19,16 @@ exports.handler = async function(event, context) {
     const json = await res.json();
     // Map to your frontend's expected shape
     const flights = json.result.map(f => ({
-      flightId: f.id,
-      latitude: f.latitude,
-      longitude: f.longitude,
-      heading: f.heading,
-      callsign: f.callsign,
-      aircraftName: f.aircraft?.name || '',
-      username: f.username,
-      altitude: f.altitude,
-      speed: f.groundSpeed
-    }));
+  flightId: f.id,
+  latitude: f.latitude,
+  longitude: f.longitude,
+  heading: f.heading,
+  callsign: f.callsign,
+  aircraftName: f.aircraft?.name || "",
+  username: f.username,
+  altitude: f.altitude,
+  speed: f.groundSpeed  
+}));
 
     return {
       statusCode: 200,
