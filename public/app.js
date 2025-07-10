@@ -916,75 +916,78 @@ async function updateAtcList(atcFacilities, allFlights) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
 
-    if (!atcFacilities || atcFacilities.length === 0) {
-        atcList.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
-        return;
-    }
+    try {
+        if (!atcFacilities || atcFacilities.length === 0) {
+            atcList.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
+            return;
+        }
 
-    const atcByIcao = {};
-    const allAirports = await getAirports(); // We need the full airport list for names
+        const atcByIcao = {};
+        const allAirports = await getAirports();
 
-    atcFacilities.forEach(facility => {
-        // Check if facility and its key properties exist before using them
-        if (facility && facility.icao && facility.name) {
-            if (!atcByIcao[facility.icao]) {
-                atcByIcao[facility.icao] = new Set();
+        atcFacilities.forEach(facility => {
+            if (facility && facility.icao && facility.name) {
+                if (!atcByIcao[facility.icao]) {
+                    atcByIcao[facility.icao] = new Set();
+                }
+                atcByIcao[facility.icao].add(facility.name);
             }
-            atcByIcao[facility.icao].add(facility.name); // This is now safe to call
-        }
-    });
-
-    if (Object.keys(atcByIcao).length === 0) {
-        atcList.innerHTML = '<div class="atc-airport-row">No active ATC at any airport.</div>';
-        return;
-    }
-
-    atcList.innerHTML = ''; // Clear the list
-
-    // Define the standard order of ATC positions to display
-    const atcPositionOrder = [
-        { key: 'ATIS', display: 'ATS' },
-        { key: 'Ground', display: 'GND' },
-        { key: 'Tower', display: 'TWR' },
-        { key: 'Approach', display: 'APP' },
-        { key: 'Departure', display: 'DEP' }
-    ];
-
-    for (const icao in atcByIcao) {
-        const airportInfo = allAirports.find(a => a.ident === icao);
-
-        // If the ICAO from the ATC data isn't in our airport list, skip this entry.
-        if (!airportInfo) {
-            console.warn(`ATC facility found for an unknown or filtered ICAO: ${icao}. Skipping.`);
-            continue; // Move to the next ICAO in the loop
-        }
-
-        // Since we checked for airportInfo, it's now safe to access its name.
-        const airportName = airportInfo.name;
-        const activePositions = atcByIcao[icao];
-
-        const row = document.createElement('div');
-        row.className = 'atc-airport-row';
-
-        let positionsHtml = '';
-        atcPositionOrder.forEach(pos => {
-            const isActive = activePositions.has(pos.key);
-            positionsHtml += `<span class="${isActive ? 'atc-pos-active' : 'atc-pos-inactive'}">${pos.display}</span>`;
         });
 
-        row.innerHTML = `
-            <div class="atc-airport-info">
-                <strong>${icao}</strong>
-                <span>${airportName}</span>
-            </div>
-            <div class="atc-arrivals-info">
-                ✈ --
-            </div>
-            <div class="atc-positions">
-                ${positionsHtml}
-            </div>
-        `;
-        atcList.appendChild(row);
+        if (Object.keys(atcByIcao).length === 0) {
+            atcList.innerHTML = '<div class="atc-airport-row">No active ATC at any airport.</div>';
+            return;
+        }
+
+        atcList.innerHTML = '';
+
+        const atcPositionOrder = [
+            { key: 'ATIS', display: 'ATS' },
+            { key: 'Ground', display: 'GND' },
+            { key: 'Tower', display: 'TWR' },
+            { key: 'Approach', display: 'APP' },
+            { key: 'Departure', display: 'DEP' }
+        ];
+
+        for (const icao in atcByIcao) {
+            const airportInfo = allAirports.find(a => a.ident === icao);
+
+            if (!airportInfo) {
+                console.warn(`ATC facility found for an unknown or filtered ICAO: ${icao}. Skipping.`);
+                continue;
+            }
+
+            const airportName = airportInfo.name;
+            const activePositions = atcByIcao[icao];
+
+            const row = document.createElement('div');
+            row.className = 'atc-airport-row';
+
+            let positionsHtml = '';
+            atcPositionOrder.forEach(pos => {
+                const isActive = activePositions.has(pos.key);
+                positionsHtml += `<span class="${isActive ? 'atc-pos-active' : 'atc-pos-inactive'}">${pos.display}</span>`;
+            });
+
+            row.innerHTML = `
+                <div class="atc-airport-info">
+                    <strong>${icao}</strong>
+                    <span>${airportName}</span>
+                </div>
+                <div class="atc-arrivals-info">
+                    ✈ --
+                </div>
+                <div class="atc-positions">
+                    ${positionsHtml}
+                </div>
+            `;
+            atcList.appendChild(row);
+        }
+    } catch (error) {
+        console.error("A critical error occurred in updateAtcList. This may be due to unexpected API data.", error);
+        if (atcList) {
+            atcList.innerHTML = '<div class="atc-airport-row" style="color: red;">Error loading ATC data.</div>';
+        }
     }
 }
 
