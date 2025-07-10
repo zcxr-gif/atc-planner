@@ -718,13 +718,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
         const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-        const iconHtml = `<img src="/plane.png" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+const ownerUsername = "_ServerNoob";
+let iconSrc = "/plane.png"; // Default icon
+
+// Check if the flight belongs to the owner
+if (flight.username === ownerUsername) {
+    iconSrc = "/plane-yellow.png"; // Use the yellow icon for the owner
+}
+
+// Use the selected icon in the HTML
+const iconHtml = `<img src="${iconSrc}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
 const aircraftIcon = L.divIcon({
     html: iconHtml,
     className: 'custom-map-marker',
     iconSize: [24, 24]
 });
+...
 
         const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
                               User: ${flight.username || 'N/A'}<br>
