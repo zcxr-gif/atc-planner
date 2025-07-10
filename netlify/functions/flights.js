@@ -17,18 +17,19 @@ exports.handler = async function(event, context) {
     }
 
     const json = await res.json();
-    // Map to your frontend's expected shape
+    
+    // FINAL FIX: Map the flight data, using `f.id` for the flightId.
     const flights = json.result.map(f => ({
-  flightId: f.id,
-  latitude: f.latitude,
-  longitude: f.longitude,
-  heading: f.heading,
-  callsign: f.callsign,
-  aircraftName: f.aircraft?.name || "",
-  username: f.username,
-  altitude: f.altitude,
-  speed: f.groundSpeed  
-}));
+      flightId: f.id, // THIS IS THE FIX: The API uses 'id', not 'flightId'
+      latitude: f.latitude,
+      longitude: f.longitude,
+      heading: f.heading,
+      callsign: f.callsign,
+      aircraftName: f.aircraftName || "",
+      username: f.username,
+      altitude: f.altitude,
+      speed: f.speed
+    }));
 
     return {
       statusCode: 200,
