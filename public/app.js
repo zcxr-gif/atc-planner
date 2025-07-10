@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function getVORsFromOpenAIP(bbox) {
-        const url = `/api/navaids?bbox=${bbox.join(',')}`;
+        const url = `/.netlify/navaids?bbox=${bbox.join(',')}`;
 
         try {
             const response = await fetch(url);
