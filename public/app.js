@@ -1316,8 +1316,8 @@ async function updateAtcList(atcFacilities, allFlights) {
 
             const navaidIcon = L.divIcon({
                 className: 'custom-map-marker',
-                // This SVG creates a solid dark purple hexagon to match the original style
-                html: `<svg width="16" height="16" viewbox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
+                // Corrected "viewbox" to "viewBox" (capital B)
+                html: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
                 iconSize: [16, 16]
             });
 
