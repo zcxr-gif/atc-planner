@@ -734,7 +734,6 @@ const aircraftIcon = L.divIcon({
     className: 'custom-map-marker',
     iconSize: [24, 24]
 });
-...
 
         const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
                               User: ${flight.username || 'N/A'}<br>
