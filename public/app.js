@@ -317,14 +317,37 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('click', resetInactivityTimer, false);
     }
 	
-	document.addEventListener('click', function(e) {
+	document.addEventListener('click', async function (e) {
+    // Only run if the button was clicked
     if (e.target && e.target.classList.contains('view-fpl-btn')) {
         e.preventDefault();
-        const flightId = e.target.getAttribute('data-flight-id');
-        const callsign = e.target.closest('.leaflet-popup-content').querySelector('b').textContent.split(' ')[0];
-        if (flightId) {
-            fetchAndDisplayFlightPlan(flightId, callsign);
+
+        // Try to get flightId and callsign safely
+        const flightId = e.target.getAttribute('data-flight-id') || '';
+        let callsign = 'Unknown';
+        try {
+            const popup = e.target.closest('.leaflet-popup-content');
+            if (popup) {
+                const boldTag = popup.querySelector('b');
+                if (boldTag && boldTag.textContent) {
+                    // Use the first word before space as callsign
+                    callsign = boldTag.textContent.split(' ')[0];
+                }
+            }
+        } catch (err) {
+            console.warn("Could not extract callsign:", err);
         }
+
+        // Log for debugging
+        console.log('[FPL Button] Clicked:', { flightId, callsign });
+
+        if (!flightId) {
+            alert('No valid flight plan ID found.');
+            return;
+        }
+
+        // Call the new fetch/display function
+        await fetchAndDisplayFlightPlan(flightId, callsign);
     }
 });
     
@@ -795,51 +818,90 @@ if (liveFlightMarkers[flight.flightId]) {
     console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
 }
 
-async function fetchAndDisplayFlightPlan(flightId, callsign) {
-    if (!flightId) {
-        alert(`No valid flight plan ID for ${callsign}.`);
-        return;
+	async function fetchAndDisplayFlightPlan(flightId, callsign) {
+    // Defensive: clear previous route
+    if (typeof flightPlanRouteGroup !== "undefined") {
+        flightPlanRouteGroup.clearLayers();
+    } else {
+        console.warn("flightPlanRouteGroup not defined.");
     }
-    flightPlanRouteGroup.clearLayers(); // Clear previous route
+
+    // Show loader/spinner if you have one
+    if (window.showLoader) showLoader("Loading Flight Plan...");
+
     try {
-console.log('Fetching flight plan for flightId:', flightId, 'callsign:', callsign);
-const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
-        if (!response.ok) throw new Error('Failed to load flight plan.');
+        console.log(`[FPL] Fetching flight plan:`, { flightId, callsign });
+
+        const url = `/.netlify/functions/flightplan/${encodeURIComponent(flightId)}`;
+        const response = await fetch(url);
+
+        // Check for HTTP errors
+        if (!response.ok) {
+            throw new Error(`API returned status ${response.status}`);
+        }
+
+        // Parse JSON
         const fplData = await response.json();
-        if (!fplData.result || fplData.result.waypoints.length === 0) {
+        console.log("[FPL] API response:", fplData);
+
+        // Validate data structure
+        if (!fplData || !fplData.result || !Array.isArray(fplData.result.waypoints) || fplData.result.waypoints.length === 0) {
             alert(`No flight plan filed for ${callsign}.`);
             return;
         }
 
         const routeWaypoints = fplData.result.waypoints;
-        const latLngs = routeWaypoints.map(wp => [wp.latitude, wp.longitude]);
+        const latLngs = [];
+        for (const wp of routeWaypoints) {
+            // Defensive: Ensure lat/lon are numbers
+            const lat = Number(wp.latitude);
+            const lon = Number(wp.longitude);
+            if (isNaN(lat) || isNaN(lon)) continue;
+            latLngs.push([lat, lon]);
+        }
 
-        // Draw the route on the map ✈️
-        L.polyline(latLngs, { 
-            color: 'var(--accent)', 
-            weight: 3, 
+        if (latLngs.length === 0) {
+            alert(`Flight plan for ${callsign} contains no valid waypoints.`);
+            return;
+        }
+
+        // Draw polyline for route
+        L.polyline(latLngs, {
+            color: '#FFD600', // Use a visible color or your CSS var
+            weight: 3,
             opacity: 0.8,
             dashArray: '5, 10'
         }).addTo(flightPlanRouteGroup);
-        
-        // Add waypoint markers 📍
-        routeWaypoints.forEach(wp => {
-            L.circleMarker([wp.latitude, wp.longitude], {
+
+        // Add waypoint markers
+        for (const wp of routeWaypoints) {
+            const lat = Number(wp.latitude);
+            const lon = Number(wp.longitude);
+            if (isNaN(lat) || isNaN(lon)) continue;
+            L.circleMarker([lat, lon], {
                 radius: 4,
-                color: 'var(--accent)',
-                fillColor: 'var(--background-dark)',
+                color: '#FFD600',
+                fillColor: '#333',
                 fillOpacity: 1
-            }).bindTooltip(wp.name).addTo(flightPlanRouteGroup);
-        });
-        
-        // Fit the map to the flight plan bounds
-        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
+            }).bindTooltip(wp.name || '').addTo(flightPlanRouteGroup);
+        }
+
+        // Fit map to bounds
+        if (typeof map !== "undefined" && latLngs.length > 1) {
+            map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
+        }
+
+        // Success log
+        console.log(`[FPL] Displayed flight plan for ${callsign}.`);
 
     } catch (error) {
-        console.error("Flight Plan Error:", error);
-        alert(`Could not retrieve flight plan for ${callsign}.`);
+        console.error("[FPL] Error fetching/displaying flight plan:", error);
+        alert(`Could not retrieve flight plan for ${callsign}. (${error.message || error})`);
+    } finally {
+        // Hide loader/spinner if you have one
+        if (window.hideLoader) hideLoader();
     }
-}	
+}
 	
 async function updateAtcList(atcFacilities, allFlights) {
     const atcList = document.getElementById('atc-list');
