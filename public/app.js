@@ -316,6 +316,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('keydown', resetInactivityTimer, false);
         document.addEventListener('click', resetInactivityTimer, false);
     }
+	
+	document.addEventListener('click', function(e) {
+    if (e.target && e.target.classList.contains('view-fpl-btn')) {
+        e.preventDefault();
+        const flightId = e.target.getAttribute('data-flight-id');
+        const callsign = e.target.closest('.leaflet-popup-content').querySelector('b').textContent.split(' ')[0];
+        if (flightId) {
+            fetchAndDisplayFlightPlan(flightId, callsign);
+        }
+    }
+});
     
     // --- UI PANELS ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
@@ -824,7 +835,7 @@ async function fetchAndDisplayFlightPlan(flightId, callsign) {
     }
 }	
 	
-async function updateAtcList(atcFacilities) {
+async function updateAtcList(atcFacilities, allFlights) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
 
