@@ -659,12 +659,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     flights.forEach(flight => {
+        // FIX: First, check for valid location data to prevent crashes
+        if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number') {
+            return; // Skip this aircraft if it has no location
+        }
+
         const lat = flight.latitude;
         const lon = flight.longitude;
         const heading = flight.heading;
         const callsign = flight.callsign;
-        const altitude = Math.round(flight.altitude);
-        const speed = (typeof flight.speed === "number" && !isNaN(flight.speed)) ? Math.round(flight.speed) : "---";
+        
+        // FIX: Handle potentially null/invalid altitude and speed gracefully
+        const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
+        const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
+
+        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
+        const speedText = speed !== null ? `${speed} kts GS` : '--- kts GS';
 
         const iconHtml = `<span class="live-aircraft-icon" style="transform: rotate(${heading}deg);">✈</span>`;
         const aircraftIcon = L.divIcon({
@@ -673,10 +683,10 @@ document.addEventListener('DOMContentLoaded', () => {
             iconSize: [24, 24]
         });
 
-        const popupContent = `<b>${callsign} (${flight.aircraftName})</b><br>
-                              User: ${flight.username}<br>
-                              Altitude: ${altitude.toLocaleString()} ft<br>
-                              Speed: ${speed} kts GS`;
+        const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
+                              User: ${flight.username || 'N/A'}<br>
+                              Altitude: ${altitudeText}<br>
+                              Speed: ${speedText}`;
 
         if (liveFlightMarkers[flight.flightId]) {
             // Update existing marker
