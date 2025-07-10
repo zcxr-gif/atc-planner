@@ -781,51 +781,48 @@ function updateAtcList(atcFacilities) {
     const atcList = document.getElementById('atc-list');
     if (!atcList) return;
 
-    const atcByIcao = {};
-
-    // Group controllers by their airport ICAO
-    if (atcFacilities && atcFacilities.length > 0) {
-        atcFacilities.forEach(facility => {
-            const { icao, name, username, frequency } = facility;
-
-            // IMPORTANT: Only process controllers that have an airport ICAO
-            if (!icao) {
-                return;
-            }
-
-            if (!atcByIcao[icao]) {
-                atcByIcao[icao] = []; // Create an array for this airport if it's the first time we see it
-            }
-
-            atcByIcao[icao].push({ name, username, frequency });
-        });
-    }
-
-    // Check if there are any airports with active ATC after filtering
-    if (Object.keys(atcByIcao).length === 0) {
-        atcList.innerHTML = '<li>No active ATC at any airport.</li>';
+    if (!atcFacilities || atcFacilities.length === 0) {
+        atcList.innerHTML = '<li>No active ATC on this server.</li>';
         return;
     }
 
-    atcList.innerHTML = ''; // Clear the list
+    // This object will hold all controller groups
+    const atcGroups = {};
 
-    // Create the list structure for each airport
-    for (const icao in atcByIcao) {
-        const controllers = atcByIcao[icao];
-        const airportLi = document.createElement('li');
+    atcFacilities.forEach(facility => {
+        // Use the airport ICAO as a key, or a general key for airport-less controllers
+        const key = facility.icao || "UNICOM / Center";
 
-        // Create a sub-list for the controllers at this airport
-        let innerHtml = `<strong>${icao}</strong><ul style="margin-top: 5px; margin-bottom: 10px;">`;
+        if (!atcGroups[key]) {
+            atcGroups[key] = [];
+        }
+        // Store the controller's details in the correct group
+        atcGroups[key].push({
+            name: facility.name || "Controller",
+            username: facility.username || "System",
+            frequency: facility.frequency
+        });
+    });
+
+    atcList.innerHTML = ''; // Clear the list before repopulating
+
+    // Create the list items for each group
+    for (const groupName in atcGroups) {
+        const controllers = atcGroups[groupName];
+        const groupLi = document.createElement('li');
+
+        // Create a sub-list for the controllers in this group
+        let innerHtml = `<strong style="color: var(--accent);">${groupName}</strong><ul style="margin: 5px 0 12px 0; padding-left: 15px;">`;
 
         controllers.forEach(controller => {
             // Format frequency from kHz to MHz (e.g., 121900 -> 121.90)
             const formattedFrequency = (controller.frequency / 1000).toFixed(2);
-            innerHtml += `<li>${controller.name}: ${controller.username} (${formattedFrequency})</li>`;
+            innerHtml += `<li style="padding: 2px 0;">${controller.name}: ${controller.username} (${formattedFrequency})</li>`;
         });
 
         innerHtml += `</ul>`;
-        airportLi.innerHTML = innerHtml;
-        atcList.appendChild(airportLi);
+        groupLi.innerHTML = innerHtml;
+        atcList.appendChild(groupLi);
     }
 }
 
