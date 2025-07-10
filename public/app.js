@@ -918,11 +918,12 @@ async function updateAtcList(atcFacilities, allFlights) {
     const allAirports = await getAirports(); // We need the full airport list for names
 
     atcFacilities.forEach(facility => {
-        if (facility.icao) {
+        // Check if facility and its key properties exist before using them
+        if (facility && facility.icao && facility.name) {
             if (!atcByIcao[facility.icao]) {
                 atcByIcao[facility.icao] = new Set();
             }
-            atcByIcao[facility.icao].add(facility.name); // 'name' is the facilityType
+            atcByIcao[facility.icao].add(facility.name); // This is now safe to call
         }
     });
 
