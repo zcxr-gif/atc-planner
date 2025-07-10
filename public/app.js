@@ -631,12 +631,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchAndDisplayData(sessionId) {
         try {
             // Fetch flights
-            const flightsResponse = await fetch(`/functions/flights/${sessionId}`);
+            const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
             const flights = await flightsResponse.json();
             if (flights.result) updateFlightMarkers(flights.result);
 
             // Fetch ATC
-            const atcResponse = await fetch(`/functions/atc/${sessionId}`);
+            const atcResponse = await fetch(`fetch(`/.netlify/functions/atc/${sessionId}`);
             const atc = await atcResponse.json();
             if (atc.result) updateAtcList(atc.result);
 
