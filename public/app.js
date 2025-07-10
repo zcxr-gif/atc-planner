@@ -998,7 +998,6 @@ async function updateAtcList(atcFacilities, allFlights) {
         }
     }
 }
-}
 
    function createSettingsPanel() {
         const content = `
