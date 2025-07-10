@@ -684,8 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (typeof flight.latitude !== 'number' || typeof flight.longitude !== 'number' || flight.flightId == null) {
     // Skip only if flightId is null or undefined
     return;
-} 
-            }
+} // Skip this aircraft if it has no location or ID
 
             const lat = flight.latitude;
             const lon = flight.longitude;
