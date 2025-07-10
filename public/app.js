@@ -175,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getVORsFromOpenAIP(bbox) {
         // This function might need updating depending on final proxy implementation
         // For now, assuming a simple proxy structure
-        const url = `/api/navaids?bbox=${bbox.join(',')}`;
+        const url = `/functions/navaids?bbox=${bbox.join(',')}`;
 
         try {
             const response = await fetch(url);
@@ -568,7 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusIndicator = panel.querySelector('#live-status-indicator');
 
         try {
-            const response = await fetch('/netlify/functions/sessions');
+            const response = await fetch('/.netlify/functions/sessions');
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const sessions = await response.json();
             
@@ -631,12 +631,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function fetchAndDisplayData(sessionId) {
         try {
             // Fetch flights
-            const flightsResponse = await fetch(`/api/flights/${sessionId}`);
+            const flightsResponse = await fetch(`/functions/flights/${sessionId}`);
             const flights = await flightsResponse.json();
             if (flights.result) updateFlightMarkers(flights.result);
 
             // Fetch ATC
-            const atcResponse = await fetch(`/api/atc/${sessionId}`);
+            const atcResponse = await fetch(`/functions/atc/${sessionId}`);
             const atc = await atcResponse.json();
             if (atc.result) updateAtcList(atc.result);
 
