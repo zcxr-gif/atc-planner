@@ -1,36 +1,30 @@
+// netlify/functions/atc.js
 const fetch = require('node-fetch');
 
 exports.handler = async function(event, context) {
-  const apiKey = process.env.INFINITE_FLIGHT_API_KEY;
-  const sessionId = event.path.split('/').pop();
-  const url = `https://api.infiniteflight.com/public/v2/sessions/${sessionId}/atc`;
+    // Extract the sessionId from the URL path
+    const sessionId = event.path.split('/').pop();
+    const apiKey = process.env.IF_API_KEY;
 
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${apiKey}`
-      }
-    });
-
-    if (!res.ok) {
-      return { statusCode: res.status, body: JSON.stringify({ error: "Failed to fetch ATC" }) };
+    if (!sessionId) {
+        return { statusCode: 400, body: JSON.stringify({ error: 'Session ID is required.' }) };
     }
 
-    const json = await res.json();
-    // Map to frontend shape: show ICAO, frequency type, frequency, controller, and ATIS if available
-    const atcList = json.result.map(atc => ({
-      icao: atc.airportIcao || '',
-      name: atc.facilityType,
-      frequency: atc.frequency,
-      username: atc.username,
-      atis: atc.atis // May be undefined unless facilityType is ATIS
-    }));
+    const url = `https://api.infiniteflight.com/v2/sessions/${sessionId}/atc`;
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ result: atcList })
-    };
-  } catch (e) {
-    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
-  }
+    try {
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+
+        if (!response.ok) {
+            return { statusCode: response.status, body: JSON.stringify({ error: `API Error: ${response.statusText}` }) };
+        }
+
+        const data = await response.json();
+        return { statusCode: 200, body: JSON.stringify(data) };
+
+    } catch (error) {
+        return { statusCode: 500, body: JSON.stringify({ error: 'Failed to fetch ATC data.' }) };
+    }
 };
