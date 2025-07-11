@@ -752,9 +752,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
             const data = await response.json();
 
-            if (!response.ok || !data.result || data.result.waypoints.length < 2) {
-                alert(`No flight plan waypoints were found for ${callsign}.`);
-                return;
+            const waypoints = (data.waypoints) ? data.waypoints : (data.result && data.result.waypoints) ? data.result.waypoints : [];
+if (waypoints.length < 2) {
+    alert(`No flight plan waypoints were found for ${callsign}.`);
+    return;
+}
             }
 
             const waypoints = data.result.waypoints;
