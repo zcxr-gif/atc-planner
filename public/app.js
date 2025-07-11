@@ -304,7 +304,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 magVarText = `Mag Var: ${declination.toFixed(2)}°`;
             }
 
-            mslPopup.innerHTML = 'MSL: Loading...<br>' + magVarText;
+            mslPopup.innerHTML = 'MSA: Loading...<br>' + magVarText;
             
             clearTimeout(elevationRequestTimeout);
             elevationRequestTimeout = setTimeout(() => getElevationAndMag(e.latlng), 50);
@@ -1332,14 +1332,14 @@ async function updateAtcList(atcFacilities, allFlights) {
             const lat = navaid.geometry.coordinates[1];
             const lon = navaid.geometry.coordinates[0];
 
-            const navaidIcon = L.divIcon({
+            const nvaidIcon = L.divIcon({
                 className: 'custom-map-marker',
                 // Corrected "viewbox" to "viewBox" (capital B)
                 html: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
                 iconSize: [16, 16]
             });
 
-            L.marker([lat, lon], { icon: navaidIcon })
+            L.marker([lat, lon], { icon: nvaidIcon })
              .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
              .addTo(navaidsGroup);
         });
@@ -1920,23 +1920,38 @@ async function updateAtcList(atcFacilities, allFlights) {
              const point = wmmModel.field(latlng.lat, latlng.lng);
              magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
         }
-
+    
         try {
             const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
             if (!response.ok) throw new Error(`API error`);
             const data = await response.json();
             const elevationMeters = data.elevation[0];
-            let mslText = "MSL: Sea Level";
+            
+            // --- FIX START ---
+            // Changed label from MSL to MSA and updated the calculation.
+            let msaText = "MSA: 2,000'"; // Default MSA if on water or at sea level
+    
             if (elevationMeters !== null && elevationMeters > 0) {
-                let elevationFeet = Math.round(elevationMeters * 3.28084);
-                const rounded = Math.round(elevationFeet / 100) * 100;
-                mslText = `MSL: ${rounded.toLocaleString()}'`;
+                // 1. Convert terrain elevation from meters to feet
+                let terrainElevationFeet = elevationMeters * 3.28084;
+                
+                // 2. Add 2000 feet buffer for safety altitude
+                let calculatedMsa = terrainElevationFeet + 2000;
+                
+                // 3. Round UP to the nearest 1,000 feet
+                let roundedMsa = Math.ceil(calculatedMsa / 1000) * 1000;
+    
+                msaText = `MSA: ${roundedMsa.toLocaleString()}'`;
             }
-             mslPopup.innerHTML = `${mslText}<br>${magVarText}`;
-
+            // --- FIX END ---
+    
+             // Update the popup with the new MSA text and the existing magnetic variation text
+             mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
+    
         } catch (error) {
             console.error("Failed to fetch elevation data:", error);
-            mslPopup.innerHTML = `MSL: Unavailable<br>${magVarText}`;
+            // Use MSA in the error message as well for consistency
+            mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
         }
     }
 
