@@ -747,52 +747,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- NEW: Rebuilt Flight Plan Function ---
     async function fetchAndDisplayFlightPlan(flightId, callsign) {
-        flightPlanRouteGroup.clearLayers();
-        try {
-            const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
-            const data = await response.json();
+    flightPlanRouteGroup.clearLayers();
+    try {
+        const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+        const data = await response.json();
 
-            const waypoints = (data.waypoints) ? data.waypoints : (data.result && data.result.waypoints) ? data.result.waypoints : [];
-if (waypoints.length < 2) {
-    alert(`No flight plan waypoints were found for ${callsign}.`);
-    return;
-}
-            }
-
-            const waypoints = data.result.waypoints;
-            const latLngs = waypoints
-                .map(wp => [Number(wp.latitude), Number(wp.longitude)])
-                .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
-
-            L.polyline(latLngs, {
-                color: '#FFD600',
-                weight: 3,
-                opacity: 0.9,
-                dashArray: '8, 8'
-            }).addTo(flightPlanRouteGroup);
-
-            waypoints.forEach(wp => {
-                const lat = Number(wp.latitude);
-                const lon = Number(wp.longitude);
-                if(isNaN(lat) || isNaN(lon)) return;
-
-                L.circleMarker([lat, lon], {
-                    radius: 4,
-                    color: '#FFD600',
-                    fillColor: '#1a1a1a',
-                    fillOpacity: 1
-                }).bindTooltip(wp.name, {
-                    direction: 'top',
-                    className: 'waypoint-tooltip'
-                }).addTo(flightPlanRouteGroup);
-            });
-            map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
-
-        } catch (err) {
-            console.error("A critical error occurred while fetching the flight plan:", err);
-            alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
+        const waypoints = data.waypoints || (data.result && data.result.waypoints) || [];
+        if (waypoints.length < 2) {
+            alert(`No flight plan waypoints were found for ${callsign}.`);
+            return;
         }
+
+        const latLngs = waypoints
+            .map(wp => [Number(wp.latitude), Number(wp.longitude)])
+            .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
+
+        L.polyline(latLngs, {
+            color: '#FFD600',
+            weight: 3,
+            opacity: 0.9,
+            dashArray: '8, 8'
+        }).addTo(flightPlanRouteGroup);
+
+        waypoints.forEach(wp => {
+            const lat = Number(wp.latitude);
+            const lon = Number(wp.longitude);
+            if(isNaN(lat) || isNaN(lon)) return;
+
+            L.circleMarker([lat, lon], {
+                radius: 4,
+                color: '#FFD600',
+                fillColor: '#1a1a1a',
+                fillOpacity: 1
+            }).bindTooltip(wp.name, {
+                direction: 'top',
+                className: 'waypoint-tooltip'
+            }).addTo(flightPlanRouteGroup);
+        });
+        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
+
+    } catch (err) {
+        console.error("A critical error occurred while fetching the flight plan:", err);
+        alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
     }
+}
 	
     // --- NEW: Rebuilt ATC List Function ---
     async function updateAtcList(sessionId) {
