@@ -1,4 +1,4 @@
-// app.js (updated for real-time magnetic declination and Infinite Flight Live API)
+// app.js (updated with rebuilt FPL and ATC fetching)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     // The API key is handled by the server-side proxy, not here.
@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
         wheelPxPerZoomLevel: 150,
         maxBounds: [[-90, -180], [90, 180]],
         minZoom: 2,
-        renderer: L.canvas() // MODIFICATION: Enable canvas renderer for better performance
+        renderer: L.canvas()
     });
 
     const darkBaseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const navaidsGroup = new L.FeatureGroup().addTo(map);
     const waypointsGroup = new L.FeatureGroup().addTo(map);
     const finalApproachGroup = new L.FeatureGroup().addTo(map);
-    const liveAircraftGroup = new L.FeatureGroup().addTo(map); // NEW: For live aircraft
+    const liveAircraftGroup = new L.FeatureGroup().addTo(map);
 
     const mslPopup = document.getElementById('msl-popup');
     const reopenButton = document.getElementById('reopen-main-panel');
@@ -67,8 +67,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let tempLine, tempLabel;
     let elevationRequestTimeout;
     let navaidRequestTimeout;
-    let airportUpdateTimeout; // MODIFICATION: Added for debouncing
-    let waypointUpdateTimeout; // MODIFICATION: Added for debouncing
+    let airportUpdateTimeout;
+    let waypointUpdateTimeout;
     let currentLineType = 'standard';
 
     const planLayers = {};
@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let altitudeChart = null;
     let wmmModel = null;
 
-    // --- NEW: Live Mode Variables ---
+    // --- Live Mode Variables ---
     let inactivityTimer;
     let liveUpdateInterval;
     let liveFlightMarkers = {};
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         "Terrain (Hillshade)": hillshadeLayer,
         "Terrain (3D Feel)": stamenTerrainLayer,
         "Terrain (Drastic 3D)": esriWorldShadedRelief,
-        "Live Aircraft": liveAircraftGroup // NEW: Layer control for live traffic
+        "Live Aircraft": liveAircraftGroup
     };
     L.control.layers(baseLayers, overlayLayers, {position: 'bottomright'}).addTo(map);
 
@@ -164,7 +164,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getWaypoints() {
         if (waypointsDataCache) return waypointsDataCache;
         try {
-            // Path is relative to the root of the site (the Public folder)
             const response = await fetch('waypoints.json');
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const data = await response.json();
@@ -177,10 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function getVORsFromOpenAIP(bbox) {
-        // This function might need updating depending on final proxy implementation
-        // For now, assuming a simple proxy structure
         const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
-
         try {
             const response = await fetch(url);
             if (!response.ok) {
@@ -198,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
    async function initializeWMM() {
         try {
-            wmmModel = geomag; // Assign the global geomag object from geomag.min.js
+            wmmModel = geomag;
             console.log("World Magnetic Model loaded (from geomag.min.js).");
         } catch (error) {
             console.error("Fatal Error: Could not initialize WMM. The geomag.min.js library might be missing.", error);
@@ -218,7 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await getWaypoints(); 
         
         updateAirports();
-        // ★★★ FIX APPLIED HERE ★★★
         updateNavaids(); 
         setupEventListeners();
         loadPlanFromLocalStorage();
@@ -279,7 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
             checkRunwayLabelVisibility();
             adjustAllLabelPositions();
 
-            // --- MODIFICATION START ---
             clearTimeout(airportUpdateTimeout);
             airportUpdateTimeout = setTimeout(updateAirports, 500);
 
@@ -288,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             clearTimeout(navaidRequestTimeout);
             navaidRequestTimeout = setTimeout(updateNavaids, 500); 
-            // --- MODIFICATION END ---
         });
         
         map.on('mousemove', (e) => {
@@ -321,45 +314,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Add listeners for inactivity reset
         document.addEventListener('mousemove', resetInactivityTimer, false);
         document.addEventListener('keydown', resetInactivityTimer, false);
         document.addEventListener('click', resetInactivityTimer, false);
     }
 	
 	document.addEventListener('click', async function (e) {
-    // Only run if the button was clicked
-    if (e.target && e.target.classList.contains('view-fpl-btn')) {
-        e.preventDefault();
-
-        // Try to get flightId and callsign safely
-        const flightId = e.target.getAttribute('data-flight-id') || '';
-        let callsign = 'Unknown';
-        try {
-            const popup = e.target.closest('.leaflet-popup-content');
-            if (popup) {
-                const boldTag = popup.querySelector('b');
-                if (boldTag && boldTag.textContent) {
-                    // Use the first word before space as callsign
-                    callsign = boldTag.textContent.split(' ')[0];
+        if (e.target && e.target.classList.contains('view-fpl-btn')) {
+            e.preventDefault();
+            const flightId = e.target.getAttribute('data-flight-id') || '';
+            let callsign = 'Unknown';
+            try {
+                const popup = e.target.closest('.leaflet-popup-content');
+                if (popup) {
+                    const boldTag = popup.querySelector('b');
+                    if (boldTag && boldTag.textContent) {
+                        callsign = boldTag.textContent.split(' ')[0];
+                    }
                 }
+            } catch (err) {
+                console.warn("Could not extract callsign:", err);
             }
-        } catch (err) {
-            console.warn("Could not extract callsign:", err);
+            if (!flightId) {
+                alert('No valid flight plan ID found.');
+                return;
+            }
+            await fetchAndDisplayFlightPlan(flightId, callsign);
         }
-
-        // Log for debugging
-        console.log('[FPL Button] Clicked:', { flightId, callsign });
-
-        if (!flightId) {
-            alert('No valid flight plan ID found.');
-            return;
-        }
-
-        // Call the new fetch/display function
-        await fetchAndDisplayFlightPlan(flightId, callsign);
-    }
-});
+    });
     
     // --- UI PANELS ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
@@ -402,8 +384,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const reopenPlanButton = document.getElementById('reopen-plan-panel');
                 if(reopenPlanButton) reopenPlanButton.style.display = 'block';
             } else if (panel.id === 'live-control-panel') {
-    panel.style.display = 'none';
-}
+                panel.style.display = 'none';
+            }
             else {
                 panel.remove();
             }
@@ -430,12 +412,10 @@ document.addEventListener('DOMContentLoaded', () => {
         function dragMouseDown(e) {
             e = e || window.event;
             e.preventDefault();
-
             if (window.getComputedStyle(element).right !== 'auto') {
                 element.style.left = element.offsetLeft + 'px';
                 element.style.right = 'auto';
             }
-
             pos3 = e.clientX;
             pos4 = e.clientY;
             document.onmouseup = closeDragElement;
@@ -449,18 +429,14 @@ document.addEventListener('DOMContentLoaded', () => {
             pos2 = pos4 - e.clientY;
             pos3 = e.clientX;
             pos4 = e.clientY;
-
             let newTop = element.offsetTop - pos2;
             let newLeft = element.offsetLeft - pos1;
-
             const minLeft = 0;
             const minTop = 0;
             const maxLeft = window.innerWidth - element.offsetWidth;
             const maxTop = window.innerHeight - element.offsetHeight;
-
             newLeft = Math.max(minLeft, Math.min(newLeft, maxLeft));
             newTop = Math.max(minTop, Math.min(newTop, maxTop));
-
             element.style.top = newTop + "px";
             element.style.left = newLeft + "px";
         }
@@ -576,8 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 map.removeLayer(finalApproachGroup);
             }
         });
-
-        // Add listeners for new buttons
+        
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
@@ -649,35 +624,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 statusIndicator.style.backgroundColor = '#777';
             }
         });
-		serverSelect.addEventListener('change', (e) => {
-    const newSessionId = e.target.value;
 
-    // Check if we are currently connected to a server
-    if (connectBtn.textContent === 'Disconnect') {
-        if (newSessionId) {
-            // If a new server is selected, automatically switch
-            stopLiveUpdates();
-            startLiveUpdates(newSessionId);
-        } else {
-            // If the user chose the blank "Select a Server", disconnect
-            stopLiveUpdates();
-            connectBtn.textContent = 'Connect';
-            connectBtn.style.backgroundColor = 'var(--accent)';
-            statusIndicator.textContent = "Disconnected";
-            statusIndicator.style.backgroundColor = '#777';
-        }
-      }
-});
+		serverSelect.addEventListener('change', (e) => {
+            const newSessionId = e.target.value;
+            if (connectBtn.textContent === 'Disconnect') {
+                if (newSessionId) {
+                    stopLiveUpdates();
+                    startLiveUpdates(newSessionId);
+                } else {
+                    stopLiveUpdates();
+                    connectBtn.textContent = 'Connect';
+                    connectBtn.style.backgroundColor = 'var(--accent)';
+                    statusIndicator.textContent = "Disconnected";
+                    statusIndicator.style.backgroundColor = '#777';
+                }
+            }
+        });
     }
     
     // --- LIVE MODE: DATA FETCHING AND DISPLAY ---
     function startLiveUpdates(sessionId) {
-        stopLiveUpdates(); // Ensure no other loops are running
+        stopLiveUpdates();
         isLiveModeActive = true;
-
         fetchAndDisplayData(sessionId);
-        liveUpdateInterval = setInterval(() => fetchAndDisplayData(sessionId), 10000); // Update every 10 seconds
-
+        liveUpdateInterval = setInterval(() => fetchAndDisplayData(sessionId), 10000);
         startInactivityTimer();
     }
 
@@ -692,23 +662,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchAndDisplayData(sessionId) {
-    try {
-        // Fetch flights
-        const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
-        const flightsData = await flightsResponse.json();
-        if (flightsData.result) {
-            updateFlightMarkers(flightsData.result);
-        };
+        try {
+            // Fetch flights
+            const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
+            const flightsData = await flightsResponse.json();
+            if (flightsData.result) {
+                updateFlightMarkers(flightsData.result);
+            }
 
-        // Fetch ATC
-        const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
-        const atcData = await atcResponse.json();
-        if (atcData.result) {
-            // MODIFICATION: Pass flightsData.result here
-            updateAtcList(atcData.result, flightsData.result || []); 
-        };
+            // Call the new, rebuilt ATC function
+            await updateAtcList(sessionId);
 
-    } catch (error) {
+        } catch (error) {
             console.error("Failed to fetch live data:", error);
             const statusIndicator = document.getElementById('live-status-indicator');
             if(statusIndicator){
@@ -719,298 +684,152 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // THIS FUNCTION IS CORRECTED AND INCLUDES DEBUGGING LOGS
     function updateFlightMarkers(flights) {
-    // --- DEBUGGING: Log what we received from the API ---
-    console.log(`Received ${flights.length} flights from the API.`);
+        const existingFlightIds = Object.keys(liveFlightMarkers);
+        const incomingFlightIds = flights.map(f => f.flightId);
 
-    const existingFlightIds = Object.keys(liveFlightMarkers);
-    const incomingFlightIds = flights.map(f => f.flightId);
-    let renderedCount = 0; // Counter for successfully rendered aircraft
-
-    // Remove markers for flights that are no longer present
-    existingFlightIds.forEach(flightId => {
-        if (!incomingFlightIds.includes(flightId)) {
-            if (liveFlightMarkers[flightId]) {
-                map.removeLayer(liveFlightMarkers[flightId]);
-            }
-            delete liveFlightMarkers[flightId];
-        }
-    });
-
-    flights.forEach((flight, index) => {
-        // --- DEBUGGING: Log the actual values for the first 3 flights ---
-        if (index < 3) {
-            console.log(`Processing flight #${index}:`, {
-                id: flight.id,
-                flightId: flight.flightId,
-                latitude: flight.latitude,
-                longitude: flight.longitude,
-                heading: flight.heading,
-                callsign: flight.callsign,
-                aircraftName: flight.aircraftName,
-                username: flight.username,
-                altitude: flight.altitude,
-                speed: flight.speed
-            });
-        }
-
-        // Parse latitude and longitude as numbers (handles both string and number)
-        const lat = Number(flight.latitude);
-        const lon = Number(flight.longitude);
-
-        // Only skip if lat/lon are not valid numbers or flightId is null/undefined
-        if (isNaN(lat) || isNaN(lon) || flight.flightId == null) {
-            if (index < 3) {
-                console.log(`--> SKIPPING flight #${index} due to missing/invalid coordinates or flightId.`, {
-                    flightId: flight.flightId,
-                    latitude: flight.latitude,
-                    longitude: flight.longitude
-                });
-            }
-            return;
-        }
-
-        const heading = flight.heading;
-        const callsign = flight.callsign || 'N/A';
-
-        const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : 
-                         (typeof flight.altitude === 'string' && !isNaN(Number(flight.altitude))) ? Math.round(Number(flight.altitude)) : null;
-        const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) :
-                      (typeof flight.speed === 'string' && !isNaN(Number(flight.speed))) ? Math.round(Number(flight.speed)) : null;
-
-        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
-        const speedText = speed !== null ? `${speed} kts GS` : '---';
-
-const ownerUsername = "_ServerNoob";
-let iconSrc = "/plane.png"; // Default icon
-
-// Check if the flight belongs to the owner
-if (flight.username === ownerUsername) {
-    iconSrc = "/plane-yellow.png"; // Use the yellow icon for the owner
-}
-
-// Use the selected icon in the HTML
-const iconHtml = `<img src="${iconSrc}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
-
-const aircraftIcon = L.divIcon({
-    html: iconHtml,
-    className: 'custom-map-marker',
-    iconSize: [24, 24]
-});
-
-        const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
-  User: ${flight.username || 'N/A'}<br>
-  Altitude: ${altitudeText}<br>
-  Speed: ${speedText}<br>
-  ${
-    flight.flightId
-      ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
-      : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
-  }`;
-
-if (liveFlightMarkers[flight.flightId]) {
-    // Update existing marker
-    liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
-    liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
-    liveFlightMarkers[flight.flightId].setPopupContent(popupContent); // Update the popup content
-} else {
-    // Create new marker
-    const marker = L.marker([lat, lon], { icon: aircraftIcon });
-    marker.bindPopup(popupContent);
-    marker.addTo(liveAircraftGroup);
-    liveFlightMarkers[flight.flightId] = marker;
-}
-        renderedCount++; // Increment the counter for successful renders
-    });
-
-    // --- DEBUGGING: Log the final count of rendered aircraft ---
-    console.log(`Successfully rendered ${renderedCount} out of ${flights.length} aircraft.`);
-}
-
-	// app.js
-
-async function fetchAndDisplayFlightPlan(flightId, callsign) {
-    console.log(`[FPL] Initiating fetch for callsign: ${callsign} (Flight ID: ${flightId})`);
-
-    // --- 1. Clear Previous Route ---
-    // Ensure the layer group for the route exists and is cleared before drawing a new one.
-    if (!flightPlanRouteGroup) {
-        console.error("[FPL] Aborting: flightPlanRouteGroup is not defined on the map.");
-        return;
-    }
-    flightPlanRouteGroup.clearLayers();
-
-    // --- 2. Call the Serverless Function ---
-    try {
-        const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
-        const data = await response.json();
-
-        // --- 3. Handle Errors from the Serverless Function ---
-        if (!response.ok || data.error) {
-            console.error(`[FPL] Error response from server. Status: ${response.status}`, data);
-            alert(`Could not retrieve flight plan for ${callsign}. Reason: ${data.details || data.error || 'Unknown server error'}`);
-            return;
-        }
-        
-        console.log(`[FPL] Received data for ${callsign}:`, data);
-
-        // --- 4. Validate the Flight Plan Data ---
-        // Ensure the flight plan has a 'result' object with a non-empty 'waypoints' array.
-        if (!data.result || !Array.isArray(data.result.waypoints) || data.result.waypoints.length === 0) {
-            console.warn(`[FPL] No flight plan waypoints found for ${callsign}.`);
-            alert(`No flight plan has been filed for ${callsign}.`);
-            return;
-        }
-
-        const waypoints = data.result.waypoints;
-
-        // --- 5. Extract Coordinates ---
-        const latLngs = waypoints.map(wp => {
-            // Ensure latitude and longitude are valid numbers before adding them.
-            const lat = Number(wp.latitude);
-            const lon = Number(wp.longitude);
-            if (isNaN(lat) || isNaN(lon)) {
-                return null;
-            }
-            return [lat, lon];
-        }).filter(coord => coord !== null); // Filter out any null entries
-
-        if (latLngs.length < 2) {
-             alert(`The flight plan for ${callsign} does not contain enough valid waypoints to draw a route.`);
-             return;
-        }
-
-        // --- 6. Draw the Route and Markers on the Map ---
-        // Create the main flight path line
-        L.polyline(latLngs, {
-            color: '#FFD600', // A bright, visible color
-            weight: 3,
-            opacity: 0.9,
-            dashArray: '8, 8'
-        }).addTo(flightPlanRouteGroup);
-
-        // Add a small circle marker for each waypoint
-        waypoints.forEach(wp => {
-            // FIX APPLIED HERE: Check for malformed waypoint data
-            if (!wp || isNaN(Number(wp.latitude)) || isNaN(Number(wp.longitude))) return;
-
-            const lat = Number(wp.latitude);
-            const lon = Number(wp.longitude);
-            const name = wp.name || 'Waypoint'; // Provide a fallback for the name
-
-            L.circleMarker([lat, lon], {
-                radius: 4,
-                color: '#FFD600',
-                fillColor: '#1a1a1a',
-                fillOpacity: 1
-            }).bindTooltip(name, { // Use the safe name variable
-                direction: 'top',
-                className: 'waypoint-tooltip'
-            }).addTo(flightPlanRouteGroup);
-        });
-
-        // --- 7. Fit Map to the New Route ---
-        // Adjust the map view to show the entire flight plan with some padding.
-        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
-
-        console.log(`[FPL] Successfully displayed flight plan for ${callsign}.`);
-
-    } catch (err) {
-        console.error("[FPL] A critical error occurred during the fetch/display process:", err);
-        alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
-    }
-}
-	
-// MODIFICATION: Replaced with more performant version
-async function updateAtcList(atcFacilities, allFlights) {
-    const atcList = document.getElementById('atc-list');
-    if (!atcList) return;
-
-    try {
-        if (!atcFacilities || atcFacilities.length === 0) {
-            atcList.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
-            return;
-        }
-
-        const atcByIcao = {};
-        const allAirports = await getAirports();
-
-        atcFacilities.forEach(facility => {
-            if (facility && facility.icao && facility.name) {
-                if (!atcByIcao[facility.icao]) {
-                    atcByIcao[facility.icao] = { facilities: new Set(), airportInfo: allAirports.find(a => a.ident === facility.icao) };
+        // Remove markers for flights that are no longer present
+        existingFlightIds.forEach(flightId => {
+            if (!incomingFlightIds.includes(flightId)) {
+                if (liveFlightMarkers[flightId]) {
+                    map.removeLayer(liveFlightMarkers[flightId]);
                 }
-                atcByIcao[facility.icao].facilities.add(facility.name);
-            }
-        });
-        
-        const atcPositionOrder = [
-            { key: 'ATIS', display: 'ATS' }, { key: 'Ground', display: 'GND' },
-            { key: 'Tower', display: 'TWR' }, { key: 'Approach', display: 'APP' },
-            { key: 'Departure', display: 'DEP' }
-        ];
-
-        const incomingIcaos = new Set(Object.keys(atcByIcao));
-        const existingIcaos = new Set(Array.from(atcList.querySelectorAll('[data-icao]')).map(el => el.dataset.icao));
-
-        // 1. Remove airports that are no longer active
-        existingIcaos.forEach(icao => {
-            if (!incomingIcaos.has(icao)) {
-                atcList.querySelector(`[data-icao="${icao}"]`)?.remove();
+                delete liveFlightMarkers[flightId];
             }
         });
 
-        // 2. Add or update active airports
-        for (const icao of incomingIcaos) {
-            const airportData = atcByIcao[icao];
-            if (!airportData.airportInfo) continue; // Skip if airport info not found
+        flights.forEach(flight => {
+            const lat = Number(flight.latitude);
+            const lon = Number(flight.longitude);
+            if (isNaN(lat) || isNaN(lon) || flight.flightId == null) {
+                return;
+            }
 
-            const activePositions = airportData.facilities;
-            const airportName = airportData.airportInfo.name;
-
-            let positionsHtml = '';
-            atcPositionOrder.forEach(pos => {
-                const isActive = activePositions.has(pos.key);
-                positionsHtml += `<span class="${isActive ? 'atc-pos-active' : 'atc-pos-inactive'}">${pos.display}</span>`;
+            const heading = flight.heading;
+            const callsign = flight.callsign || 'N/A';
+            const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
+            const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
+            const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
+            const speedText = speed !== null ? `${speed} kts GS` : '---';
+            const ownerUsername = "_ServerNoob";
+            let iconSrc = "/plane.png";
+            if (flight.username === ownerUsername) {
+                iconSrc = "/plane-yellow.png";
+            }
+            const iconHtml = `<img src="${iconSrc}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+            const aircraftIcon = L.divIcon({
+                html: iconHtml,
+                className: 'custom-map-marker',
+                iconSize: [24, 24]
             });
+            const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
+              User: ${flight.username || 'N/A'}<br>
+              Altitude: ${altitudeText}<br>
+              Speed: ${speedText}<br>
+              ${
+                flight.flightId
+                  ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
+                  : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
+              }`;
 
-            const rowContent = `
-                <div class="atc-airport-info"><strong>${icao}</strong><span>${airportName}</span></div>
-                <div class="atc-arrivals-info">✈ --</div>
-                <div class="atc-positions">${positionsHtml}</div>
-            `;
-
-            let row = atcList.querySelector(`[data-icao="${icao}"]`);
-            if (row) {
-                // Update existing row
-                row.innerHTML = rowContent;
+            if (liveFlightMarkers[flight.flightId]) {
+                liveFlightMarkers[flight.flightId].setLatLng([lat, lon]);
+                liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
+                liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
             } else {
-                // Create new row
-                row = document.createElement('div');
-                row.className = 'atc-airport-row';
-                row.dataset.icao = icao;
-                row.innerHTML = rowContent;
-                atcList.appendChild(row);
+                const marker = L.marker([lat, lon], { icon: aircraftIcon });
+                marker.bindPopup(popupContent);
+                marker.addTo(liveAircraftGroup);
+                liveFlightMarkers[flight.flightId] = marker;
             }
-        }
-        
-        // Handle case where list might become empty after filtering
-        if (atcList.children.length === 0 && Object.keys(atcByIcao).length > 0) {
-             atcList.innerHTML = '<div class="atc-airport-row">No active ATC at any known airport.</div>';
-        } else if(atcList.children.length === 0) {
-             atcList.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
-        }
+        });
+    }
 
-    } catch (error) {
-        console.error("A critical error occurred in updateAtcList:", error);
-        if (atcList) {
-            atcList.innerHTML = '<div class="atc-airport-row" style="color: red;">Error loading ATC data.</div>';
+    // --- NEW: Rebuilt Flight Plan Function ---
+    async function fetchAndDisplayFlightPlan(flightId, callsign) {
+        flightPlanRouteGroup.clearLayers();
+        try {
+            const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+            const data = await response.json();
+
+            if (!response.ok || !data.result || data.result.waypoints.length < 2) {
+                alert(`No flight plan waypoints were found for ${callsign}.`);
+                return;
+            }
+
+            const waypoints = data.result.waypoints;
+            const latLngs = waypoints
+                .map(wp => [Number(wp.latitude), Number(wp.longitude)])
+                .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
+
+            L.polyline(latLngs, {
+                color: '#FFD600',
+                weight: 3,
+                opacity: 0.9,
+                dashArray: '8, 8'
+            }).addTo(flightPlanRouteGroup);
+
+            waypoints.forEach(wp => {
+                const lat = Number(wp.latitude);
+                const lon = Number(wp.longitude);
+                if(isNaN(lat) || isNaN(lon)) return;
+
+                L.circleMarker([lat, lon], {
+                    radius: 4,
+                    color: '#FFD600',
+                    fillColor: '#1a1a1a',
+                    fillOpacity: 1
+                }).bindTooltip(wp.name, {
+                    direction: 'top',
+                    className: 'waypoint-tooltip'
+                }).addTo(flightPlanRouteGroup);
+            });
+            map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
+
+        } catch (err) {
+            console.error("A critical error occurred while fetching the flight plan:", err);
+            alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
         }
     }
-}
+	
+    // --- NEW: Rebuilt ATC List Function ---
+    async function updateAtcList(sessionId) {
+        const atcListElement = document.getElementById('atc-list');
+        if (!atcListElement) return;
+        try {
+            const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
+            const data = await response.json();
 
-   function createSettingsPanel() {
+            if (!response.ok || !data.result || data.result.length === 0) {
+                atcListElement.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
+                return;
+            }
+            
+            const atcFacilities = data.result;
+            const atcByIcao = atcFacilities.reduce((acc, facility) => {
+                const icao = facility.icao || "Center";
+                if (!acc[icao]) {
+                    acc[icao] = [];
+                }
+                acc[icao].push(facility.name);
+                return acc;
+            }, {});
+
+            let html = '';
+            for (const icao in atcByIcao) {
+                const positions = atcByIcao[icao].join(', ');
+                html += `<div class="atc-airport-row"><strong>${icao}:</strong> ${positions}</div>`;
+            }
+            
+            atcListElement.innerHTML = html;
+
+        } catch (error) {
+            console.error("Failed to update ATC list:", error);
+            atcListElement.innerHTML = '<div class="atc-airport-row" style="color: red;">Error loading ATC data.</div>';
+        }
+    }
+
+    function createSettingsPanel() {
         const content = `
             <div class="info-card">
                 <h3>Display</h3>
@@ -1043,7 +862,6 @@ async function updateAtcList(atcFacilities, allFlights) {
         createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
         
         const settingsPanel = document.getElementById('settings-panel');
-
         settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
             appSettings.useTrueHeading = e.target.checked;
             updateAllFlightDataBlockStyles();
@@ -1196,7 +1014,6 @@ async function updateAtcList(atcFacilities, allFlights) {
         endAltInput.addEventListener('input', updateFromInput);
     }
     
-    // UPDATED: Now respects the useTrueHeading setting
     function updateDataBlock(stepId) {
         const legData = planLayers[stepId];
         if (!legData || !legData.label) return;
@@ -1228,7 +1045,6 @@ async function updateAtcList(atcFacilities, allFlights) {
         }
 
         const speed = legData.speed || '---';
-        
         const headingToShow = appSettings.useTrueHeading ? legData.heading.true : legData.heading.magnetic;
         const headingUnit = appSettings.useTrueHeading ? '° T' : '° M';
 
@@ -1249,11 +1065,9 @@ async function updateAtcList(atcFacilities, allFlights) {
     function updateAltitudeForLeg(stepId) {
         const legData = planLayers[stepId];
         if (!legData) return;
-
         const startAlt = legData.startAltitude;
         const endAlt = legData.endAltitude;
         const altitudeInput = document.getElementById(`alt-${stepId}`);
-
         if (startAlt !== undefined && endAlt !== undefined && startAlt !== endAlt) {
             if (altitudeInput) altitudeInput.value = '';
             legData.altitude = '';
@@ -1261,7 +1075,6 @@ async function updateAtcList(atcFacilities, allFlights) {
             const displayAlt = legData.altitude || startAlt;
             if (altitudeInput) altitudeInput.value = displayAlt || '';
         }
-        
         updateDataBlock(stepId);
     }
 
@@ -1271,19 +1084,15 @@ async function updateAtcList(atcFacilities, allFlights) {
             dynamicRunwaysGroup.clearLayers();
             return;
         }
-
         const zoom = map.getZoom();
         hubDotsGroup.clearLayers();
         dynamicRunwaysGroup.clearLayers();
         finalApproachGroup.clearLayers();
-
         if (!airportsDataCache) return;
         const mainPanel = document.getElementById('main-panel');
         if (!mainPanel) return;
-
         const selectedTypes = Array.from(mainPanel.querySelectorAll('#airport-filters input:checked')).map(input => input.value);
         const bounds = map.getBounds();
-
         const airportsToShow = airportsDataCache.filter(airport => {
             if (!selectedTypes.includes(airport.type)) return false;
             const lat = parseFloat(airport.latitude_deg);
@@ -1293,9 +1102,7 @@ async function updateAtcList(atcFacilities, allFlights) {
             if (zoom < 8) return ['large_airport', 'medium_airport'].includes(airport.type);
             return true;
         });
-
         const drawnRunwayAirports = new Set();
-
         if (zoom >= 13) {
             airportsToShow.forEach(airport => {
                 if (['large_airport', 'medium_airport'].includes(airport.type)) {
@@ -1304,7 +1111,6 @@ async function updateAtcList(atcFacilities, allFlights) {
                 }
             });
         }
-
         airportsToShow.forEach(airport => {
             if (drawnRunwayAirports.has(airport.ident)) return;
             const coords = [parseFloat(airport.latitude_deg), parseFloat(airport.longitude_deg)];
@@ -1315,36 +1121,29 @@ async function updateAtcList(atcFacilities, allFlights) {
     }
 	
 	function updateNavaids() {
-    const showNavaids = document.getElementById('filter-navaids')?.checked;
-
-    if (!showNavaids) {
+        const showNavaids = document.getElementById('filter-navaids')?.checked;
+        if (!showNavaids) {
+            navaidsGroup.clearLayers();
+            return;
+        }
+        const bounds = map.getBounds();
+        const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
         navaidsGroup.clearLayers();
-        return;
-    }
-
-    const bounds = map.getBounds();
-    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-    
-    navaidsGroup.clearLayers();
-
-    getVORsFromOpenAIP(bbox).then(navaids => {
-        navaids.forEach(navaid => {
-            const lat = navaid.geometry.coordinates[1];
-            const lon = navaid.geometry.coordinates[0];
-
-            const nvaidIcon = L.divIcon({
-                className: 'custom-map-marker',
-                // Corrected "viewbox" to "viewBox" (capital B)
-                html: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
-                iconSize: [16, 16]
+        getVORsFromOpenAIP(bbox).then(navaids => {
+            navaids.forEach(navaid => {
+                const lat = navaid.geometry.coordinates[1];
+                const lon = navaid.geometry.coordinates[0];
+                const navaidIcon = L.divIcon({
+                    className: 'custom-map-marker',
+                    html: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
+                    iconSize: [16, 16]
+                });
+                L.marker([lat, lon], { icon: navaidIcon })
+                .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
+                .addTo(navaidsGroup);
             });
-
-            L.marker([lat, lon], { icon: nvaidIcon })
-             .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
-             .addTo(navaidsGroup);
         });
-    });
-}
+    }
 
     async function displayAirportDetails(icao) {
         airportDetailsGroup.clearLayers();
@@ -1353,33 +1152,25 @@ async function updateAtcList(atcFacilities, allFlights) {
         runwayLayers = {};
         const infoPanel = document.getElementById('airport-info-panel');
         if (infoPanel) infoPanel.remove();
-
         activeAirportIcao = icao;
         updateAirports();
-
         try {
             const airports = await getAirports();
             const airport = airports.find(a => a.ident === icao);
             if (!airport) return alert(`Airport with ICAO ${icao} not found.`);
-            
             const lat = parseFloat(airport.latitude_deg);
             const lon = parseFloat(airport.longitude_deg);
             currentAirportCoords = L.latLng(lat, lon);
-
             const airportRunways = await getRunwaysForAirport(icao);
-
             airportRunways.forEach(runway => drawRunway(runway, airportDetailsGroup, runwayLabelsGroup, finalApproachGroup));
             updateAirportInfoPanel(airport, airportRunways);
-
             createDistanceRings(lat, lon, planLayers).forEach(ring => ring.addTo(airportDetailsGroup));
             if(map.getZoom() < 13) map.setView([lat, lon], 13);
             else map.panTo([lat,lon]);
-
             const clearBtn = document.getElementById('clear-selection-btn');
             if(clearBtn) clearBtn.style.display = 'block';
             const clearText = document.getElementById('clear-selection-text');
             if (clearText) clearText.style.display = 'block';
-
             checkAirportDetailsVisibility();
             checkRunwayLabelVisibility();
         } catch (err) {
@@ -1392,18 +1183,14 @@ async function updateAtcList(atcFacilities, allFlights) {
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
         else if (airport.type === 'medium_airport') airspaceClass = 'Charlie';
         else if (airport.type === 'small_airport') airspaceClass = 'Other';
-
         const panelTitle = `INFO: ${airport.ident}`;
         const lat = parseFloat(airport.latitude_deg);
         const lon = parseFloat(airport.longitude_deg);
-
         let declination = 0;
         if (wmmModel) { 
             const point = wmmModel.field(lat, lon);
             declination = point.declination;
         }
-
-
         let runwaysHTML = `
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
@@ -1415,28 +1202,21 @@ async function updateAtcList(atcFacilities, allFlights) {
                 </thead>
                 <tbody>
         `;
-
         if (runways.length > 0) {
             runwaysHTML += runways.map(runway => {
                 const runwayName = (runway.le_ident && runway.he_ident) ?
                     `${runway.le_ident}/${runway.he_ident}` :
                     (runway.le_ident || runway.he_ident || 'Unnamed');
-
                 let le_true_hdg = parseFloat(runway.le_heading_degT);
                 let he_true_hdg = parseFloat(runway.he_heading_degT);
-
                 let le_mag_hdg_raw = le_true_hdg - declination;
                 let he_mag_hdg_raw = he_true_hdg - declination;
-
                 le_mag_hdg_raw = (le_mag_hdg_raw + 360) % 360;
                 he_mag_hdg_raw = (he_mag_hdg_raw + 360) % 360;
-                
                 const le_mag_hdg_str = !isNaN(le_mag_hdg_raw) ? Math.round(le_mag_hdg_raw).toString().padStart(3, '0') + '°' : '---';
                 const he_mag_hdg_str = !isNaN(he_mag_hdg_raw) ? Math.round(he_mag_hdg_raw).toString().padStart(3, '0') + '°' : '---';
-
                 const le_true_hdg_str = !isNaN(le_true_hdg) ? Math.round(le_true_hdg).toString().padStart(3, '0') + '°' : '---';
                 const he_true_hdg_str = !isNaN(he_true_hdg) ? Math.round(he_true_hdg).toString().padStart(3, '0') + '°' : '---';
-
                 return `
                     <tr data-runway-id="${runway.id}" style="border-bottom: 1px solid #333; cursor: pointer;">
                         <td style="padding: 5px 2px;"><strong>${runwayName}</strong></td>
@@ -1448,9 +1228,7 @@ async function updateAtcList(atcFacilities, allFlights) {
         } else {
             runwaysHTML += '<tr><td colspan="3" style="padding: 4px; text-align: center;">No runway data available.</td></tr>';
         }
-
         runwaysHTML += '</tbody></table>';
-
         const content = `
             <div class="info-card">
                 <h3>General</h3>
@@ -1464,9 +1242,7 @@ async function updateAtcList(atcFacilities, allFlights) {
                 <h3>Runways 🧭</h3>
                 ${runwaysHTML}
             </div>`;
-
         const panel = createFloatingPanel('airport-info-panel', `<h2>${panelTitle}</h2>`, '20px', '360px', content);
-
         panel.querySelectorAll('[data-runway-id]').forEach(row => {
             const runwayId = row.dataset.runwayId;
             row.addEventListener('mouseover', () => highlightRunway(runwayId));
@@ -1475,40 +1251,30 @@ async function updateAtcList(atcFacilities, allFlights) {
     }
 
 	function updateWaypoints() {
-    const showWaypoints = document.getElementById('filter-waypoints')?.checked;
-    const zoom = map.getZoom();
-    waypointsGroup.clearLayers();
-
-    if (!showWaypoints || zoom < 8) {
-        return;
-    }
-
-    if (!waypointsDataCache) return;
-
-    const bounds = map.getBounds();
-
-    waypointsDataCache.forEach(waypoint => {
-        if (!waypoint.coords || waypoint.coords.length < 2) return;
-        
-        const lon = parseFloat(waypoint.coords[0]);
-        const lat = parseFloat(waypoint.coords[1]);
-
-        if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
+        const showWaypoints = document.getElementById('filter-waypoints')?.checked;
+        const zoom = map.getZoom();
+        waypointsGroup.clearLayers();
+        if (!showWaypoints || zoom < 8 || !waypointsDataCache) {
             return;
         }
-
-        const waypointIcon = L.divIcon({
-            className: 'custom-map-marker',
-            // This SVG creates a solid white triangle
-            html: `<svg width="12" height="12" viewbox="0 0 12 12"><polygon points="6,1 11,11 1,11" fill="white"/></svg>`,
-            iconSize: [12, 12]
+        const bounds = map.getBounds();
+        waypointsDataCache.forEach(waypoint => {
+            if (!waypoint.coords || waypoint.coords.length < 2) return;
+            const lon = parseFloat(waypoint.coords[0]);
+            const lat = parseFloat(waypoint.coords[1]);
+            if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
+                return;
+            }
+            const waypointIcon = L.divIcon({
+                className: 'custom-map-marker',
+                html: `<svg width="12" height="12" viewbox="0 0 12 12"><polygon points="6,1 11,11 1,11" fill="white"/></svg>`,
+                iconSize: [12, 12]
+            });
+            L.marker([lat, lon], { icon: waypointIcon })
+            .bindTooltip(waypoint.name, { direction: 'top' })
+            .addTo(waypointsGroup);
         });
-
-        L.marker([lat, lon], { icon: waypointIcon })
-         .bindTooltip(waypoint.name, { direction: 'top' })
-         .addTo(waypointsGroup);
-    });
-}
+    }
 
     function highlightRunway(runwayId) {
         if (runwayLayers[runwayId]) {
@@ -1523,15 +1289,12 @@ async function updateAtcList(atcFacilities, allFlights) {
         }
     }
     
-    // UPDATED: Now uses the heading object {magnetic, true}
     function addPlanStep(stepId, heading, distanceMeters, altitude = '', speed = '', lineType = 'standard') {
         createOrShowPlanPanel();
         const sectionMap = { standard: 'standard-steps', arrival: 'arrival-steps', departure: 'departure-steps' };
         const planContainerId = sectionMap[lineType] || 'standard-steps';
         const planContainer = document.getElementById(planContainerId);
-
         if (!planContainer) return;
-
         const allContentAreas = document.querySelectorAll('.plan-section-content');
         allContentAreas.forEach(area => {
             if (area.id !== planContainerId) {
@@ -1539,7 +1302,6 @@ async function updateAtcList(atcFacilities, allFlights) {
             }
         });
         planContainer.style.display = 'block';
-
         const distanceNM = (distanceMeters / 1852).toFixed(1);
         const stepDiv = document.createElement('div');
         stepDiv.className = 'plan-step';
@@ -1553,14 +1315,11 @@ async function updateAtcList(atcFacilities, allFlights) {
                 <div><label>Alt (ft):</label><input type="number" id="alt-${stepId}" value="${altitude}" placeholder="10000" step="100"></div>
                 <div><label>Speed (kts):</label><input type="number" id="speed-${stepId}" value="${speed}" placeholder="250"></div>
             </div>`;
-
         planContainer.appendChild(stepDiv);
-
         stepDiv.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             createAltitudeProfilePanel(stepId);
         });
-
         const headingSpan = stepDiv.querySelector('.plan-heading-text');
         headingSpan.addEventListener('click', () => {
             const currentHeading = planLayers[stepId].heading.magnetic;
@@ -1573,24 +1332,21 @@ async function updateAtcList(atcFacilities, allFlights) {
             input.style.color = '#fff';
             input.style.border = '1px solid #777';
             input.style.borderRadius = '4px';
-
             headingSpan.parentElement.replaceChild(input, headingSpan);
             input.focus();
             input.select();
-
             const saveHeading = () => {
                 let newHeading = parseInt(input.value, 10);
                 if (!isNaN(newHeading)) {
                     newHeading = (newHeading + 360) % 360; 
                     const newHeadingText = newHeading.toString().padStart(3, '0');
-                    planLayers[stepId].heading.magnetic = newHeadingText; // Only update magnetic part
+                    planLayers[stepId].heading.magnetic = newHeadingText;
                     headingSpan.textContent = `Hdg ${newHeadingText}° M`;
                     updateDataBlock(stepId);
                 }
                 input.parentElement.replaceChild(headingSpan, input);
                 savePlanToLocalStorage();
             };
-
             input.addEventListener('blur', saveHeading);
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
@@ -1601,7 +1357,6 @@ async function updateAtcList(atcFacilities, allFlights) {
                 }
             });
         });
-
         stepDiv.querySelector('.delete-step-btn').addEventListener('click', function() {
             const idToDelete = this.getAttribute('data-step-id');
             if (planLayers[idToDelete]) {
@@ -1613,7 +1368,6 @@ async function updateAtcList(atcFacilities, allFlights) {
             }
             this.closest('.plan-step').remove();
         });
-
         document.getElementById(`alt-${stepId}`).addEventListener('input', (e) => {
             const legData = planLayers[stepId];
             const newAlt = parseInt(e.target.value);
@@ -1623,7 +1377,6 @@ async function updateAtcList(atcFacilities, allFlights) {
             updateAltitudeForLeg(stepId);
             savePlanToLocalStorage();
         });
-
         document.getElementById(`speed-${stepId}`).addEventListener('input', (e) => {
             const legData = planLayers[stepId];
             legData.speed = e.target.value;
@@ -1661,69 +1414,51 @@ async function updateAtcList(atcFacilities, allFlights) {
         Object.keys(planLayers).forEach(stepId => updateDataBlock(stepId));
     }
 
-    // UPDATED: Temporary label creation and styling
     function handleMouseDown(e) {
         if (!isDrawingEnabled || e.originalEvent.button !== 0 || e.originalEvent.target.closest('.floating-panel')) { return; }
-        
         if (tempLine) map.removeLayer(tempLine);
         if (tempLabel) map.removeLayer(tempLabel);
-        
         Object.values(planLayers).forEach(layer => {
             if (layer.label && layer.label.dragging) { layer.label.dragging.disable(); }
         });
-    
         isDrawing = true;
         const startPoint = e.latlng;
         tempLine = L.polyline([startPoint, startPoint], { color: '#007bff', weight: 3, dashArray: '10, 10' }).addTo(map);
         tempLabel = L.marker(startPoint, { 
             icon: L.divIcon({ 
-                className: 'custom-map-marker', // Use a transparent container class
+                className: 'custom-map-marker',
                 html: `<div class="drawing-temp-heading">---</div>` 
             }) 
         }).addTo(map);
     }
     
-    // UPDATED: Logic for updating the temporary heading label
     function handleMouseMove(e) {
         if (!isDrawing || !tempLine) return;
-        
         const startPoint = tempLine.getLatLngs()[0];
         const currentPoint = e.latlng;
         tempLine.setLatLngs([startPoint, currentPoint]);
-
         const midPoint = getMidPoint(startPoint, currentPoint);
         tempLabel.setLatLng(midPoint);
-
         const trueHeading = calculateHeading(startPoint, currentPoint);
         let magneticHeading = trueHeading;
-        let declination = 0;
-
         if (wmmModel) {
-            declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+            const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
             magneticHeading = (trueHeading - declination + 360) % 360;
         }
-
         const headingText = Math.round(magneticHeading).toString().padStart(3, '0');
-        
-        // Only show magnetic heading now with the new style
         if(tempLabel.getElement()) {
             tempLabel.getElement().innerHTML = `<div class="drawing-temp-heading">${headingText}° M</div>`;
         }
     }
     
-    // UPDATED: Now creates a full heading object {magnetic, true}
     function handleMouseUp(e) {
         if (!isDrawing) return;
-    
         isDrawing = false; 
-    
         if (tempLine) {
             const startPoint = tempLine.getLatLngs()[0];
             const endPoint = e.latlng;
-
-            if (startPoint.distanceTo(endPoint) > 50) { // minimum distance to draw
+            if (startPoint.distanceTo(endPoint) > 50) {
                 const lineType = currentLineType;
-
                 const trueHeading = calculateHeading(startPoint, endPoint);
                 let magneticHeading = trueHeading;
                 if (wmmModel) {
@@ -1731,12 +1466,10 @@ async function updateAtcList(atcFacilities, allFlights) {
                     const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
                     magneticHeading = (trueHeading - declination + 360) % 360;
                 }
-                
                 const finalHeading = { 
                     magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
                     true: Math.round(trueHeading).toString().padStart(3, '0')
                 };
-
                 createFinalLine(startPoint, endPoint, `step-${Date.now()}`, '', '', true, lineType, null, null, finalHeading);
                 savePlanToLocalStorage();
             }
@@ -1745,13 +1478,11 @@ async function updateAtcList(atcFacilities, allFlights) {
             tempLine = null;
             tempLabel = null;
         }
-
         Object.values(planLayers).forEach(layer => {
             if (layer.label && layer.label.dragging) { layer.label.dragging.enable(); }
         });
     }
 
-    // UPDATED: Now expects a heading object {magnetic, true}
     function createFinalLine(start, end, stepId, altitude = '', speed = '', performCollisionCheck = false, lineType = 'standard', startAltitude, endAltitude, heading) {
         let line, outline;
         if (lineType === 'standard' && currentMapMode === "regular") {
@@ -1761,7 +1492,6 @@ async function updateAtcList(atcFacilities, allFlights) {
             const style = (currentMapMode === "terrain") ? FLIGHT_LINE_STYLES_TERRAIN[lineType] : FLIGHT_LINE_STYLES_REGULAR[lineType];
             line = L.polyline([start, end], style).addTo(planItemsGroup);
         }
-        
         if (!heading) {
              const trueHeading = calculateHeading(start, end);
              let magneticHeading = trueHeading;
@@ -1775,12 +1505,9 @@ async function updateAtcList(atcFacilities, allFlights) {
                 true: Math.round(trueHeading).toString().padStart(3, '0')
              };
         }
-
         let labelPos = getOptimalLabelPosition(start, end);
         if (performCollisionCheck) { labelPos = findNonCollidingPosition(labelPos); }
-        
         const initialHtml = `<div class="flight-data-block"><div class="fdb-heading">${heading.magnetic}° M</div><div class="fdb-row"><div class="fdb-data-item fdb-airspeed"><span class="fdb-value">---</span><span class="fdb-unit">kts</span></div><div class="fdb-data-item fdb-altitude"><span class="fdb-value">---</span><span class="fdb-unit">ft</span></div></div></div>`;
-
         const label = L.marker(labelPos, {
             draggable: true,
             icon: L.divIcon({
@@ -1788,21 +1515,16 @@ async function updateAtcList(atcFacilities, allFlights) {
                 html: initialHtml
             })
         });
-        
         if (appSettings.showDataBlocks) { label.addTo(planLabelsGroup); }
-
         label.on('mousedown', (e) => { L.DomEvent.stopPropagation(e.originalEvent); });
         label.on('dragend', (event) => {
             planLayers[stepId].labelPosition = event.target.getLatLng();
             planLayers[stepId].hasBeenDragged = true;
             savePlanToLocalStorage();
         });
-
         planLayers[stepId] = { line, outline, start, end, labelPosition: labelPos, altitude, speed, lineType, hasBeenDragged: false, label, heading, startAltitude, endAltitude };
-        
         addPlanStep(stepId, heading, start.distanceTo(end), altitude, speed, lineType);
         updateAltitudeForLeg(stepId);
-
         checkPlanLabelVisibility();
         updateAllFlightDataBlockStyles();
     }
@@ -1856,7 +1578,6 @@ async function updateAtcList(atcFacilities, allFlights) {
         }
     }
 
-    // UPDATED: Now saves the full heading object
     function savePlanToLocalStorage() {
         const planData = Object.keys(planLayers).map(key => {
             const layer = planLayers[key];
@@ -1869,7 +1590,7 @@ async function updateAtcList(atcFacilities, allFlights) {
                 speed: layer.speed,
                 lineType: layer.lineType,
                 hasBeenDragged: layer.hasBeenDragged,
-                heading: layer.heading, // Save the whole heading object
+                heading: layer.heading,
                 startAltitude: layer.startAltitude,
                 endAltitude: layer.endAltitude
             };
@@ -1877,7 +1598,6 @@ async function updateAtcList(atcFacilities, allFlights) {
         localStorage.setItem('flightPlan', JSON.stringify(planData));
     }
 
-    // UPDATED: Handles both old and new saved plan formats
     function loadPlanFromLocalStorage() {
         const savedPlan = localStorage.getItem('flightPlan');
         if (savedPlan) {
@@ -1885,20 +1605,17 @@ async function updateAtcList(atcFacilities, allFlights) {
             planData.forEach(data => {
                 const start = L.latLng(data.start.lat, data.start.lng);
                 const end = L.latLng(data.end.lat, data.end.lng);
-                
                 let heading;
-                if (data.heading) { // New format with heading object
+                if (data.heading) {
                     heading = data.heading;
-                } else if (data.headingText) { // Backwards compatibility for old format
+                } else if (data.headingText) {
                     const trueHeading = calculateHeading(start, end);
                     heading = {
                         magnetic: data.headingText,
                         true: Math.round(trueHeading).toString().padStart(3, '0')
                     };
                 }
-
                 createFinalLine(start, end, data.stepId, data.altitude, data.speed, false, data.lineType, data.startAltitude, data.endAltitude, heading);
-                
                 if (data.labelPosition) {
                     const labelPos = L.latLng(data.labelPosition.lat, data.labelPosition.lng);
                     planLayers[data.stepId].label.setLatLng(labelPos);
@@ -1920,37 +1637,21 @@ async function updateAtcList(atcFacilities, allFlights) {
              const point = wmmModel.field(latlng.lat, latlng.lng);
              magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
         }
-    
         try {
             const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
             if (!response.ok) throw new Error(`API error`);
             const data = await response.json();
             const elevationMeters = data.elevation[0];
-            
-            // --- FIX START ---
-            // Changed label from MSL to MSA and updated the calculation.
-            let msaText = "MSA: 2,000'"; // Default MSA if on water or at sea level
-    
+            let msaText = "MSA: 2,000'";
             if (elevationMeters !== null && elevationMeters > 0) {
-                // 1. Convert terrain elevation from meters to feet
                 let terrainElevationFeet = elevationMeters * 3.28084;
-                
-                // 2. Add 2000 feet buffer for safety altitude
                 let calculatedMsa = terrainElevationFeet + 2000;
-                
-                // 3. Round UP to the nearest 1,000 feet
                 let roundedMsa = Math.ceil(calculatedMsa / 1000) * 1000;
-    
                 msaText = `MSA: ${roundedMsa.toLocaleString()}'`;
             }
-            // --- FIX END ---
-    
-             // Update the popup with the new MSA text and the existing magnetic variation text
-             mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
-    
+            mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
         } catch (error) {
             console.error("Failed to fetch elevation data:", error);
-            // Use MSA in the error message as well for consistency
             mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
         }
     }
@@ -1982,9 +1683,7 @@ async function updateAtcList(atcFacilities, allFlights) {
         const he_lat = parseFloat(runwayData.he_latitude_deg);
         const he_lon = parseFloat(runwayData.he_longitude_deg);
         const width_ft = parseFloat(runwayData.width_ft);
-
         if ([le_lat, le_lon, he_lat, he_lon, width_ft].some(isNaN) || width_ft <= 0) { return; }
-        
         const widthMeters = width_ft * 0.3048;
         const runwayLineString = turf.lineString([[le_lon, le_lat], [he_lon, he_lat]]);
         const bufferRadiusKm = (widthMeters / 2) / 1000;
@@ -1995,15 +1694,12 @@ async function updateAtcList(atcFacilities, allFlights) {
         const clStyle = (currentMapMode === "terrain") ? RUNWAY_CENTERLINE_STYLE_TERRAIN : RUNWAY_CENTERLINE_STYLE_REGULAR;
         L.polyline([[le_lat, le_lon], [he_lat, he_lon]], clStyle).addTo(polygonGroup);
         addRunwayLabel(runwayData, [le_lon, le_lat], [he_lon, he_lat], labelGroup);
-        
         const le_point = turf.point([le_lon, le_lat]);
         const he_point = turf.point([he_lon, he_lat]);
-        
         if (runwayData.le_ident) {
             const bearing_he_to_le = turf.bearing(he_point, le_point);
             drawFinalApproachCone(le_point, bearing_he_to_le, finalApproachGroup);
         }
-
         if (runwayData.he_ident) {
             const bearing_le_to_he = turf.bearing(le_point, he_point);
             drawFinalApproachCone(he_point, bearing_le_to_he, finalApproachGroup);
@@ -2013,23 +1709,14 @@ async function updateAtcList(atcFacilities, allFlights) {
     function drawFinalApproachCone(runwayEnd, bearing, group) {
         const finalDistNM = 10;
         const finalWidthNM = 1.0; 
-
         const apex = runwayEnd;
         const baseCenter = turf.destination(runwayEnd, finalDistNM, bearing, { units: 'nauticalmiles' });
         const p1 = turf.destination(baseCenter, finalWidthNM, bearing - 90, { units: 'nauticalmiles' });
         const p2 = turf.destination(baseCenter, finalWidthNM, bearing + 90, { units: 'nauticalmiles' });
-        
-        const coneCoords = [[
-            p1.geometry.coordinates,
-            p2.geometry.coordinates,
-            apex.geometry.coordinates,
-            p1.geometry.coordinates 
-        ]];
-
+        const coneCoords = [[ p1.geometry.coordinates, p2.geometry.coordinates, apex.geometry.coordinates, p1.geometry.coordinates ]];
         const conePoly = turf.polygon(coneCoords);
         L.geoJSON(conePoly, { style: FINAL_APPROACH_STYLE }).addTo(group);
-
-        const centerline = L.polyline([
+        L.polyline([
             [apex.geometry.coordinates[1], apex.geometry.coordinates[0]],
             [baseCenter.geometry.coordinates[1], baseCenter.geometry.coordinates[0]]
         ], FINAL_APPROACH_CENTERLINE_STYLE).addTo(group);
@@ -2060,18 +1747,14 @@ async function updateAtcList(atcFacilities, allFlights) {
     function segmentsIntersect(p1, p2, p3, p4) {
         const toPoint = (p) => ({ x: p.x, y: p.y });
         const det = (a, b) => a.x * b.y - a.y * b.x;
-
         const a = toPoint(p1), b = toPoint(p2), c = toPoint(p3), d = toPoint(p4);
         const C_A = { x: c.x - a.x, y: c.y - a.y };
         const D_C = { x: d.x - c.x, y: d.y - c.y };
         const B_A = { x: b.x - a.x, y: b.y - a.y };
-
         const det_D_C_B_A = det(D_C, B_A);
         if (det_D_C_B_A === 0) return false;
-
         const t = det(C_A, D_C) / det_D_C_B_A;
         const u = det(C_A, B_A) / det_D_C_B_A;
-
         return t >= 0 && t <= 1 && u >= 0 && u <= 1;
     }
 
