@@ -21,20 +21,11 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer: L.canvas()
     });
 
-    // --- BASE LAYERS ---
-    const mapboxTerrain = L.tileLayer('https://api.mapbox.com/styles/v1/servernoob/cmczbx5sp003901s75pireieo/tiles/{z}/{x}/{y}?access_token=pk.eyJ1Ijoic2VydmVybm9vYiIsImEiOiJjbWN6YnVzcTMwNnEwMnJvZ2N5OXlhdnpiIn0.Nn3bZwHhbjTsnudkj0L1ig', {
-        attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
-        maxZoom: 22,
-        tileSize: 512,
-        zoomOffset: -1
-    }).addTo(map); // Set as the default map
-
     const darkBaseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
         noWrap: true
-    });
+    }).addTo(map);
 
-    // --- OVERLAY LAYERS ---
     const hillshadeLayer = L.tileLayer(
         'https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Hillshade: &copy; Esri, USGS, NOAA',
@@ -54,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri',
         maxZoom: 13
     });
-
 
     // --- GLOBAL VARIABLES & LAYER GROUPS ---
     const hubDotsGroup = new L.FeatureGroup().addTo(map);
@@ -97,10 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isLiveModeActive = false;
 
     // --- Layer control with all terrain and navaid options ---
-    const baseLayers = {
-        "Terrain": mapboxTerrain,
-        "Dark Mode": darkBaseLayer
-    };
+    const baseLayers = { "Dark Map": darkBaseLayer };
     const overlayLayers = {
         "Terrain (Hillshade)": hillshadeLayer,
         "Terrain (3D Feel)": stamenTerrainLayer,
