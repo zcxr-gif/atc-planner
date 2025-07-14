@@ -1,4 +1,4 @@
-// app.js (Fixed to align with official Infinite Flight API documentation)
+// app.js (Fully Fixed)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     delete L.Icon.Default.prototype._getIconUrl;
@@ -306,9 +306,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.target && e.target.classList.contains('view-fpl-btn')) {
                 e.preventDefault();
                 const flightId = e.target.getAttribute('data-flight-id');
+                const sessionId = e.target.getAttribute('data-session-id'); // Get the session ID
                 const callsign = e.target.getAttribute('data-callsign') || 'Unknown';
-                if (flightId) {
-                    await fetchAndDisplayFlightPlan(flightId, callsign);
+                
+                // Check for both IDs before proceeding
+                if (flightId && sessionId) {
+                    await fetchAndDisplayFlightPlan(flightId, sessionId, callsign);
+                } else {
+                    console.error("Flight ID or Session ID is missing from the button.", { flightId, sessionId });
+                    alert("Could not fetch flight plan: required information is missing.");
                 }
             }
         });
@@ -653,7 +659,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
             const flightsData = await flightsResponse.json();
             if (flightsData.result) {
-                updateFlightMarkers(flightsData.result);
+                // Pass the sessionId to the marker update function
+                updateFlightMarkers(flightsData.result, sessionId);
             }
 
             // Call the new, rebuilt ATC function
@@ -670,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function updateFlightMarkers(flights) {
+    function updateFlightMarkers(flights, sessionId) {
         const existingFlightIds = Object.keys(liveFlightMarkers);
         const incomingFlightIds = flights.map(f => f.flightId);
 
@@ -704,13 +711,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 className: 'custom-map-marker',
                 iconSize: [24, 24]
             });
+            // Add the data-session-id attribute to the button
             const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
               User: ${flight.username || 'N/A'}<br>
               Altitude: ${altitudeText}<br>
               Speed: ${speedText}<br>
               ${
                 flight.flightId
-                  ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" data-callsign="${callsign}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
+                  ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" data-session-id="${sessionId}" data-callsign="${callsign}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
                   : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
               }`;
 
@@ -728,35 +736,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- FIXED FLIGHT PLAN FUNCTION (ALIGNED WITH IF API DOCS) ---
-    async function fetchAndDisplayFlightPlan(flightId, callsign) {
+    async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign) {
         flightPlanRouteGroup.clearLayers();
         try {
-            const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+            // Update the fetch call to include the sessionId in the path
+            const response = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flightId}`);
             if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(`API Error: ${response.status} - ${errorData.error}`);
             }
             const data = await response.json();
 
-            // Use flightPlanItems array, which is the correct source of data 
-            const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
+            // The 'result' object contains the flight plan data[cite: 12].
+            const flightPlanItems = (data.result && data.result.flightPlanItems) || []; // [cite: 15]
             const allWaypoints = [];
 
             // Parse the flightPlanItems, accounting for nested procedures
             flightPlanItems.forEach(item => {
-                // If an item has children, it's a procedure (SID, STAR, Approach) 
+                // If an item has children, it's a procedure (SID, STAR, Approach)[cite: 19].
                 // We must process the children to get the actual waypoints.
-                if (item.children && item.children.length > 0) {
+                if (item.children && item.children.length > 0) { // [cite: 18]
                     item.children.forEach(child => {
-                        if (child.location) {
+                        if (child.location) { // [cite: 22]
                             allWaypoints.push({
-                                name: child.name,
+                                name: child.name, // [cite: 16]
                                 latitude: child.location.latitude,
                                 longitude: child.location.longitude
                             });
                         }
                     });
                 } else {
-                    // If no children, the item itself is a waypoint (Fix, VOR, etc.) [cite: 19]
+                    // If no children, the item itself is a waypoint (Fix, VOR, etc.)[cite: 19].
                     if (item.location) {
                         allWaypoints.push({
                             name: item.name,
@@ -795,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error("A critical error occurred while fetching the flight plan:", error);
-            alert(`An unexpected error occurred. Could not display the flight plan for ${callsign}.`);
+            alert(`An unexpected error occurred. Could not display the flight plan for ${callsign}. See console for details.`);
         }
     }
 	

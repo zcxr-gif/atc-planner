@@ -4,15 +4,17 @@
 const fetch = require('node-fetch');
 
 exports.handler = async function(event, context) {
-    // --- 1. Get Flight ID from the URL ---
-    // We split the path (e.g., "/api/flightplan/some-flight-id") and take the last part.
-    const flightId = event.path.split('/').pop();
+    // --- 1. Get Session ID & Flight ID from the URL ---
+    // We now expect a path like: /api/flightplan/{sessionId}/{flightId}
+    const pathParts = event.path.split('/').filter(Boolean); // filter(Boolean) removes empty strings
+    const flightId = pathParts.pop();
+    const sessionId = pathParts.pop();
 
-    // If no flightId is provided in the URL, return a clear error.
-    if (!flightId) {
+    // If either ID is missing from the URL, return a clear error.
+    if (!sessionId || !flightId) {
         return {
             statusCode: 400,
-            body: JSON.stringify({ error: 'A Flight ID must be provided in the URL.' }),
+            body: JSON.stringify({ error: 'A Session ID and Flight ID must be provided in the URL.' }),
         };
     }
 
@@ -28,8 +30,9 @@ exports.handler = async function(event, context) {
         };
     }
 
-    // --- 3. Prepare and Fetch from the API ---
-    const apiUrl = `https://api.infiniteflight.com/v2/flights/${flightId}/flightplan`;
+    // --- 3. Prepare and Fetch from the CORRECT API Endpoint ---
+    // This URL now matches the official API documentation.
+    const apiUrl = `https://api.infiniteflight.com/public/v2/sessions/${sessionId}/flights/${flightId}/flightplan`;
 
     try {
         const response = await fetch(apiUrl, {
@@ -52,7 +55,6 @@ exports.handler = async function(event, context) {
 
         // --- 4. DEBUGGER ---
         // This logs the full data structure received from the API to your Netlify function log.
-        // The 'null, 2' part formats the JSON to be easily readable.
         console.log('--- Infinite Flight API Response ---');
         console.log(JSON.stringify(flightplanData, null, 2));
         console.log('------------------------------------');
