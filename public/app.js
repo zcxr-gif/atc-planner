@@ -25,17 +25,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Your new MapTiler Layers
-    const lightModeMap = L.tileLayer('https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/256/{z}/{x}/{y}.png?key=InN0UHhrnYhq86Wukvt6', {
+    const lightModeMap = L.tileLayer('https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/style.json?key=InN0UHhrnYhq86Wukvt6', {
         attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
         noWrap: true
     });
 
-    const darkTerrainMap = L.tileLayer('https://api.maptiler.com/maps/01980635-0568-7f37-8096-3914e198c5ef/256/{z}/{x}/{y}.png?key=InN0UHhrnYhq86Wukvt6', {
+    const darkTerrainMap = L.tileLayer('https://api.maptiler.com/maps/01980635-0568-7f37-8096-3914e198c5ef/style.json?key=InN0UHhrnYhq86Wukvt6', {
         attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
         noWrap: true
     });
 
-    const darkModeMap = L.tileLayer('https://api.maptiler.com/maps/01980649-9f3e-7abd-a079-601fb40d973e/256/{z}/{x}/{y}.png?key=InN0UHhrnYhq86Wukvt6', {
+    const darkModeMap = L.tileLayer('https://api.maptiler.com/maps/01980649-9f3e-7abd-a079-601fb40d973e/style.json?key=InN0UHhrnYhq86Wukvt6', {
         attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
         noWrap: true
     });
