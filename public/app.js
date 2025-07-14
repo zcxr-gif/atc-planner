@@ -462,7 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             <div class="filter-dropdown-container" id="airport-dropdown-container">
                 <button class="filter-dropdown-btn">Airport Type <span style="float: right;">▼</span></button>
-                <div class="filter-dropdown-content">
+                <div class="filter-dropdown-content" style="display: none;">
                     <p class="dropdown-description">Filter airports by airspace classification.</p>
                     <div id="airport-filters">
                         <label><input type="checkbox" id="filter-large" value="large_airport" checked> Bravo</label>
@@ -532,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
         
-        // NEW: Consolidated listener for all navigation filters
         mainPanel.querySelector('#navigation-filters').addEventListener('change', (e) => {
             if (e.target.id === 'filter-navaids' || e.target.id === 'filter-waypoints') {
                 updateNavaids();
@@ -567,29 +566,39 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Airport dropdown (hover)
-        const airportDropdownContainer = mainPanel.querySelector('#airport-dropdown-container');
-        if (airportDropdownContainer) {
-            const dropdownContent = airportDropdownContainer.querySelector('.filter-dropdown-content');
-            airportDropdownContainer.addEventListener('mouseenter', () => { if (dropdownContent) dropdownContent.style.display = 'block'; });
-            airportDropdownContainer.addEventListener('mouseleave', () => { if (dropdownContent) dropdownContent.style.display = 'none'; });
-        }
-        
-        // NEW: Navigation dropdown (click)
-        const navDropdownBtn = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-btn');
-        if (navDropdownBtn) {
-            navDropdownBtn.addEventListener('click', () => {
-                const dropdownContent = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-content');
-                if (dropdownContent) {
-                    const isVisible = dropdownContent.style.display === 'block';
-                    dropdownContent.style.display = isVisible ? 'none' : 'block';
-                }
-            });
-        }
-        
         mainPanel.querySelector('#line-type-selector').addEventListener('change', (e) => {
             if (e.target.name === 'line-type') {
                 currentLineType = e.target.value;
+            }
+        });
+
+        // --- UNIFIED DROPDOWN CLICK LOGIC ---
+        const airportDropdownBtn = mainPanel.querySelector('#airport-dropdown-container .filter-dropdown-btn');
+        const airportDropdownContent = mainPanel.querySelector('#airport-dropdown-container .filter-dropdown-content');
+        
+        const navDropdownBtn = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-btn');
+        const navDropdownContent = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-content');
+
+        airportDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = airportDropdownContent.style.display === 'block';
+            if (navDropdownContent) navDropdownContent.style.display = 'none';
+            airportDropdownContent.style.display = isVisible ? 'none' : 'block';
+        });
+
+        navDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isVisible = navDropdownContent.style.display === 'block';
+            if (airportDropdownContent) airportDropdownContent.style.display = 'none';
+            navDropdownContent.style.display = isVisible ? 'none' : 'block';
+        });
+
+        document.addEventListener('click', (e) => {
+             if (airportDropdownContent && !airportDropdownBtn.contains(e.target) && !airportDropdownContent.contains(e.target)) {
+                airportDropdownContent.style.display = 'none';
+            }
+            if (navDropdownContent && !navDropdownBtn.contains(e.target) && !navDropdownContent.contains(e.target)) {
+                navDropdownContent.style.display = 'none';
             }
         });
         
