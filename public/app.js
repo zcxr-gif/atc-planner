@@ -387,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const content = panel.querySelector('.panel-content');
             const isHidden = content.style.display === 'none';
             content.style.display = isHidden ? 'block' : 'none';
-e.target.textContent = isHidden ? '-' : '+';
+            e.target.textContent = isHidden ? '-' : '+';
         });
 
         makeDraggable(panel);
@@ -464,21 +464,24 @@ e.target.textContent = isHidden ? '-' : '+';
                 <button class="filter-dropdown-btn">Airport Type <span style="float: right;">▼</span></button>
                 <div class="filter-dropdown-content">
                     <p class="dropdown-description">Filter airports by airspace classification.</p>
-                    <div id="airport-filters"> <label><input type="checkbox" id="filter-large" value="large_airport" checked> Bravo</label>
+                    <div id="airport-filters">
+                        <label><input type="checkbox" id="filter-large" value="large_airport" checked> Bravo</label>
                         <label><input type="checkbox" id="filter-medium" value="medium_airport" checked> Charlie</label>
                         <label><input type="checkbox" id="filter-small" value="small_airport" checked> Small/Other</label>
                     </div>
                 </div>
             </div>
 
-            <div id="navaid-filters" style="margin-top: 10px;">
-                <input type="checkbox" id="filter-navaids" checked> <label for="filter-navaids" style="color: #fff; font-weight: normal;">Show VORs</label><br>
-                <input type="checkbox" id="filter-waypoints" checked> <label for="filter-waypoints" style="color: #fff; font-weight: normal;">Show Waypoints</label>
-            </div>
-
-            <div id="final-approach-toggle" style="margin-top: 10px;">
-                <input type="checkbox" id="enable-final-approach" checked>
-                <label for="enable-final-approach" style="color: #fff; font-weight: normal;">Show 10nm Final</label>
+            <div class="filter-dropdown-container" id="navigation-dropdown-container">
+                <button class="filter-dropdown-btn">Navigation Aids <span style="float: right;">▼</span></button>
+                <div class="filter-dropdown-content" style="display: none;">
+                    <p class="dropdown-description">Toggle visibility of navigational elements.</p>
+                    <div id="navigation-filters">
+                        <label><input type="checkbox" id="filter-navaids" checked> Show VORs</label>
+                        <label><input type="checkbox" id="filter-waypoints" checked> Show Waypoints</label>
+                        <label><input type="checkbox" id="enable-final-approach" checked> Show 10nm Final</label>
+                    </div>
+                </div>
             </div>
 
             <h3 style="margin-top: 15px;">Tools</h3>
@@ -527,60 +530,66 @@ e.target.textContent = isHidden ? '-' : '+';
             updateAirports();
         });
 
-        // This listener on the parent div still works for the checkboxes inside
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
         
-        mainPanel.querySelector('#navaid-filters').addEventListener('change', (e) => {
-            updateNavaids();
-            updateWaypoints();
+        // NEW: Consolidated listener for all navigation filters
+        mainPanel.querySelector('#navigation-filters').addEventListener('change', (e) => {
+            if (e.target.id === 'filter-navaids' || e.target.id === 'filter-waypoints') {
+                updateNavaids();
+                updateWaypoints();
+            }
+            if (e.target.id === 'enable-final-approach') {
+                const finalApproachCheckbox = document.getElementById('enable-final-approach');
+                if (finalApproachCheckbox && finalApproachCheckbox.checked) {
+                    map.addLayer(finalApproachGroup);
+                } else {
+                    map.removeLayer(finalApproachGroup);
+                }
+            }
         });
 				
-        // MODIFIED: Event listener for Drawing Mode now also toggles the Line Type selector
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
             isDrawingEnabled = e.target.checked;
             const drawingText = document.getElementById('drawing-mode-text');
-            const lineSelector = document.getElementById('line-type-selector'); // Get the line selector
+            const lineSelector = document.getElementById('line-type-selector');
 
             if (isDrawingEnabled) {
                 map.dragging.disable();
                 map.getContainer().style.cursor = 'crosshair';
                 if (drawingText) drawingText.style.display = 'block';
-                if (lineSelector) lineSelector.style.display = 'block'; // Show line selector
+                if (lineSelector) lineSelector.style.display = 'block';
                 createOrShowPlanPanel();
             } else {
                 map.dragging.enable();
                 map.getContainer().style.cursor = '';
                 if (drawingText) drawingText.style.display = 'none';
-                if (lineSelector) lineSelector.style.display = 'none'; // Hide line selector
+                if (lineSelector) lineSelector.style.display = 'none';
             }
         });
-
-        // NEW: Event listeners for the airport filter dropdown
+        
+        // Airport dropdown (hover)
         const airportDropdownContainer = mainPanel.querySelector('#airport-dropdown-container');
         if (airportDropdownContainer) {
             const dropdownContent = airportDropdownContainer.querySelector('.filter-dropdown-content');
-            
-            // Show dropdown on mouse enter
-            airportDropdownContainer.addEventListener('mouseenter', () => {
-                if (dropdownContent) dropdownContent.style.display = 'block';
-            });
-
-            // Hide dropdown on mouse leave
-            airportDropdownContainer.addEventListener('mouseleave', () => {
-                if (dropdownContent) dropdownContent.style.display = 'none';
+            airportDropdownContainer.addEventListener('mouseenter', () => { if (dropdownContent) dropdownContent.style.display = 'block'; });
+            airportDropdownContainer.addEventListener('mouseleave', () => { if (dropdownContent) dropdownContent.style.display = 'none'; });
+        }
+        
+        // NEW: Navigation dropdown (click)
+        const navDropdownBtn = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-btn');
+        if (navDropdownBtn) {
+            navDropdownBtn.addEventListener('click', () => {
+                const dropdownContent = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-content');
+                if (dropdownContent) {
+                    const isVisible = dropdownContent.style.display === 'block';
+                    dropdownContent.style.display = isVisible ? 'none' : 'block';
+                }
             });
         }
         
         mainPanel.querySelector('#line-type-selector').addEventListener('change', (e) => {
             if (e.target.name === 'line-type') {
                 currentLineType = e.target.value;
-            }
-        });
-        mainPanel.querySelector('#enable-final-approach').addEventListener('change', (e) => {
-            if (e.target.checked) {
-                map.addLayer(finalApproachGroup);
-            } else {
-                map.removeLayer(finalApproachGroup);
             }
         });
         
@@ -786,19 +795,19 @@ e.target.textContent = isHidden ? '-' : '+';
             }
             const data = await response.json();
 
-            // The 'result' object contains the flight plan data.
-            const flightPlanItems = (data.result && data.result.flightPlanItems) || []; //
+            // The 'result' object contains the flight plan data
+            const flightPlanItems = (data.result && data.result.flightPlanItems) || []; 
             const allWaypoints = [];
 
             // Parse the flightPlanItems, accounting for nested procedures
             flightPlanItems.forEach(item => {
                 // If an item has children, it's a procedure (SID, STAR, Approach).
                 // We must process the children to get the actual waypoints.
-                if (item.children && item.children.length > 0) { //
+                if (item.children && item.children.length > 0) { 
                     item.children.forEach(child => {
-                        if (child.location) { //
+                        if (child.location) { 
                             allWaypoints.push({
-                                name: child.name, //
+                                name: child.name, 
                                 latitude: child.location.latitude,
                                 longitude: child.location.longitude
                             });
@@ -809,8 +818,8 @@ e.target.textContent = isHidden ? '-' : '+';
                     if (item.location) {
                         allWaypoints.push({
                             name: item.name,
-                            latitude: item.location.latitude, //
-                            longitude: item.location.longitude //
+                            latitude: item.location.latitude, 
+                            longitude: item.location.longitude 
                         });
                     }
                 }
