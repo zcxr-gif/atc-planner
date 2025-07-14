@@ -16,39 +16,37 @@ document.addEventListener('DOMContentLoaded', () => {
         zoom: 5,
         scrollWheelZoom: true,
         wheelPxPerZoomLevel: 150,
-        maxBounds: [[-90, -180], [90, 180]],
+        maxBounds: [
+            [-90, -180],
+            [90, 180]
+        ],
         minZoom: 2,
         renderer: L.canvas()
     });
 
-    const darkBaseLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    // Your new MapTiler Layers
+    const lightModeMap = L.tileLayer('https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/256/{z}/{x}/{y}.png?key=InN0UHhrnYhq86Wukvt6', {
+        attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
         noWrap: true
-    }).addTo(map);
-
-    const hillshadeLayer = L.tileLayer(
-        'https://services.arcgisonline.com/ArcGIS/rest/services/Elevation/World_Hillshade/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Hillshade: &copy; Esri, USGS, NOAA',
-            opacity: 0.85,
-            noWrap: true
-        }
-    );
-
-    const stamenTerrainLayer = L.tileLayer('https://stamen-tiles-{s}.a.ssl.fastly.net/terrain/{z}/{x}/{y}{r}.png', {
-        attribution: 'Map tiles by <a href="http://stamen.com">Stamen Design</a>, <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a> &mdash; Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        subdomains: 'abcd',
-        minZoom: 0,
-        maxZoom: 18,
     });
 
-    const esriWorldShadedRelief = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri',
-        maxZoom: 13
+    const darkTerrainMap = L.tileLayer('https://api.maptiler.com/maps/01980635-0568-7f37-8096-3914e198c5ef/256/{z}/{x}/{y}.png?key=InN0UHhrnYhq86Wukvt6', {
+        attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
+        noWrap: true
     });
+
+    const darkModeMap = L.tileLayer('https://api.maptiler.com/maps/01980649-9f3e-7abd-a079-601fb40d973e/256/{z}/{x}/{y}.png?key=InN0UHhrnYhq86Wukvt6', {
+        attribution: '<a href="https://www.maptiler.com/copyright/" target="_blank">&copy; MapTiler</a> <a href="https://www.openstreetmap.org/copyright" target="_blank">&copy; OpenStreetMap contributors</a>',
+        noWrap: true
+    });
+
+    // Set the default map by adding it here
+    lightModeMap.addTo(map);
+
 
     // --- GLOBAL VARIABLES & LAYER GROUPS ---
     const hubDotsGroup = new L.FeatureGroup().addTo(map);
-	const flightPlanRouteGroup = new L.FeatureGroup().addTo(map);
+    const flightPlanRouteGroup = new L.FeatureGroup().addTo(map);
     const airportDetailsGroup = new L.FeatureGroup().addTo(map);
     const runwayLabelsGroup = new L.FeatureGroup().addTo(map);
     const dynamicRunwaysGroup = new L.FeatureGroup().addTo(map);
@@ -76,7 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeAirportIcao = null;
     let currentMapMode = "regular";
     let runwayLayers = {};
-    let appSettings = { dataBlockScale: 1.0, showDataBlocks: true, useTrueHeading: false };
+    let appSettings = {
+        dataBlockScale: 1.0,
+        showDataBlocks: true,
+        useTrueHeading: false
+    };
     let altitudeChart = null;
     let wmmModel = null;
 
@@ -87,30 +89,84 @@ document.addEventListener('DOMContentLoaded', () => {
     let isLiveModeActive = false;
 
     // --- Layer control with all terrain and navaid options ---
-    const baseLayers = { "Dark Map": darkBaseLayer };
+    const baseLayers = {
+        "Light Mode": lightModeMap,
+        "Dark w/ Terrain": darkTerrainMap,
+        "Dark Mode": darkModeMap
+    };
+
     const overlayLayers = {
-        "Terrain (Hillshade)": hillshadeLayer,
-        "Terrain (3D Feel)": stamenTerrainLayer,
-        "Terrain (Drastic 3D)": esriWorldShadedRelief,
         "Live Aircraft": liveAircraftGroup
     };
-    L.control.layers(baseLayers, overlayLayers, {position: 'bottomright'}).addTo(map);
+    L.control.layers(baseLayers, overlayLayers, {
+        position: 'bottomright'
+    }).addTo(map);
+
 
     // --- Style configs ---
-    const RUNWAY_STYLE_REGULAR = { color: '#AAAAAA', weight: 1, fillColor: '#707070', fillOpacity: 1 };
-    const RUNWAY_STYLE_HIGHLIGHT = { color: '#FFD700', weight: 2, fillColor: '#FFD700', fillOpacity: 0.7 };
-    const RUNWAY_CENTERLINE_STYLE_REGULAR = { color: '#FFFFFF', weight: 1, dashArray: '10, 15' };
-    const FLIGHT_LINE_STYLES_REGULAR = {
-        standard: { color: 'white', weight: 2, opacity: 1 },
-        arrival: { color: '#64b5f6', weight: 2, opacity: 1 },
-        departure: { color: '#e57373', weight: 2, opacity: 1 }
+    const RUNWAY_STYLE_REGULAR = {
+        color: '#AAAAAA',
+        weight: 1,
+        fillColor: '#707070',
+        fillOpacity: 1
     };
-    const RUNWAY_STYLE_TERRAIN = { color: '#222', weight: 2, fillColor: '#444', fillOpacity: 0.95, opacity: 1 };
-    const RUNWAY_CENTERLINE_STYLE_TERRAIN = { color: '#F5F5F5', weight: 2, dashArray: '6, 12', opacity: 1 };
+    const RUNWAY_STYLE_HIGHLIGHT = {
+        color: '#FFD700',
+        weight: 2,
+        fillColor: '#FFD700',
+        fillOpacity: 0.7
+    };
+    const RUNWAY_CENTERLINE_STYLE_REGULAR = {
+        color: '#FFFFFF',
+        weight: 1,
+        dashArray: '10, 15'
+    };
+    const FLIGHT_LINE_STYLES_REGULAR = {
+        standard: {
+            color: 'white',
+            weight: 2,
+            opacity: 1
+        },
+        arrival: {
+            color: '#64b5f6',
+            weight: 2,
+            opacity: 1
+        },
+        departure: {
+            color: '#e57373',
+            weight: 2,
+            opacity: 1
+        }
+    };
+    const RUNWAY_STYLE_TERRAIN = {
+        color: '#222',
+        weight: 2,
+        fillColor: '#444',
+        fillOpacity: 0.95,
+        opacity: 1
+    };
+    const RUNWAY_CENTERLINE_STYLE_TERRAIN = {
+        color: '#F5F5F5',
+        weight: 2,
+        dashArray: '6, 12',
+        opacity: 1
+    };
     const FLIGHT_LINE_STYLES_TERRAIN = {
-        standard: { color: '#000', weight: 4, opacity: 1 },
-        arrival:  { color: '#2979FF', weight: 4, opacity: 1 },
-        departure:{ color: '#FF3D00', weight: 4, opacity: 1 }
+        standard: {
+            color: '#000',
+            weight: 4,
+            opacity: 1
+        },
+        arrival: {
+            color: '#2979FF',
+            weight: 4,
+            opacity: 1
+        },
+        departure: {
+            color: '#FF3D00',
+            weight: 4,
+            opacity: 1
+        }
     };
     const FINAL_APPROACH_STYLE = {
         color: 'rgba(0, 255, 255, 0.5)',
@@ -174,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
     }
-    
+
     async function getVORsFromOpenAIP(bbox) {
         const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
         try {
@@ -191,8 +247,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
     }
-    
-   async function initializeWMM() {
+
+    async function initializeWMM() {
         try {
             wmmModel = geomag;
             console.log("World Magnetic Model loaded (from geomag.min.js).");
@@ -208,13 +264,13 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSettings();
         createMainPanel();
         await initializeWMM();
-        
+
         await getAirports();
         await getRunways();
-        await getWaypoints(); 
-        
+        await getWaypoints();
+
         updateAirports();
-        updateNavaids(); 
+        updateNavaids();
         setupEventListeners();
         loadPlanFromLocalStorage();
 
@@ -224,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     initializeApp();
-    
+
     // --- LIVE MODE: INACTIVITY TIMER ---
     function startInactivityTimer() {
         clearTimeout(inactivityTimer);
@@ -249,26 +305,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- EVENT HANDLERS ---
     map.on('overlayadd', function(e) {
-        if (e.layer === hillshadeLayer || e.layer === stamenTerrainLayer || e.layer === esriWorldShadedRelief) {
+        // This logic might need adjustment depending on which of your new maps are "terrain"
+        if (e.layer === darkTerrainMap) {
             currentMapMode = "terrain";
             restyleAllRunwaysAndLines();
         }
     });
+
     map.on('overlayremove', function(e) {
-        if (e.layer === hillshadeLayer || e.layer === stamenTerrainLayer || e.layer === esriWorldShadedRelief) {
-            if (!map.hasLayer(hillshadeLayer) && !map.hasLayer(stamenTerrainLayer) && !map.hasLayer(esriWorldShadedRelief)) {
+        // This logic might need adjustment
+        if (e.layer === darkTerrainMap) {
+            if (!map.hasLayer(darkTerrainMap)) {
                 currentMapMode = "regular";
                 restyleAllRunwaysAndLines();
             }
         }
     });
 
+
     function setupEventListeners() {
         map.getContainer().addEventListener('contextmenu', (e) => e.preventDefault());
         map.on('mousedown', handleMouseDown);
         map.on('mousemove', handleMouseMove);
         map.on('mouseup', handleMouseUp);
-        map.on('zoomend moveend', () => { 
+        map.on('zoomend moveend', () => {
             checkAirportDetailsVisibility();
             checkPlanLabelVisibility();
             checkRunwayLabelVisibility();
@@ -279,11 +339,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clearTimeout(waypointUpdateTimeout);
             waypointUpdateTimeout = setTimeout(updateWaypoints, 500);
-            
+
             clearTimeout(navaidRequestTimeout);
-            navaidRequestTimeout = setTimeout(updateNavaids, 500); 
+            navaidRequestTimeout = setTimeout(updateNavaids, 500);
         });
-        
+
         map.on('mousemove', (e) => {
             if (isDrawingEnabled || !mslPopup) return;
             mslPopup.style.left = `${e.containerPoint.x + 15}px`;
@@ -298,7 +358,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             mslPopup.innerHTML = 'MSA: Loading...<br>' + magVarText;
-            
+
             clearTimeout(elevationRequestTimeout);
             elevationRequestTimeout = setTimeout(() => getElevationAndMag(e.latlng), 50);
         });
@@ -313,13 +373,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 createMainPanel();
             });
         }
-        
+
         document.addEventListener('mousemove', resetInactivityTimer, false);
         document.addEventListener('keydown', resetInactivityTimer, false);
         document.addEventListener('click', resetInactivityTimer, false);
     }
-	
-	document.addEventListener('click', async function (e) {
+
+    document.addEventListener('click', async function(e) {
         if (e.target && e.target.classList.contains('view-fpl-btn')) {
             e.preventDefault();
             const flightId = e.target.getAttribute('data-flight-id') || '';
@@ -342,7 +402,7 @@ document.addEventListener('DOMContentLoaded', () => {
             await fetchAndDisplayFlightPlan(flightId, callsign);
         }
     });
-    
+
     // --- UI PANELS ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
         const existingPanel = document.getElementById(id);
@@ -382,11 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 isDrawingEnabled = false;
                 panel.style.display = 'none';
                 const reopenPlanButton = document.getElementById('reopen-plan-panel');
-                if(reopenPlanButton) reopenPlanButton.style.display = 'block';
+                if (reopenPlanButton) reopenPlanButton.style.display = 'block';
             } else if (panel.id === 'live-control-panel') {
                 panel.style.display = 'none';
-            }
-            else {
+            } else {
                 panel.remove();
             }
         });
@@ -401,9 +460,12 @@ document.addEventListener('DOMContentLoaded', () => {
         makeDraggable(panel);
         return panel;
     }
-    
+
     function makeDraggable(element) {
-        let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+        let pos1 = 0,
+            pos2 = 0,
+            pos3 = 0,
+            pos4 = 0;
         const header = element.querySelector(".panel-header");
         if (header) {
             header.onmousedown = dragMouseDown;
@@ -446,7 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.onmousemove = null;
         }
     }
-    
+
     function createMainPanel() {
         const existingPanel = document.getElementById('main-panel');
         if (existingPanel) {
@@ -456,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (reopenButton) reopenButton.style.display = 'none';
-        
+
         const content = `
             <form id="airport-form">
                 <input type="text" id="airport-input" placeholder="e.g., KLAX">
@@ -513,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalApproachGroup.clearLayers();
             const infoPanel = document.getElementById('airport-info-panel');
             if (infoPanel) infoPanel.remove();
-            
+
             mainPanel.querySelector('#clear-selection-btn').style.display = 'none';
             const clearText = document.getElementById('clear-selection-text');
             if (clearText) clearText.style.display = 'none';
@@ -525,7 +587,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateNavaids();
             updateWaypoints();
         });
-				
+
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
             isDrawingEnabled = e.target.checked;
             const drawingText = document.getElementById('drawing-mode-text');
@@ -552,12 +614,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 map.removeLayer(finalApproachGroup);
             }
         });
-        
+
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
     }
-    
+
     async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
         if (existingPanel) {
@@ -581,7 +643,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         const panel = createFloatingPanel('live-control-panel', '<h2>Live Mode</h2>', '80px', '360px', content);
-        
+
         const serverSelect = panel.querySelector('#server-select');
         const connectBtn = panel.querySelector('#connect-live-btn');
         const statusIndicator = panel.querySelector('#live-status-indicator');
@@ -590,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/.netlify/functions/sessions');
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const sessions = await response.json();
-            
+
             serverSelect.innerHTML = '<option value="">Select a Server</option>';
             sessions.result.forEach(session => {
                 const option = document.createElement('option');
@@ -603,7 +665,7 @@ document.addEventListener('DOMContentLoaded', () => {
             serverSelect.innerHTML = '<option>Could not load servers.</option>';
             console.error(error);
         }
-        
+
         connectBtn.addEventListener('click', () => {
             const sessionId = serverSelect.value;
             if (!sessionId) {
@@ -625,7 +687,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-		serverSelect.addEventListener('change', (e) => {
+        serverSelect.addEventListener('change', (e) => {
             const newSessionId = e.target.value;
             if (connectBtn.textContent === 'Disconnect') {
                 if (newSessionId) {
@@ -641,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
+
     // --- LIVE MODE: DATA FETCHING AND DISPLAY ---
     function startLiveUpdates(sessionId) {
         stopLiveUpdates();
@@ -676,14 +738,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to fetch live data:", error);
             const statusIndicator = document.getElementById('live-status-indicator');
-            if(statusIndicator){
+            if (statusIndicator) {
                 statusIndicator.textContent = "Error";
                 statusIndicator.style.backgroundColor = 'var(--danger-color)';
             }
             stopLiveUpdates();
         }
     }
-    
+
     function updateFlightMarkers(flights) {
         const existingFlightIds = Object.keys(liveFlightMarkers);
         const incomingFlightIds = flights.map(f => f.flightId);
@@ -737,7 +799,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 liveFlightMarkers[flight.flightId].setIcon(aircraftIcon);
                 liveFlightMarkers[flight.flightId].setPopupContent(popupContent);
             } else {
-                const marker = L.marker([lat, lon], { icon: aircraftIcon });
+                const marker = L.marker([lat, lon], {
+                    icon: aircraftIcon
+                });
                 marker.bindPopup(popupContent);
                 marker.addTo(liveAircraftGroup);
                 liveFlightMarkers[flight.flightId] = marker;
@@ -747,51 +811,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- NEW: Rebuilt Flight Plan Function ---
     async function fetchAndDisplayFlightPlan(flightId, callsign) {
-    flightPlanRouteGroup.clearLayers();
-    try {
-        const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
-        const data = await response.json();
+        flightPlanRouteGroup.clearLayers();
+        try {
+            const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+            const data = await response.json();
 
-        const waypoints = data.waypoints || (data.result && data.result.waypoints) || [];
-        if (waypoints.length < 2) {
-            alert(`No flight plan waypoints were found for ${callsign}.`);
-            return;
-        }
+            const waypoints = data.waypoints || (data.result && data.result.waypoints) || [];
+            if (waypoints.length < 2) {
+                alert(`No flight plan waypoints were found for ${callsign}.`);
+                return;
+            }
 
-        const latLngs = waypoints
-            .map(wp => [Number(wp.latitude), Number(wp.longitude)])
-            .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
+            const latLngs = waypoints
+                .map(wp => [Number(wp.latitude), Number(wp.longitude)])
+                .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
 
-        L.polyline(latLngs, {
-            color: '#FFD600',
-            weight: 3,
-            opacity: 0.9,
-            dashArray: '8, 8'
-        }).addTo(flightPlanRouteGroup);
-
-        waypoints.forEach(wp => {
-            const lat = Number(wp.latitude);
-            const lon = Number(wp.longitude);
-            if(isNaN(lat) || isNaN(lon)) return;
-
-            L.circleMarker([lat, lon], {
-                radius: 4,
+            L.polyline(latLngs, {
                 color: '#FFD600',
-                fillColor: '#1a1a1a',
-                fillOpacity: 1
-            }).bindTooltip(wp.name, {
-                direction: 'top',
-                className: 'waypoint-tooltip'
+                weight: 3,
+                opacity: 0.9,
+                dashArray: '8, 8'
             }).addTo(flightPlanRouteGroup);
-        });
-        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
 
-    } catch (err) {
-        console.error("A critical error occurred while fetching the flight plan:", err);
-        alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
+            waypoints.forEach(wp => {
+                const lat = Number(wp.latitude);
+                const lon = Number(wp.longitude);
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                L.circleMarker([lat, lon], {
+                    radius: 4,
+                    color: '#FFD600',
+                    fillColor: '#1a1a1a',
+                    fillOpacity: 1
+                }).bindTooltip(wp.name, {
+                    direction: 'top',
+                    className: 'waypoint-tooltip'
+                }).addTo(flightPlanRouteGroup);
+            });
+            map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
+
+        } catch (err) {
+            console.error("A critical error occurred while fetching the flight plan:", err);
+            alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
+        }
     }
-}
-	
+
     // --- NEW: Rebuilt ATC List Function ---
     async function updateAtcList(sessionId) {
         const atcListElement = document.getElementById('atc-list');
@@ -804,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 atcListElement.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
                 return;
             }
-            
+
             const atcFacilities = data.result;
             const atcByIcao = atcFacilities.reduce((acc, facility) => {
                 const icao = facility.icao || "Center";
@@ -820,7 +884,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const positions = atcByIcao[icao].join(', ');
                 html += `<div class="atc-airport-row"><strong>${icao}:</strong> ${positions}</div>`;
             }
-            
+
             atcListElement.innerHTML = html;
 
         } catch (error) {
@@ -860,20 +924,20 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
-        
+
         const settingsPanel = document.getElementById('settings-panel');
         settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
             appSettings.useTrueHeading = e.target.checked;
             updateAllFlightDataBlockStyles();
             saveSettings();
         });
-        
+
         settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
             appSettings.showDataBlocks = e.target.checked;
             toggleDataBlockVisibility();
             saveSettings();
         });
-        
+
         const scaleSlider = settingsPanel.querySelector('#data-block-scale-slider');
         const scaleValueLabel = settingsPanel.querySelector('#data-block-scale-value');
         scaleSlider.addEventListener('input', (e) => {
@@ -939,11 +1003,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <canvas id="altitude-chart"></canvas>
         `;
         panel = createFloatingPanel('altitude-profile-panel', `<h2>${title}</h2>`, '150px', '150px', content);
-        
+
         const ctx = document.getElementById('altitude-chart').getContext('2d');
         const startAltInput = document.getElementById('start-alt-input');
         const endAltInput = document.getElementById('end-alt-input');
-        
+
         const startAltitude = legData.startAltitude || (legData.altitude ? parseInt(legData.altitude) : 10000);
         const endAltitude = legData.endAltitude || startAltitude;
 
@@ -982,17 +1046,28 @@ document.addEventListener('DOMContentLoaded', () => {
                             savePlanToLocalStorage();
                         }
                     },
-                    legend: { display: false }
+                    legend: {
+                        display: false
+                    }
                 },
                 scales: {
                     y: {
                         beginAtZero: false,
-                        ticks: { color: '#fff', callback: (value) => value + ' ft' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        ticks: {
+                            color: '#fff',
+                            callback: (value) => value + ' ft'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
                     },
                     x: {
-                        ticks: { color: '#fff' },
-                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                        ticks: {
+                            color: '#fff'
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        }
                     }
                 }
             }
@@ -1013,7 +1088,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startAltInput.addEventListener('input', updateFromInput);
         endAltInput.addEventListener('input', updateFromInput);
     }
-    
+
     function updateDataBlock(stepId) {
         const legData = planLayers[stepId];
         if (!legData || !legData.label) return;
@@ -1025,8 +1100,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (startAlt !== undefined && endAlt !== undefined && startAlt !== endAlt) {
             altitudeHtml = `<div class="fdb-data-item fdb-altitude"><span class="fdb-value" style="font-size: 12px; color: #FFD700;">${(startAlt / 1000).toFixed(1).replace('.0','')}k &rarr; ${(endAlt / 1000).toFixed(1).replace('.0','')}k</span><span class="fdb-unit">ft</span></div>`;
             const color = endAlt < startAlt ? '#FF8C00' : '#39FF14';
-            if (legData.line) legData.line.setStyle({ color: color, weight: 4 });
-            if (legData.outline) legData.outline.setStyle({ weight: 0 });
+            if (legData.line) legData.line.setStyle({
+                color: color,
+                weight: 4
+            });
+            if (legData.outline) legData.outline.setStyle({
+                weight: 0
+            });
         } else {
             const displayAlt = legData.altitude || startAlt;
             let altValueText = '---';
@@ -1041,7 +1121,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const style = (currentMapMode === "terrain") ? FLIGHT_LINE_STYLES_TERRAIN[legData.lineType] : FLIGHT_LINE_STYLES_REGULAR[legData.lineType];
             if (legData.line) legData.line.setStyle(style);
-            if (legData.outline && currentMapMode === "regular") legData.outline.setStyle({ color: '#000', weight: 6, opacity: 1 });
+            if (legData.outline && currentMapMode === "regular") legData.outline.setStyle({
+                color: '#000',
+                weight: 6,
+                opacity: 1
+            });
         }
 
         const speed = legData.speed || '---';
@@ -1055,13 +1139,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${altitudeHtml}
                             </div>
                           </div>`;
-        
+
         legData.label.setIcon(L.divIcon({
             className: 'custom-map-marker',
             html: fullHtml
         }));
     }
-    
+
     function updateAltitudeForLeg(stepId) {
         const legData = planLayers[stepId];
         if (!legData) return;
@@ -1119,8 +1203,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 .on('click', () => displayAirportDetails(airport.ident));
         });
     }
-	
-	function updateNavaids() {
+
+    function updateNavaids() {
         const showNavaids = document.getElementById('filter-navaids')?.checked;
         if (!showNavaids) {
             navaidsGroup.clearLayers();
@@ -1138,9 +1222,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     html: `<svg width="16" height="16" viewBox="0 0 16 16"><polygon points="15,8 11.5,14 4.5,14 1,8 4.5,2 11.5,2" fill="#483D8B"/></svg>`,
                     iconSize: [16, 16]
                 });
-                L.marker([lat, lon], { icon: navaidIcon })
-                .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, { direction: 'top' })
-                .addTo(navaidsGroup);
+                L.marker([lat, lon], {
+                        icon: navaidIcon
+                    })
+                    .bindTooltip(`${navaid.properties.name} (${navaid.properties.identifier})`, {
+                        direction: 'top'
+                    })
+                    .addTo(navaidsGroup);
             });
         });
     }
@@ -1165,10 +1253,10 @@ document.addEventListener('DOMContentLoaded', () => {
             airportRunways.forEach(runway => drawRunway(runway, airportDetailsGroup, runwayLabelsGroup, finalApproachGroup));
             updateAirportInfoPanel(airport, airportRunways);
             createDistanceRings(lat, lon, planLayers).forEach(ring => ring.addTo(airportDetailsGroup));
-            if(map.getZoom() < 13) map.setView([lat, lon], 13);
-            else map.panTo([lat,lon]);
+            if (map.getZoom() < 13) map.setView([lat, lon], 13);
+            else map.panTo([lat, lon]);
             const clearBtn = document.getElementById('clear-selection-btn');
-            if(clearBtn) clearBtn.style.display = 'block';
+            if (clearBtn) clearBtn.style.display = 'block';
             const clearText = document.getElementById('clear-selection-text');
             if (clearText) clearText.style.display = 'block';
             checkAirportDetailsVisibility();
@@ -1177,7 +1265,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(`Failed to fetch details for ${icao}:`, err);
         }
     }
-    
+
     async function updateAirportInfoPanel(airport, runways) {
         let airspaceClass = 'N/A';
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
@@ -1187,7 +1275,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lat = parseFloat(airport.latitude_deg);
         const lon = parseFloat(airport.longitude_deg);
         let declination = 0;
-        if (wmmModel) { 
+        if (wmmModel) {
             const point = wmmModel.field(lat, lon);
             declination = point.declination;
         }
@@ -1250,7 +1338,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-	function updateWaypoints() {
+    function updateWaypoints() {
         const showWaypoints = document.getElementById('filter-waypoints')?.checked;
         const zoom = map.getZoom();
         waypointsGroup.clearLayers();
@@ -1270,9 +1358,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 html: `<svg width="12" height="12" viewbox="0 0 12 12"><polygon points="6,1 11,11 1,11" fill="white"/></svg>`,
                 iconSize: [12, 12]
             });
-            L.marker([lat, lon], { icon: waypointIcon })
-            .bindTooltip(waypoint.name, { direction: 'top' })
-            .addTo(waypointsGroup);
+            L.marker([lat, lon], {
+                    icon: waypointIcon
+                })
+                .bindTooltip(waypoint.name, {
+                    direction: 'top'
+                })
+                .addTo(waypointsGroup);
         });
     }
 
@@ -1288,10 +1380,14 @@ document.addEventListener('DOMContentLoaded', () => {
             runwayLayers[runwayId].setStyle(style);
         }
     }
-    
+
     function addPlanStep(stepId, heading, distanceMeters, altitude = '', speed = '', lineType = 'standard') {
         createOrShowPlanPanel();
-        const sectionMap = { standard: 'standard-steps', arrival: 'arrival-steps', departure: 'departure-steps' };
+        const sectionMap = {
+            standard: 'standard-steps',
+            arrival: 'arrival-steps',
+            departure: 'departure-steps'
+        };
         const planContainerId = sectionMap[lineType] || 'standard-steps';
         const planContainer = document.getElementById(planContainerId);
         if (!planContainer) return;
@@ -1338,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const saveHeading = () => {
                 let newHeading = parseInt(input.value, 10);
                 if (!isNaN(newHeading)) {
-                    newHeading = (newHeading + 360) % 360; 
+                    newHeading = (newHeading + 360) % 360;
                     const newHeadingText = newHeading.toString().padStart(3, '0');
                     planLayers[stepId].heading.magnetic = newHeadingText;
                     headingSpan.textContent = `Hdg ${newHeadingText}° M`;
@@ -1386,52 +1482,77 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkAirportDetailsVisibility() {
-        if (!map.hasLayer(airportDetailsGroup) && map.getZoom() >= 10) { map.addLayer(airportDetailsGroup); }
-        if (map.hasLayer(airportDetailsGroup) && map.getZoom() < 10) { map.removeLayer(airportDetailsGroup); }
+        if (!map.hasLayer(airportDetailsGroup) && map.getZoom() >= 10) {
+            map.addLayer(airportDetailsGroup);
+        }
+        if (map.hasLayer(airportDetailsGroup) && map.getZoom() < 10) {
+            map.removeLayer(airportDetailsGroup);
+        }
     }
+
     function checkRunwayLabelVisibility() {
-        if (!map.hasLayer(runwayLabelsGroup) && map.getZoom() >= 13) { map.addLayer(runwayLabelsGroup); }
-        if (map.hasLayer(runwayLabelsGroup) && map.getZoom() < 13) { map.removeLayer(runwayLabelsGroup); }
+        if (!map.hasLayer(runwayLabelsGroup) && map.getZoom() >= 13) {
+            map.addLayer(runwayLabelsGroup);
+        }
+        if (map.hasLayer(runwayLabelsGroup) && map.getZoom() < 13) {
+            map.removeLayer(runwayLabelsGroup);
+        }
     }
 
     function toggleDataBlockVisibility() {
         if (appSettings.showDataBlocks) {
-            if (!map.hasLayer(planLabelsGroup)) { map.addLayer(planLabelsGroup); }
+            if (!map.hasLayer(planLabelsGroup)) {
+                map.addLayer(planLabelsGroup);
+            }
         } else {
-            if (map.hasLayer(planLabelsGroup)) { map.removeLayer(planLabelsGroup); }
+            if (map.hasLayer(planLabelsGroup)) {
+                map.removeLayer(planLabelsGroup);
+            }
         }
         checkPlanLabelVisibility();
     }
 
     function checkPlanLabelVisibility() {
         if (appSettings.showDataBlocks) {
-            if (!map.hasLayer(planLabelsGroup) && map.getZoom() >= 9) { map.addLayer(planLabelsGroup); }
-            if (map.hasLayer(planLabelsGroup) && map.getZoom() < 9) { map.removeLayer(planLabelsGroup); }
+            if (!map.hasLayer(planLabelsGroup) && map.getZoom() >= 9) {
+                map.addLayer(planLabelsGroup);
+            }
+            if (map.hasLayer(planLabelsGroup) && map.getZoom() < 9) {
+                map.removeLayer(planLabelsGroup);
+            }
         }
     }
-    
+
     function updateAllFlightDataBlockStyles() {
         Object.keys(planLayers).forEach(stepId => updateDataBlock(stepId));
     }
 
     function handleMouseDown(e) {
-        if (!isDrawingEnabled || e.originalEvent.button !== 0 || e.originalEvent.target.closest('.floating-panel')) { return; }
+        if (!isDrawingEnabled || e.originalEvent.button !== 0 || e.originalEvent.target.closest('.floating-panel')) {
+            return;
+        }
         if (tempLine) map.removeLayer(tempLine);
         if (tempLabel) map.removeLayer(tempLabel);
         Object.values(planLayers).forEach(layer => {
-            if (layer.label && layer.label.dragging) { layer.label.dragging.disable(); }
+            if (layer.label && layer.label.dragging) {
+                layer.label.dragging.disable();
+            }
         });
         isDrawing = true;
         const startPoint = e.latlng;
-        tempLine = L.polyline([startPoint, startPoint], { color: '#007bff', weight: 3, dashArray: '10, 10' }).addTo(map);
-        tempLabel = L.marker(startPoint, { 
-            icon: L.divIcon({ 
+        tempLine = L.polyline([startPoint, startPoint], {
+            color: '#007bff',
+            weight: 3,
+            dashArray: '10, 10'
+        }).addTo(map);
+        tempLabel = L.marker(startPoint, {
+            icon: L.divIcon({
                 className: 'custom-map-marker',
-                html: `<div class="drawing-temp-heading">---</div>` 
-            }) 
+                html: `<div class="drawing-temp-heading">---</div>`
+            })
         }).addTo(map);
     }
-    
+
     function handleMouseMove(e) {
         if (!isDrawing || !tempLine) return;
         const startPoint = tempLine.getLatLngs()[0];
@@ -1446,14 +1567,14 @@ document.addEventListener('DOMContentLoaded', () => {
             magneticHeading = (trueHeading - declination + 360) % 360;
         }
         const headingText = Math.round(magneticHeading).toString().padStart(3, '0');
-        if(tempLabel.getElement()) {
+        if (tempLabel.getElement()) {
             tempLabel.getElement().innerHTML = `<div class="drawing-temp-heading">${headingText}° M</div>`;
         }
     }
-    
+
     function handleMouseUp(e) {
         if (!isDrawing) return;
-        isDrawing = false; 
+        isDrawing = false;
         if (tempLine) {
             const startPoint = tempLine.getLatLngs()[0];
             const endPoint = e.latlng;
@@ -1466,7 +1587,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
                     magneticHeading = (trueHeading - declination + 360) % 360;
                 }
-                const finalHeading = { 
+                const finalHeading = {
                     magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
                     true: Math.round(trueHeading).toString().padStart(3, '0')
                 };
@@ -1479,34 +1600,46 @@ document.addEventListener('DOMContentLoaded', () => {
             tempLabel = null;
         }
         Object.values(planLayers).forEach(layer => {
-            if (layer.label && layer.label.dragging) { layer.label.dragging.enable(); }
+            if (layer.label && layer.label.dragging) {
+                layer.label.dragging.enable();
+            }
         });
     }
 
     function createFinalLine(start, end, stepId, altitude = '', speed = '', performCollisionCheck = false, lineType = 'standard', startAltitude, endAltitude, heading) {
         let line, outline;
         if (lineType === 'standard' && currentMapMode === "regular") {
-            outline = L.polyline([start, end], { color: '#000', weight: 6, opacity: 1 }).addTo(planItemsGroup);
-            line = L.polyline([start, end], { color: '#fff', weight: 3, opacity: 1 }).addTo(planItemsGroup);
+            outline = L.polyline([start, end], {
+                color: '#000',
+                weight: 6,
+                opacity: 1
+            }).addTo(planItemsGroup);
+            line = L.polyline([start, end], {
+                color: '#fff',
+                weight: 3,
+                opacity: 1
+            }).addTo(planItemsGroup);
         } else {
             const style = (currentMapMode === "terrain") ? FLIGHT_LINE_STYLES_TERRAIN[lineType] : FLIGHT_LINE_STYLES_REGULAR[lineType];
             line = L.polyline([start, end], style).addTo(planItemsGroup);
         }
         if (!heading) {
-             const trueHeading = calculateHeading(start, end);
-             let magneticHeading = trueHeading;
-             if (wmmModel) {
-                 const midPoint = getMidPoint(start, end);
-                 const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
-                 magneticHeading = (trueHeading - declination + 360) % 360;
-             }
-             heading = { 
+            const trueHeading = calculateHeading(start, end);
+            let magneticHeading = trueHeading;
+            if (wmmModel) {
+                const midPoint = getMidPoint(start, end);
+                const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+                magneticHeading = (trueHeading - declination + 360) % 360;
+            }
+            heading = {
                 magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
                 true: Math.round(trueHeading).toString().padStart(3, '0')
-             };
+            };
         }
         let labelPos = getOptimalLabelPosition(start, end);
-        if (performCollisionCheck) { labelPos = findNonCollidingPosition(labelPos); }
+        if (performCollisionCheck) {
+            labelPos = findNonCollidingPosition(labelPos);
+        }
         const initialHtml = `<div class="flight-data-block"><div class="fdb-heading">${heading.magnetic}° M</div><div class="fdb-row"><div class="fdb-data-item fdb-airspeed"><span class="fdb-value">---</span><span class="fdb-unit">kts</span></div><div class="fdb-data-item fdb-altitude"><span class="fdb-value">---</span><span class="fdb-unit">ft</span></div></div></div>`;
         const label = L.marker(labelPos, {
             draggable: true,
@@ -1515,14 +1648,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 html: initialHtml
             })
         });
-        if (appSettings.showDataBlocks) { label.addTo(planLabelsGroup); }
-        label.on('mousedown', (e) => { L.DomEvent.stopPropagation(e.originalEvent); });
+        if (appSettings.showDataBlocks) {
+            label.addTo(planLabelsGroup);
+        }
+        label.on('mousedown', (e) => {
+            L.DomEvent.stopPropagation(e.originalEvent);
+        });
         label.on('dragend', (event) => {
             planLayers[stepId].labelPosition = event.target.getLatLng();
             planLayers[stepId].hasBeenDragged = true;
             savePlanToLocalStorage();
         });
-        planLayers[stepId] = { line, outline, start, end, labelPosition: labelPos, altitude, speed, lineType, hasBeenDragged: false, label, heading, startAltitude, endAltitude };
+        planLayers[stepId] = {
+            line,
+            outline,
+            start,
+            end,
+            labelPosition: labelPos,
+            altitude,
+            speed,
+            lineType,
+            hasBeenDragged: false,
+            label,
+            heading,
+            startAltitude,
+            endAltitude
+        };
         addPlanStep(stepId, heading, start.distanceTo(end), altitude, speed, lineType);
         updateAltitudeForLeg(stepId);
         checkPlanLabelVisibility();
@@ -1533,22 +1684,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const labelWidth = 100 * appSettings.dataBlockScale;
         const labelHeight = 70 * appSettings.dataBlockScale;
         const startScreenPoint = map.latLngToContainerPoint(optimalPosition);
-        const candidates = [ startScreenPoint, startScreenPoint.add([0, -labelHeight]), startScreenPoint.add([0, labelHeight]), startScreenPoint.add([labelWidth / 2, -labelHeight / 2]), startScreenPoint.add([-labelWidth / 2, labelHeight / 2]), ];
+        const candidates = [startScreenPoint, startScreenPoint.add([0, -labelHeight]), startScreenPoint.add([0, labelHeight]), startScreenPoint.add([labelWidth / 2, -labelHeight / 2]), startScreenPoint.add([-labelWidth / 2, labelHeight / 2]), ];
         const existingRects = Object.entries(planLayers).map(([key, layer]) => {
             if (key === excludeStepId) return null;
             const point = map.latLngToContainerPoint(layer.labelPosition);
-            return L.bounds( point.subtract([labelWidth / 2, labelHeight / 2]), point.add([labelWidth / 2, labelHeight / 2]) );
+            return L.bounds(point.subtract([labelWidth / 2, labelHeight / 2]), point.add([labelWidth / 2, labelHeight / 2]));
         }).filter(Boolean);
         for (const candidate of candidates) {
-            const newRect = L.bounds( candidate.subtract([labelWidth / 2, labelHeight / 2]), candidate.add([labelWidth / 2, labelHeight / 2]) );
+            const newRect = L.bounds(candidate.subtract([labelWidth / 2, labelHeight / 2]), candidate.add([labelWidth / 2, labelHeight / 2]));
             let isOverlapping = existingRects.some(rect => newRect.intersects(rect));
-            if (!isOverlapping) { return map.containerPointToLatLng(candidate); }
+            if (!isOverlapping) {
+                return map.containerPointToLatLng(candidate);
+            }
         }
         return map.containerPointToLatLng(candidates[0]);
     }
 
     function adjustAllLabelPositions() {
-        if(Object.keys(planLayers).length === 0) return;
+        if (Object.keys(planLayers).length === 0) return;
         const updatedPositions = {};
         for (const key in planLayers) {
             const layer = planLayers[key];
@@ -1569,12 +1722,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveSettings() {
         localStorage.setItem('atcPlannerSettings', JSON.stringify(appSettings));
     }
-    
+
     function loadSettings() {
         const savedSettings = localStorage.getItem('atcPlannerSettings');
         if (savedSettings) {
             const parsedSettings = JSON.parse(savedSettings);
-            appSettings = { ...appSettings, ...parsedSettings };
+            appSettings = { ...appSettings,
+                ...parsedSettings
+            };
         }
     }
 
@@ -1621,7 +1776,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     planLayers[data.stepId].label.setLatLng(labelPos);
                     planLayers[data.stepId].labelPosition = labelPos;
                 }
-                if(data.hasBeenDragged){
+                if (data.hasBeenDragged) {
                     planLayers[data.stepId].hasBeenDragged = true;
                 }
             });
@@ -1630,12 +1785,12 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
-    
+
     async function getElevationAndMag(latlng) {
         let magVarText = "Mag Var: N/A";
         if (wmmModel) {
-             const point = wmmModel.field(latlng.lat, latlng.lng);
-             magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
+            const point = wmmModel.field(latlng.lat, latlng.lng);
+            magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
         }
         try {
             const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
@@ -1658,7 +1813,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
-        if (!currentAirportCoords || midPoint.distanceTo(currentAirportCoords) > 3000) { return midPoint; }
+        if (!currentAirportCoords || midPoint.distanceTo(currentAirportCoords) > 3000) {
+            return midPoint;
+        }
         return L.latLng(start.lat + (end.lat - start.lat) * 0.75, start.lng + (end.lng - start.lng) * 0.75);
     }
 
@@ -1683,16 +1840,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const he_lat = parseFloat(runwayData.he_latitude_deg);
         const he_lon = parseFloat(runwayData.he_longitude_deg);
         const width_ft = parseFloat(runwayData.width_ft);
-        if ([le_lat, le_lon, he_lat, he_lon, width_ft].some(isNaN) || width_ft <= 0) { return; }
+        if ([le_lat, le_lon, he_lat, he_lon, width_ft].some(isNaN) || width_ft <= 0) {
+            return;
+        }
         const widthMeters = width_ft * 0.3048;
-        const runwayLineString = turf.lineString([[le_lon, le_lat], [he_lon, he_lat]]);
+        const runwayLineString = turf.lineString([
+            [le_lon, le_lat],
+            [he_lon, he_lat]
+        ]);
         const bufferRadiusKm = (widthMeters / 2) / 1000;
-        const runwayPolygon = turf.buffer(runwayLineString, bufferRadiusKm, { units: 'kilometers' });
+        const runwayPolygon = turf.buffer(runwayLineString, bufferRadiusKm, {
+            units: 'kilometers'
+        });
         const style = (currentMapMode === "terrain") ? RUNWAY_STYLE_TERRAIN : RUNWAY_STYLE_REGULAR;
-        const runwayLayer = L.geoJSON(runwayPolygon, { style: style }).addTo(polygonGroup);
+        const runwayLayer = L.geoJSON(runwayPolygon, {
+            style: style
+        }).addTo(polygonGroup);
         runwayLayers[runwayData.id] = runwayLayer;
         const clStyle = (currentMapMode === "terrain") ? RUNWAY_CENTERLINE_STYLE_TERRAIN : RUNWAY_CENTERLINE_STYLE_REGULAR;
-        L.polyline([[le_lat, le_lon], [he_lat, he_lon]], clStyle).addTo(polygonGroup);
+        L.polyline([
+            [le_lat, le_lon],
+            [he_lat, he_lon]
+        ], clStyle).addTo(polygonGroup);
         addRunwayLabel(runwayData, [le_lon, le_lat], [he_lon, he_lat], labelGroup);
         const le_point = turf.point([le_lon, le_lat]);
         const he_point = turf.point([he_lon, he_lat]);
@@ -1708,14 +1877,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawFinalApproachCone(runwayEnd, bearing, group) {
         const finalDistNM = 10;
-        const finalWidthNM = 1.0; 
+        const finalWidthNM = 1.0;
         const apex = runwayEnd;
-        const baseCenter = turf.destination(runwayEnd, finalDistNM, bearing, { units: 'nauticalmiles' });
-        const p1 = turf.destination(baseCenter, finalWidthNM, bearing - 90, { units: 'nauticalmiles' });
-        const p2 = turf.destination(baseCenter, finalWidthNM, bearing + 90, { units: 'nauticalmiles' });
-        const coneCoords = [[ p1.geometry.coordinates, p2.geometry.coordinates, apex.geometry.coordinates, p1.geometry.coordinates ]];
+        const baseCenter = turf.destination(runwayEnd, finalDistNM, bearing, {
+            units: 'nauticalmiles'
+        });
+        const p1 = turf.destination(baseCenter, finalWidthNM, bearing - 90, {
+            units: 'nauticalmiles'
+        });
+        const p2 = turf.destination(baseCenter, finalWidthNM, bearing + 90, {
+            units: 'nauticalmiles'
+        });
+        const coneCoords = [
+            [p1.geometry.coordinates, p2.geometry.coordinates, apex.geometry.coordinates, p1.geometry.coordinates]
+        ];
         const conePoly = turf.polygon(coneCoords);
-        L.geoJSON(conePoly, { style: FINAL_APPROACH_STYLE }).addTo(group);
+        L.geoJSON(conePoly, {
+            style: FINAL_APPROACH_STYLE
+        }).addTo(group);
         L.polyline([
             [apex.geometry.coordinates[1], apex.geometry.coordinates[0]],
             [baseCenter.geometry.coordinates[1], baseCenter.geometry.coordinates[0]]
@@ -1731,13 +1910,21 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!ident) return;
             const axialOffset = 0.35;
             const separationDistance = 0.15;
-            let pos = turf.destination(point, axialOffset, bearing, { units: 'kilometers' });
+            let pos = turf.destination(point, axialOffset, bearing, {
+                units: 'kilometers'
+            });
             if (ident.endsWith('L') || ident.endsWith('R')) {
                 let offsetBearing = ident.endsWith('L') ? bearing + 90 : bearing - 90;
-                pos = turf.destination(pos, separationDistance, offsetBearing, { units: 'kilometers' });
+                pos = turf.destination(pos, separationDistance, offsetBearing, {
+                    units: 'kilometers'
+                });
             }
             L.marker([pos.geometry.coordinates[1], pos.geometry.coordinates[0]], {
-                icon: L.divIcon({ className: 'runway-label-halo', html: `<span>${ident}</span>`, iconAnchor: [ident.length * 5, 8] })
+                icon: L.divIcon({
+                    className: 'runway-label-halo',
+                    html: `<span>${ident}</span>`,
+                    iconAnchor: [ident.length * 5, 8]
+                })
             }).addTo(labelGroup);
         };
         createLabel(runwayData.le_ident, le_point, bearing_he_to_le);
@@ -1745,12 +1932,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function segmentsIntersect(p1, p2, p3, p4) {
-        const toPoint = (p) => ({ x: p.x, y: p.y });
+        const toPoint = (p) => ({
+            x: p.x,
+            y: p.y
+        });
         const det = (a, b) => a.x * b.y - a.y * b.x;
-        const a = toPoint(p1), b = toPoint(p2), c = toPoint(p3), d = toPoint(p4);
-        const C_A = { x: c.x - a.x, y: c.y - a.y };
-        const D_C = { x: d.x - c.x, y: d.y - c.y };
-        const B_A = { x: b.x - a.x, y: b.y - a.y };
+        const a = toPoint(p1),
+            b = toPoint(p2),
+            c = toPoint(p3),
+            d = toPoint(p4);
+        const C_A = {
+            x: c.x - a.x,
+            y: c.y - a.y
+        };
+        const D_C = {
+            x: d.x - c.x,
+            y: d.y - c.y
+        };
+        const B_A = {
+            x: b.x - a.x,
+            y: b.y - a.y
+        };
         const det_D_C_B_A = det(D_C, B_A);
         if (det_D_C_B_A === 0) return false;
         const t = det(C_A, D_C) / det_D_C_B_A;
@@ -1765,7 +1967,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const linePoints = line.getLatLngs();
             for (let i = 0; i < linePoints.length - 1; i++) {
                 for (let j = 0; j < arcPoints.length - 1; j++) {
-                    if (segmentsIntersect( map.latLngToLayerPoint(linePoints[i]), map.latLngToLayerPoint(linePoints[i+1]), map.latLngToLayerPoint(arcPoints[j]), map.latLngToLayerPoint(arcPoints[j+1]) )) return true;
+                    if (segmentsIntersect(map.latLngToLayerPoint(linePoints[i]), map.latLngToLayerPoint(linePoints[i + 1]), map.latLngToLayerPoint(arcPoints[j]), map.latLngToLayerPoint(arcPoints[j + 1]))) return true;
                 }
             }
         }
@@ -1773,12 +1975,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createDistanceRings(lat, lon, planLayers, speedKts = 240) {
-        const ringSpecs = [{ nm: 10 }, { nm: 20 }, { nm: 30 }];
+        const ringSpecs = [{
+            nm: 10
+        }, {
+            nm: 20
+        }, {
+            nm: 30
+        }];
         const groups = [];
         const candidateAngles = [0, 90, 180, 270, 45, 135, 225, 315];
         ringSpecs.forEach((spec, idx) => {
             const radius = spec.nm * 1852;
-            const circle = L.circle([lat, lon], { radius, color: '#FFD600', weight: 2, fill: false, dashArray: '5, 10', opacity: 1 });
+            const circle = L.circle([lat, lon], {
+                radius,
+                color: '#FFD600',
+                weight: 2,
+                fill: false,
+                dashArray: '5, 10',
+                opacity: 1
+            });
             const timeHours = spec.nm / speedKts;
             const totalSeconds = Math.round(timeHours * 3600);
             const minutes = Math.floor(totalSeconds / 60);
@@ -1786,17 +2001,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const labelText = `${spec.nm} NM – ${(minutes > 0 ? `${minutes}m` : '')}${seconds}s @${speedKts}kt`;
             let labelPath;
             for (let angleDeg of candidateAngles) {
-                const arcSweep = 80, arcStep = 6;
+                const arcSweep = 80,
+                    arcStep = 6;
                 const arcLatLngs = [];
-                for (let a = -arcSweep/2; a <= arcSweep/2; a += arcStep) {
+                for (let a = -arcSweep / 2; a <= arcSweep / 2; a += arcStep) {
                     const theta = (angleDeg + a) * Math.PI / 180;
                     const dLat = (radius * Math.cos(theta)) / 111320;
-                    const dLon = (radius * Math.sin(theta)) / (111320 * Math.cos(lat * Math.PI/180));
+                    const dLon = (radius * Math.sin(theta)) / (111320 * Math.cos(lat * Math.PI / 180));
                     arcLatLngs.push([lat + dLat, lon + dLon]);
                 }
                 const arcPoints = arcLatLngs.map(([la, lo]) => L.latLng(la, lo));
                 if (!doesArcIntersectPlanLines(arcPoints, planLayers)) {
-                    labelPath = L.polyline(arcPoints, { opacity: 0 });
+                    labelPath = L.polyline(arcPoints, {
+                        opacity: 0
+                    });
                     break;
                 }
             }
@@ -1805,7 +2023,19 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 labelPath.addTo(map);
                 if (typeof labelPath.setText === "function") {
-                    labelPath.setText(labelText, { repeat: false, center: true, attributes: { fill: '#FFD600', stroke: '#222', 'stroke-width': 4, 'paint-order': 'stroke fill', 'font-size': '16px', 'font-weight': 'bold', 'text-shadow': '0 2px 6px #000, 0 0 2px #FFD600' } });
+                    labelPath.setText(labelText, {
+                        repeat: false,
+                        center: true,
+                        attributes: {
+                            fill: '#FFD600',
+                            stroke: '#222',
+                            'stroke-width': 4,
+                            'paint-order': 'stroke fill',
+                            'font-size': '16px',
+                            'font-weight': 'bold',
+                            'text-shadow': '0 2px 6px #000, 0 0 2px #FFD600'
+                        }
+                    });
                 }
                 groups.push(L.layerGroup([circle, labelPath]));
             }
@@ -1815,24 +2045,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getAirportColor(type) {
         switch (type) {
-            case 'large_airport': return '#FF0000';
-            case 'medium_airport': return '#FFA500';
-            case 'small_airport': return '#2980b9';
-            default: return '#95a5a6';
+            case 'large_airport':
+                return '#FF0000';
+            case 'medium_airport':
+                return '#FFA500';
+            case 'small_airport':
+                return '#2980b9';
+            default:
+                return '#95a5a6';
         }
     }
+
     function getAirportRadius(type) {
         switch (type) {
-            case 'large_airport': return 7;
-            case 'medium_airport': return 5;
-            default: return 3;
+            case 'large_airport':
+                return 7;
+            case 'medium_airport':
+                return 5;
+            default:
+                return 3;
         }
     }
+
     function createAirportDot(latlng, icao, color, radius) {
         return L.circleMarker(latlng, {
-            radius: radius, color: '#000', weight: 1,
-            fillColor: color, fillOpacity: 1, icao: icao
-        }).bindTooltip(icao, { permanent: false, direction: 'top', offset: [0, -radius] });
+            radius: radius,
+            color: '#000',
+            weight: 1,
+            fillColor: color,
+            fillOpacity: 1,
+            icao: icao
+        }).bindTooltip(icao, {
+            permanent: false,
+            direction: 'top',
+            offset: [0, -radius]
+        });
     }
 
     function calculateHeading(start, end) {
@@ -1845,7 +2092,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const getMidPoint = (start, end) => L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
-	
+
     function createOrShowPlanPanel() {
         let planPanel = document.getElementById('plan-panel');
         if (planPanel) {
