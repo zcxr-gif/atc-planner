@@ -1,4 +1,4 @@
-// app.js (with flight plan functionality rebuilt from scratch)
+// app.js (Fixed to align with official Infinite Flight API documentation)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     delete L.Icon.Default.prototype._getIconUrl;
@@ -46,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GLOBAL VARIABLES & LAYER GROUPS ---
     const hubDotsGroup = new L.FeatureGroup().addTo(map);
-    const flightPlanRouteGroup = new L.FeatureGroup().addTo(map); // Layer group for the new FPL logic
+    const flightPlanRouteGroup = new L.FeatureGroup().addTo(map);
     const airportDetailsGroup = new L.FeatureGroup().addTo(map);
     const runwayLabelsGroup = new L.FeatureGroup().addTo(map);
     const dynamicRunwaysGroup = new L.FeatureGroup().addTo(map);
@@ -727,32 +727,61 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- REBUILT FLIGHT PLAN FUNCTION (FROM SCRATCH) ---
+    // --- FIXED FLIGHT PLAN FUNCTION (ALIGNED WITH IF API DOCS) ---
     async function fetchAndDisplayFlightPlan(flightId, callsign) {
         flightPlanRouteGroup.clearLayers();
         try {
             const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`);
+            }
             const data = await response.json();
-    
-            const waypoints = (data.result && data.result.waypoints) || [];
-    
-            if (waypoints.length < 2) {
+
+            // Use flightPlanItems array, which is the correct source of data 
+            const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
+            const allWaypoints = [];
+
+            // Parse the flightPlanItems, accounting for nested procedures
+            flightPlanItems.forEach(item => {
+                // If an item has children, it's a procedure (SID, STAR, Approach) 
+                // We must process the children to get the actual waypoints.
+                if (item.children && item.children.length > 0) {
+                    item.children.forEach(child => {
+                        if (child.location) {
+                            allWaypoints.push({
+                                name: child.name,
+                                latitude: child.location.latitude,
+                                longitude: child.location.longitude
+                            });
+                        }
+                    });
+                } else {
+                    // If no children, the item itself is a waypoint (Fix, VOR, etc.) [cite: 19]
+                    if (item.location) {
+                        allWaypoints.push({
+                            name: item.name,
+                            latitude: item.location.latitude, // [cite: 22]
+                            longitude: item.location.longitude // [cite: 22]
+                        });
+                    }
+                }
+            });
+
+            if (allWaypoints.length < 2) {
                 alert(`No valid flight plan route could be found for ${callsign}.`);
                 return;
             }
-    
-            const latLngs = waypoints
-                .map(wp => [Number(wp.latitude), Number(wp.longitude)])
-                .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
-    
+
+            const latLngs = allWaypoints.map(wp => [wp.latitude, wp.longitude]);
+
             L.polyline(latLngs, {
                 color: '#FFD600',
                 weight: 3,
                 opacity: 0.9,
                 dashArray: '8, 8'
             }).addTo(flightPlanRouteGroup);
-    
-            waypoints.forEach(wp => {
+
+            allWaypoints.forEach(wp => {
                 L.circleMarker([wp.latitude, wp.longitude], {
                     radius: 4,
                     color: '#FFD600',
@@ -761,16 +790,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }).bindTooltip(wp.name)
                   .addTo(flightPlanRouteGroup);
             });
-    
+
             map.fitBounds(flightPlanRouteGroup.getBounds().pad(0.1));
-    
+
         } catch (error) {
             console.error("A critical error occurred while fetching the flight plan:", error);
             alert(`An unexpected error occurred. Could not display the flight plan for ${callsign}.`);
         }
     }
 	
-    // --- REBUILT ATC LIST FUNCTION (FROM SCRATCH) ---
+    // --- REBUILT ATC LIST FUNCTION ---
     async function updateAtcList(sessionId) {
         const atcListElement = document.getElementById('atc-list');
         if (!atcListElement) return;
