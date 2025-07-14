@@ -1,8 +1,6 @@
-// app.js (updated with rebuilt FPL and ATC fetching)
+// app.js (with flight plan functionality rebuilt from scratch)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
-    // The API key is handled by the server-side proxy, not here.
-
     delete L.Icon.Default.prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
@@ -48,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- GLOBAL VARIABLES & LAYER GROUPS ---
     const hubDotsGroup = new L.FeatureGroup().addTo(map);
-	const flightPlanRouteGroup = new L.FeatureGroup().addTo(map);
+    const flightPlanRouteGroup = new L.FeatureGroup().addTo(map); // Layer group for the new FPL logic
     const airportDetailsGroup = new L.FeatureGroup().addTo(map);
     const runwayLabelsGroup = new L.FeatureGroup().addTo(map);
     const dynamicRunwaysGroup = new L.FeatureGroup().addTo(map);
@@ -248,21 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- EVENT HANDLERS ---
-    map.on('overlayadd', function(e) {
-        if (e.layer === hillshadeLayer || e.layer === stamenTerrainLayer || e.layer === esriWorldShadedRelief) {
-            currentMapMode = "terrain";
-            restyleAllRunwaysAndLines();
-        }
-    });
-    map.on('overlayremove', function(e) {
-        if (e.layer === hillshadeLayer || e.layer === stamenTerrainLayer || e.layer === esriWorldShadedRelief) {
-            if (!map.hasLayer(hillshadeLayer) && !map.hasLayer(stamenTerrainLayer) && !map.hasLayer(esriWorldShadedRelief)) {
-                currentMapMode = "regular";
-                restyleAllRunwaysAndLines();
-            }
-        }
-    });
-
     function setupEventListeners() {
         map.getContainer().addEventListener('contextmenu', (e) => e.preventDefault());
         map.on('mousedown', handleMouseDown);
@@ -317,32 +300,35 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('mousemove', resetInactivityTimer, false);
         document.addEventListener('keydown', resetInactivityTimer, false);
         document.addEventListener('click', resetInactivityTimer, false);
-    }
-	
-	document.addEventListener('click', async function (e) {
-        if (e.target && e.target.classList.contains('view-fpl-btn')) {
-            e.preventDefault();
-            const flightId = e.target.getAttribute('data-flight-id') || '';
-            let callsign = 'Unknown';
-            try {
-                const popup = e.target.closest('.leaflet-popup-content');
-                if (popup) {
-                    const boldTag = popup.querySelector('b');
-                    if (boldTag && boldTag.textContent) {
-                        callsign = boldTag.textContent.split(' ')[0];
-                    }
+
+        // Listener for the new flight plan logic
+        document.addEventListener('click', async function (e) {
+            if (e.target && e.target.classList.contains('view-fpl-btn')) {
+                e.preventDefault();
+                const flightId = e.target.getAttribute('data-flight-id');
+                const callsign = e.target.getAttribute('data-callsign') || 'Unknown';
+                if (flightId) {
+                    await fetchAndDisplayFlightPlan(flightId, callsign);
                 }
-            } catch (err) {
-                console.warn("Could not extract callsign:", err);
             }
-            if (!flightId) {
-                alert('No valid flight plan ID found.');
-                return;
-            }
-            await fetchAndDisplayFlightPlan(flightId, callsign);
+        });
+    }
+
+    map.on('overlayadd', function(e) {
+        if (e.layer === hillshadeLayer || e.layer === stamenTerrainLayer || e.layer === esriWorldShadedRelief) {
+            currentMapMode = "terrain";
+            restyleAllRunwaysAndLines();
         }
     });
-    
+    map.on('overlayremove', function(e) {
+        if (e.layer === hillshadeLayer || e.layer === stamenTerrainLayer || e.layer === esriWorldShadedRelief) {
+            if (!map.hasLayer(hillshadeLayer) && !map.hasLayer(stamenTerrainLayer) && !map.hasLayer(esriWorldShadedRelief)) {
+                currentMapMode = "regular";
+                restyleAllRunwaysAndLines();
+            }
+        }
+    });
+	
     // --- UI PANELS ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
         const existingPanel = document.getElementById(id);
@@ -577,7 +563,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="info-card">
                 <h3>Active ATC</h3>
-                <ul id="atc-list" style="max-height: 200px; overflow-y: auto;"><li>No ATC data.</li></ul>
+                <div id="atc-list" style="max-height: 200px; overflow-y: auto;"><div>No ATC data.</div></div>
             </div>
         `;
         const panel = createFloatingPanel('live-control-panel', '<h2>Live Mode</h2>', '80px', '360px', content);
@@ -658,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
         liveAircraftGroup.clearLayers();
         liveFlightMarkers = {};
         const atcList = document.getElementById('atc-list');
-        if (atcList) atcList.innerHTML = '<li>No ATC data.</li>';
+        if (atcList) atcList.innerHTML = '<div>No ATC data.</div>';
     }
 
     async function fetchAndDisplayData(sessionId) {
@@ -711,12 +697,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
             const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
             const speedText = speed !== null ? `${speed} kts GS` : '---';
-            const ownerUsername = "_ServerNoob";
-            let iconSrc = "/plane.png";
-            if (flight.username === ownerUsername) {
-                iconSrc = "/plane-yellow.png";
-            }
-            const iconHtml = `<img src="${iconSrc}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+
+            const iconHtml = `<img src="/plane.png" width="24" height="24" style="transform: rotate(${heading}deg);">`;
             const aircraftIcon = L.divIcon({
                 html: iconHtml,
                 className: 'custom-map-marker',
@@ -728,7 +710,7 @@ document.addEventListener('DOMContentLoaded', () => {
               Speed: ${speedText}<br>
               ${
                 flight.flightId
-                  ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
+                  ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" data-callsign="${callsign}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
                   : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
               }`;
 
@@ -745,57 +727,54 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- NEW: Rebuilt Flight Plan Function ---
+    // --- REBUILT FLIGHT PLAN FUNCTION (FROM SCRATCH) ---
     async function fetchAndDisplayFlightPlan(flightId, callsign) {
-    flightPlanRouteGroup.clearLayers();
-    try {
-        const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
-        const data = await response.json();
-
-        const waypoints = data.waypoints || (data.result && data.result.waypoints) || [];
-        if (waypoints.length < 2) {
-            alert(`No flight plan waypoints were found for ${callsign}.`);
-            return;
-        }
-
-        const latLngs = waypoints
-            .map(wp => [Number(wp.latitude), Number(wp.longitude)])
-            .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
-
-        L.polyline(latLngs, {
-            color: '#FFD600',
-            weight: 3,
-            opacity: 0.9,
-            dashArray: '8, 8'
-        }).addTo(flightPlanRouteGroup);
-
-        waypoints.forEach(wp => {
-            const lat = Number(wp.latitude);
-            const lon = Number(wp.longitude);
-            if(isNaN(lat) || isNaN(lon)) return;
-
-            L.circleMarker([lat, lon], {
-                radius: 4,
+        flightPlanRouteGroup.clearLayers();
+        try {
+            const response = await fetch(`/.netlify/functions/flightplan/${flightId}`);
+            const data = await response.json();
+    
+            const waypoints = (data.result && data.result.waypoints) || [];
+    
+            if (waypoints.length < 2) {
+                alert(`No valid flight plan route could be found for ${callsign}.`);
+                return;
+            }
+    
+            const latLngs = waypoints
+                .map(wp => [Number(wp.latitude), Number(wp.longitude)])
+                .filter(coord => !isNaN(coord[0]) && !isNaN(coord[1]));
+    
+            L.polyline(latLngs, {
                 color: '#FFD600',
-                fillColor: '#1a1a1a',
-                fillOpacity: 1
-            }).bindTooltip(wp.name, {
-                direction: 'top',
-                className: 'waypoint-tooltip'
+                weight: 3,
+                opacity: 0.9,
+                dashArray: '8, 8'
             }).addTo(flightPlanRouteGroup);
-        });
-        map.fitBounds(L.polyline(latLngs).getBounds().pad(0.1));
-
-    } catch (err) {
-        console.error("A critical error occurred while fetching the flight plan:", err);
-        alert(`An unexpected error occurred while trying to display the flight plan for ${callsign}.`);
+    
+            waypoints.forEach(wp => {
+                L.circleMarker([wp.latitude, wp.longitude], {
+                    radius: 4,
+                    color: '#FFD600',
+                    fillColor: '#1a1a1a',
+                    fillOpacity: 1
+                }).bindTooltip(wp.name)
+                  .addTo(flightPlanRouteGroup);
+            });
+    
+            map.fitBounds(flightPlanRouteGroup.getBounds().pad(0.1));
+    
+        } catch (error) {
+            console.error("A critical error occurred while fetching the flight plan:", error);
+            alert(`An unexpected error occurred. Could not display the flight plan for ${callsign}.`);
+        }
     }
-}
 	
-    // --- NEW: Rebuilt ATC List Function ---
+    // --- REBUILT ATC LIST FUNCTION (FROM SCRATCH) ---
     async function updateAtcList(sessionId) {
         const atcListElement = document.getElementById('atc-list');
         if (!atcListElement) return;
+
         try {
             const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
             const data = await response.json();
@@ -809,19 +788,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const atcByIcao = atcFacilities.reduce((acc, facility) => {
                 const icao = facility.icao || "Center";
                 if (!acc[icao]) {
-                    acc[icao] = [];
+                    acc[icao] = {};
+                    acc[icao].name = facility.airportName || "Center";
+                    acc[icao].positions = [];
                 }
-                acc[icao].push(facility.name);
+                acc[icao].positions.push(facility.type);
                 return acc;
             }, {});
 
             let html = '';
-            for (const icao in atcByIcao) {
-                const positions = atcByIcao[icao].join(', ');
-                html += `<div class="atc-airport-row"><strong>${icao}:</strong> ${positions}</div>`;
-            }
+            Object.keys(atcByIcao).forEach(icao => {
+                const facility = atcByIcao[icao];
+                html += `<div class="atc-airport-row">
+                            <div class="atc-airport-info">
+                                <strong>${icao}</strong>
+                                <span>${facility.name}</span>
+                            </div>
+                            <div class="atc-positions">
+                                <span class="${facility.positions.includes(1) ? 'atc-pos-active' : 'atc-pos-inactive'}">TWR</span>
+                                <span class="${facility.positions.includes(2) ? 'atc-pos-active' : 'atc-pos-inactive'}">GND</span>
+                                <span class="${facility.positions.includes(4) ? 'atc-pos-active' : 'atc-pos-inactive'}">APP</span>
+                            </div>
+                         </div>`;
+            });
             
-            atcListElement.innerHTML = html;
+            atcListElement.innerHTML = html || '<div class="atc-airport-row">No active ATC on this server.</div>';
 
         } catch (error) {
             console.error("Failed to update ATC list:", error);
