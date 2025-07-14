@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let liveUpdateInterval;
     let liveFlightMarkers = {};
     let isLiveModeActive = false;
-    let selectedFlightId = null; 
+    let selectedFlightId = null;
 
     // --- Layer control with all terrain and navaid options ---
     const baseLayers = { "Dark Map": darkBaseLayer };
@@ -173,7 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
     }
-    
+
     async function getVORsFromOpenAIP(bbox) {
         const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
         try {
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
     }
-    
+
    async function initializeWMM() {
         try {
             wmmModel = geomag;
@@ -207,13 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSettings();
         createMainPanel();
         await initializeWMM();
-        
+
         await getAirports();
         await getRunways();
-        await getWaypoints(); 
-        
+        await getWaypoints();
+
         updateAirports();
-        updateNavaids(); 
+        updateNavaids();
         setupEventListeners();
         loadPlanFromLocalStorage();
 
@@ -223,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     initializeApp();
-    
+
     // --- LIVE MODE: INACTIVITY TIMER ---
     function startInactivityTimer() {
         clearTimeout(inactivityTimer);
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
         map.on('mousedown', handleMouseDown);
         map.on('mousemove', handleMouseMove);
         map.on('mouseup', handleMouseUp);
-        map.on('zoomend moveend', () => { 
+        map.on('zoomend moveend', () => {
             checkAirportDetailsVisibility();
             checkPlanLabelVisibility();
             checkRunwayLabelVisibility();
@@ -263,11 +263,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             clearTimeout(waypointUpdateTimeout);
             waypointUpdateTimeout = setTimeout(updateWaypoints, 500);
-            
+
             clearTimeout(navaidRequestTimeout);
-            navaidRequestTimeout = setTimeout(updateNavaids, 500); 
+            navaidRequestTimeout = setTimeout(updateNavaids, 500);
         });
-        
+
         map.on('mousemove', (e) => {
             if (isDrawingEnabled || !mslPopup) return;
             mslPopup.style.left = `${e.containerPoint.x + 15}px`;
@@ -282,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             mslPopup.innerHTML = 'MSA: Loading...<br>' + magVarText;
-            
+
             clearTimeout(elevationRequestTimeout);
             elevationRequestTimeout = setTimeout(() => getElevationAndMag(e.latlng), 50);
         });
@@ -297,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 createMainPanel();
             });
         }
-        
+
         document.addEventListener('mousemove', resetInactivityTimer, false);
         document.addEventListener('keydown', resetInactivityTimer, false);
         document.addEventListener('click', resetInactivityTimer, false);
@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const callsign = e.target.getAttribute('data-callsign') || 'Unknown';
                 const altitude = e.target.getAttribute('data-altitude') || 'N/A';
                 const speed = e.target.getAttribute('data-speed') || 'N/A';
-                
+
                 if (flightId && sessionId) {
                     await fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed);
                 } else {
@@ -335,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
-	
+
     // --- UI PANELS ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
         const existingPanel = document.getElementById(id);
@@ -394,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
         makeDraggable(panel);
         return panel;
     }
-    
+
     function makeDraggable(element) {
         let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
         const header = element.querySelector(".panel-header");
@@ -439,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.onmousemove = null;
         }
     }
-    
+
     // --- UPDATED MAIN PANEL FUNCTION ---
     function createMainPanel() {
         const existingPanel = document.getElementById('main-panel');
@@ -450,7 +450,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (reopenButton) reopenButton.style.display = 'none';
-        
+
         const content = `
             <form id="airport-form">
                 <input type="text" id="airport-input" placeholder="e.g., KLAX">
@@ -469,9 +469,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <li><strong>Speed:</strong> <span id="fpl-speed"></span></li>
                 </ul>
             </div>
-            
+
             <h3>Filters</h3>
-            
+
             <div class="filter-dropdown-container" id="airport-dropdown-container">
                 <button class="filter-dropdown-btn">Airport Type <span style="float: right;">▼</span></button>
                 <div class="filter-dropdown-content" style="display: none;">
@@ -534,7 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
             finalApproachGroup.clearLayers();
             const infoPanel = document.getElementById('airport-info-panel');
             if (infoPanel) infoPanel.remove();
-            
+
             mainPanel.querySelector('#clear-selection-btn').style.display = 'none';
             const clearText = document.getElementById('clear-selection-text');
             if (clearText) clearText.style.display = 'none';
@@ -560,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
-        
+
         mainPanel.querySelector('#navigation-filters').addEventListener('change', (e) => {
             if (e.target.id === 'filter-navaids' || e.target.id === 'filter-waypoints') {
                 updateNavaids();
@@ -575,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-				
+
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
             isDrawingEnabled = e.target.checked;
             const drawingText = document.getElementById('drawing-mode-text');
@@ -594,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (lineSelector) lineSelector.style.display = 'none';
             }
         });
-        
+
         mainPanel.querySelector('#line-type-selector').addEventListener('change', (e) => {
             if (e.target.name === 'line-type') {
                 currentLineType = e.target.value;
@@ -604,7 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- UNIFIED DROPDOWN CLICK LOGIC ---
         const airportDropdownBtn = mainPanel.querySelector('#airport-dropdown-container .filter-dropdown-btn');
         const airportDropdownContent = mainPanel.querySelector('#airport-dropdown-container .filter-dropdown-content');
-        
+
         const navDropdownBtn = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-btn');
         const navDropdownContent = mainPanel.querySelector('#navigation-dropdown-container .filter-dropdown-content');
 
@@ -630,12 +630,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 navDropdownContent.style.display = 'none';
             }
         });
-        
+
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
     }
-    
+
     async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
         if (existingPanel) {
@@ -659,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         const panel = createFloatingPanel('live-control-panel', '<h2>Live Mode</h2>', '80px', '360px', content);
-        
+
         const serverSelect = panel.querySelector('#server-select');
         const connectBtn = panel.querySelector('#connect-live-btn');
         const statusIndicator = panel.querySelector('#live-status-indicator');
@@ -668,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch('/.netlify/functions/sessions');
             if (!response.ok) throw new Error('Failed to fetch sessions');
             const sessions = await response.json();
-            
+
             serverSelect.innerHTML = '<option value="">Select a Server</option>';
             sessions.result.forEach(session => {
                 const option = document.createElement('option');
@@ -681,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
             serverSelect.innerHTML = '<option>Could not load servers.</option>';
             console.error(error);
         }
-        
+
         connectBtn.addEventListener('click', () => {
             const sessionId = serverSelect.value;
             if (!sessionId) {
@@ -719,7 +719,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
+
     // --- LIVE MODE: DATA FETCHING AND DISPLAY ---
     function startLiveUpdates(sessionId) {
         stopLiveUpdates();
@@ -735,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isLiveModeActive = false;
         liveAircraftGroup.clearLayers();
         liveFlightMarkers = {};
-        selectedFlightId = null; 
+        selectedFlightId = null;
         const atcList = document.getElementById('atc-list');
         if (atcList) atcList.innerHTML = '<div>No ATC data.</div>';
     }
@@ -763,7 +763,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stopLiveUpdates();
         }
     }
-    
+
     function updateFlightMarkers(flights, sessionId) {
         const existingFlightIds = Object.keys(liveFlightMarkers);
         const incomingFlightIds = flights.map(f => f.flightId);
@@ -808,9 +808,9 @@ document.addEventListener('DOMContentLoaded', () => {
               Speed: ${speedText}<br>
               ${
                 flight.flightId
-                  ? `<button class="cta-button view-fpl-btn" 
-                        data-flight-id="${flight.flightId}" 
-                        data-session-id="${sessionId}" 
+                  ? `<button class="cta-button view-fpl-btn"
+                        data-flight-id="${flight.flightId}"
+                        data-session-id="${sessionId}"
                         data-callsign="${callsign}"
                         data-altitude="${altitudeText}"
                         data-speed="${speedText}"
@@ -914,56 +914,103 @@ document.addEventListener('DOMContentLoaded', () => {
             alert(`An unexpected error occurred. Could not display the flight plan for ${callsign}. See console for details.`);
         }
     }
-	
-    // --- REBUILT ATC LIST FUNCTION ---
+
+    // --- NEW ATC LIST FUNCTION ---
+    /**
+     * Fetches and displays the active ATC frequencies for a given session.
+     * This function is designed to replace the existing implementation.
+     *
+     * @param {string} sessionId The ID of the live server session.
+     */
     async function updateAtcList(sessionId) {
         const atcListElement = document.getElementById('atc-list');
-        if (!atcListElement) return;
+        if (!atcListElement) {
+            console.error("ATC list container element ('atc-list') not found.");
+            return;
+        }
+
+        // Map of frequency type codes to human-readable names.
+        // Based on the API documentation for ActiveATCFacility 'type'.
+        // ATIS (7) is excluded as per instructions.
+        const frequencyTypeMap = {
+            0: 'Ground',
+            1: 'Tower',
+            2: 'Unicom',
+            3: 'Clearance',
+            4: 'Approach',
+            5: 'Departure',
+            6: 'Center'
+        };
 
         try {
+            // 1. Fetch data from the serverless function
             const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
             const data = await response.json();
 
-            if (!response.ok || !data.result || data.result.length === 0) {
-                atcListElement.innerHTML = '<div class="atc-airport-row">No active ATC on this server.</div>';
+            // 2. Validate the API response
+            if (!response.ok || data.errorCode !== 0 || !data.result) {
+                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+                if (data.errorCode !== 0) {
+                    console.error("Received an API error for ATC data:", data);
+                }
                 return;
             }
-            
-            const atcFacilities = data.result;
-            const atcByIcao = atcFacilities.reduce((acc, facility) => {
-                const icao = facility.icao || "Center";
-                if (!acc[icao]) {
-                    acc[icao] = {};
-                    acc[icao].name = facility.airportName || "Center";
-                    acc[icao].positions = [];
-                }
-                acc[icao].positions.push(facility.type);
-                return acc;
-            }, {});
 
-            let html = '';
-            Object.keys(atcByIcao).forEach(icao => {
-                const facility = atcByIcao[icao];
-                html += `<div class="atc-airport-row">
-                            <div class="atc-airport-info">
-                                <strong>${icao}</strong>
-                                <span>${facility.name}</span>
-                            </div>
-                            <div class="atc-positions">
-                                <span class="${facility.positions.includes(1) ? 'atc-pos-active' : 'atc-pos-inactive'}">TWR</span>
-                                <span class="${facility.positions.includes(2) ? 'atc-pos-active' : 'atc-pos-inactive'}">GND</span>
-                                <span class="${facility.positions.includes(4) ? 'atc-pos-active' : 'atc-pos-inactive'}">APP</span>
-                            </div>
-                         </div>`;
-            });
-            
-            atcListElement.innerHTML = html || '<div class="atc-airport-row">No active ATC on this server.</div>';
+            // 3. Filter for displayable frequencies and group them by airport
+            const atcByAirport = data.result
+                .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
+                .reduce((acc, facility) => {
+                    const icao = facility.airportName || "Center";
+                    if (!acc[icao]) {
+                        acc[icao] = {
+                            name: facility.airportName || "Center Control",
+                            frequencies: []
+                        };
+                    }
+                    acc[icao].frequencies.push(facility);
+                    return acc;
+                }, {});
+
+            const airportIcaos = Object.keys(atcByAirport);
+
+            if (airportIcaos.length === 0) {
+                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+                return;
+            }
+
+            // 4. Generate the HTML for the list
+            let htmlContent = airportIcaos.sort().map(icao => {
+                const airportData = atcByAirport[icao];
+                // Sort frequencies by type for consistent order (e.g., Ground, Tower, Approach)
+                airportData.frequencies.sort((a, b) => a.type - b.type);
+
+                const frequencyItems = airportData.frequencies.map(facility => {
+                    const typeName = frequencyTypeMap[facility.type];
+                    const controller = facility.username || "N/A";
+                    return `<li class="atc-frequency">
+                              <span class="atc-type">${typeName}</span>
+                              <span class="atc-controller">${controller}</span>
+                            </li>`;
+                }).join('');
+
+                return `<div class="atc-item">
+                          <div class="atc-airport-header">
+                            <strong>${icao}</strong>
+                            <span>${(icao !== "Center" && airportData.name) ? ` - ${airportData.name}` : ''}</span>
+                          </div>
+                          <ul class="atc-frequency-list">${frequencyItems}</ul>
+                        </div>`;
+            }).join('');
+
+            // 5. Render the list to the DOM
+            atcListElement.innerHTML = htmlContent;
 
         } catch (error) {
-            console.error("Failed to update ATC list:", error);
-            atcListElement.innerHTML = '<div class="atc-airport-row" style="color: red;">Error loading ATC data.</div>';
+            console.error("Failed to fetch or render ATC data:", error);
+            atcListElement.innerHTML = '<div class="atc-item" style="color: var(--danger-color);">Error loading ATC data.</div>';
         }
     }
+
 
     function createSettingsPanel() {
         const content = `
@@ -996,20 +1043,20 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
-        
+
         const settingsPanel = document.getElementById('settings-panel');
         settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
             appSettings.useTrueHeading = e.target.checked;
             updateAllFlightDataBlockStyles();
             saveSettings();
         });
-        
+
         settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
             appSettings.showDataBlocks = e.target.checked;
             toggleDataBlockVisibility();
             saveSettings();
         });
-        
+
         const scaleSlider = settingsPanel.querySelector('#data-block-scale-slider');
         const scaleValueLabel = settingsPanel.querySelector('#data-block-scale-value');
         scaleSlider.addEventListener('input', (e) => {
@@ -1075,11 +1122,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <canvas id="altitude-chart"></canvas>
         `;
         panel = createFloatingPanel('altitude-profile-panel', `<h2>${title}</h2>`, '150px', '150px', content);
-        
+
         const ctx = document.getElementById('altitude-chart').getContext('2d');
         const startAltInput = document.getElementById('start-alt-input');
         const endAltInput = document.getElementById('end-alt-input');
-        
+
         const startAltitude = legData.startAltitude || (legData.altitude ? parseInt(legData.altitude) : 10000);
         const endAltitude = legData.endAltitude || startAltitude;
 
@@ -1149,7 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startAltInput.addEventListener('input', updateFromInput);
         endAltInput.addEventListener('input', updateFromInput);
     }
-    
+
     function updateDataBlock(stepId) {
         const legData = planLayers[stepId];
         if (!legData || !legData.label) return;
@@ -1191,13 +1238,13 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${altitudeHtml}
                             </div>
                           </div>`;
-        
+
         legData.label.setIcon(L.divIcon({
             className: 'custom-map-marker',
             html: fullHtml
         }));
     }
-    
+
     function updateAltitudeForLeg(stepId) {
         const legData = planLayers[stepId];
         if (!legData) return;
@@ -1255,7 +1302,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 .on('click', () => displayAirportDetails(airport.ident));
         });
     }
-	
+
 	function updateNavaids() {
         const showNavaids = document.getElementById('filter-navaids')?.checked;
         if (!showNavaids) {
@@ -1313,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(`Failed to fetch details for ${icao}:`, err);
         }
     }
-    
+
     async function updateAirportInfoPanel(airport, runways) {
         let airspaceClass = 'N/A';
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
@@ -1323,7 +1370,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lat = parseFloat(airport.latitude_deg);
         const lon = parseFloat(airport.longitude_deg);
         let declination = 0;
-        if (wmmModel) { 
+        if (wmmModel) {
             const point = wmmModel.field(lat, lon);
             declination = point.declination;
         }
@@ -1424,7 +1471,7 @@ document.addEventListener('DOMContentLoaded', () => {
             runwayLayers[runwayId].setStyle(style);
         }
     }
-    
+
     function addPlanStep(stepId, heading, distanceMeters, altitude = '', speed = '', lineType = 'standard') {
         createOrShowPlanPanel();
         const sectionMap = { standard: 'standard-steps', arrival: 'arrival-steps', departure: 'departure-steps' };
@@ -1474,7 +1521,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const saveHeading = () => {
                 let newHeading = parseInt(input.value, 10);
                 if (!isNaN(newHeading)) {
-                    newHeading = (newHeading + 360) % 360; 
+                    newHeading = (newHeading + 360) % 360;
                     const newHeadingText = newHeading.toString().padStart(3, '0');
                     planLayers[stepId].heading.magnetic = newHeadingText;
                     headingSpan.textContent = `Hdg ${newHeadingText}° M`;
@@ -1545,7 +1592,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (map.hasLayer(planLabelsGroup) && map.getZoom() < 9) { map.removeLayer(planLabelsGroup); }
         }
     }
-    
+
     function updateAllFlightDataBlockStyles() {
         Object.keys(planLayers).forEach(stepId => updateDataBlock(stepId));
     }
@@ -1560,14 +1607,14 @@ document.addEventListener('DOMContentLoaded', () => {
         isDrawing = true;
         const startPoint = e.latlng;
         tempLine = L.polyline([startPoint, startPoint], { color: '#007bff', weight: 3, dashArray: '10, 10' }).addTo(map);
-        tempLabel = L.marker(startPoint, { 
-            icon: L.divIcon({ 
+        tempLabel = L.marker(startPoint, {
+            icon: L.divIcon({
                 className: 'custom-map-marker',
-                html: `<div class="drawing-temp-heading">---</div>` 
-            }) 
+                html: `<div class="drawing-temp-heading">---</div>`
+            })
         }).addTo(map);
     }
-    
+
     function handleMouseMove(e) {
         if (!isDrawing || !tempLine) return;
         const startPoint = tempLine.getLatLngs()[0];
@@ -1586,10 +1633,10 @@ document.addEventListener('DOMContentLoaded', () => {
             tempLabel.getElement().innerHTML = `<div class="drawing-temp-heading">${headingText}° M</div>`;
         }
     }
-    
+
     function handleMouseUp(e) {
         if (!isDrawing) return;
-        isDrawing = false; 
+        isDrawing = false;
         if (tempLine) {
             const startPoint = tempLine.getLatLngs()[0];
             const endPoint = e.latlng;
@@ -1602,7 +1649,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
                     magneticHeading = (trueHeading - declination + 360) % 360;
                 }
-                const finalHeading = { 
+                const finalHeading = {
                     magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
                     true: Math.round(trueHeading).toString().padStart(3, '0')
                 };
@@ -1636,7 +1683,7 @@ document.addEventListener('DOMContentLoaded', () => {
                  const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
                  magneticHeading = (trueHeading - declination + 360) % 360;
              }
-             heading = { 
+             heading = {
                 magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
                 true: Math.round(trueHeading).toString().padStart(3, '0')
              };
@@ -1705,7 +1752,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveSettings() {
         localStorage.setItem('atcPlannerSettings', JSON.stringify(appSettings));
     }
-    
+
     function loadSettings() {
         const savedSettings = localStorage.getItem('atcPlannerSettings');
         if (savedSettings) {
@@ -1766,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
-    
+
     async function getElevationAndMag(latlng) {
         let magVarText = "Mag Var: N/A";
         if (wmmModel) {
@@ -1844,7 +1891,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawFinalApproachCone(runwayEnd, bearing, group) {
         const finalDistNM = 10;
-        const finalWidthNM = 1.0; 
+        const finalWidthNM = 1.0;
         const apex = runwayEnd;
         const baseCenter = turf.destination(runwayEnd, finalDistNM, bearing, { units: 'nauticalmiles' });
         const p1 = turf.destination(baseCenter, finalWidthNM, bearing - 90, { units: 'nauticalmiles' });
@@ -1981,7 +2028,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const getMidPoint = (start, end) => L.latLng((start.lat + end.lat) / 2, (start.lng + end.lng) / 2);
-	
+
     function createOrShowPlanPanel() {
         let planPanel = document.getElementById('plan-panel');
         if (planPanel) {
