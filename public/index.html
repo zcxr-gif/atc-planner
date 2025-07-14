@@ -11,6 +11,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
 
     <style>
         :root {
@@ -36,7 +38,6 @@
 
         #map { height: 100vh; width: 100%; }
         
-        /* --- LOADER STYLES START --- */
         #loader {
             position: fixed;
             top: 0;
@@ -75,8 +76,6 @@
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        /* --- LOADER STYLES END --- */
-
 
         .reopen-button {
             position: absolute;
@@ -97,7 +96,6 @@
         .reopen-button:hover {
             background: var(--background-light);
         }
-
 
         .floating-panel {
             position: absolute;
@@ -232,7 +230,6 @@
         .plan-section-header.standard { border-left: 4px solid var(--text-primary); }
         .plan-section-content { display: none; padding-top: 5px; }
 
-
         .plan-step {
             background-color: var(--background-light);
             border-radius: 6px;
@@ -258,7 +255,6 @@
           box-shadow: none !important;
         }
 
-        /* UPDATED: This class now provides a clean "halo" effect for the text */
         .drawing-temp-heading {
             color: #FFFFFF;
             font-family: 'Roboto Mono', monospace;
@@ -266,7 +262,6 @@
             font-weight: bold;
             white-space: nowrap;
             text-align: center;
-            /* This creates a black outline for high visibility on any background */
             text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000;
         }
         
@@ -343,10 +338,10 @@
             font-family: 'Roboto Mono', monospace;
         }
         .atc-pos-active {
-            color: #4CAF50; /* Green */
+            color: #4CAF50;
         }
         .atc-pos-inactive {
-            color: #555; /* Dim Gray */
+            color: #555;
         }
     </style>
 </head>
@@ -360,18 +355,16 @@
     <a href="#" id="reopen-main-panel" class="reopen-button" style="display: none;">Show Planner</a>
     <div id="msl-popup"></div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-dragdata@2.2.3/dist/chartjs-plugin-dragdata.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js' defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-dragdata@2.2.3/dist/chartjs-plugin-dragdata.min.js" defer></script>
     
-    <script src="geomag.min.js"></script>
-    
-    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
-    <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.21/dist/leaflet-maplibre-gl.js"></script>
+    <script src="geomag.min.js" defer></script>
+    <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js" defer></script>
+    <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.0.21/dist/leaflet-maplibre-gl.js" defer></script>
 
-    <script src="app.js"></script>
+    <script src="app.js" defer></script>
 
 </body>
 </html>
