@@ -83,6 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let liveUpdateInterval;
     let liveFlightMarkers = {};
     let isLiveModeActive = false;
+    let selectedFlightId = null; // MODIFIED: To track the selected aircraft
 
     // --- Layer control with all terrain and navaid options ---
     const baseLayers = { "Dark Map": darkBaseLayer };
@@ -543,10 +544,22 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAirports();
         });
 
-        // NEW: Event listener for the "Clear FPL" button
+        // MODIFIED: Event listener for the "Clear FPL" button now resets the selected plane icon
         mainPanel.querySelector('#clear-fpl-btn').addEventListener('click', () => {
             flightPlanRouteGroup.clearLayers();
             document.getElementById('viewed-fpl-info').style.display = 'none';
+
+            const oldSelectedId = selectedFlightId;
+            selectedFlightId = null; // Clear the selection
+
+            // If a flight was selected, trigger a refresh to revert its icon
+            if (oldSelectedId) {
+                const serverSelect = document.getElementById('server-select');
+                const sessionId = serverSelect ? serverSelect.value : null;
+                if (isLiveModeActive && sessionId) {
+                    fetchAndDisplayData(sessionId);
+                }
+            }
         });
 
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
@@ -725,6 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isLiveModeActive = false;
         liveAircraftGroup.clearLayers();
         liveFlightMarkers = {};
+        selectedFlightId = null; // MODIFIED: Reset selected flight on disconnect
         const atcList = document.getElementById('atc-list');
         if (atcList) atcList.innerHTML = '<div>No ATC data.</div>';
     }
@@ -753,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // MODIFIED: This function now adds speed and altitude to the FPL button
+    // MODIFIED: This function now changes the icon for the selected aircraft
     function updateFlightMarkers(flights, sessionId) {
         const existingFlightIds = Object.keys(liveFlightMarkers);
         const incomingFlightIds = flights.map(f => f.flightId);
@@ -782,14 +796,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
             const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-            const iconHtml = `<img src="/plane.png" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+            const isSelected = flight.flightId === selectedFlightId;
+            const iconPath = isSelected ? '/whiteplane.png' : '/plane.png';
+            const iconHtml = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+
             const aircraftIcon = L.divIcon({
                 html: iconHtml,
                 className: 'custom-map-marker',
                 iconSize: [24, 24]
             });
 
-            // NEW: Added data-altitude and data-speed to the button
+            // Added data-altitude and data-speed to the button
             const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
               User: ${flight.username || 'N/A'}<br>
               Altitude: ${altitudeText}<br>
@@ -819,9 +836,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // MODIFIED: This function now accepts altitude/speed and updates the main panel
+    // MODIFIED: This function now sets the selected flight and triggers a refresh
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
         flightPlanRouteGroup.clearLayers();
+
+        // Set the selected flight and trigger a marker refresh immediately
+        selectedFlightId = flightId;
+        if (isLiveModeActive) {
+            fetchAndDisplayData(sessionId);
+        }
+
         try {
             const response = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flightId}`);
             if (!response.ok) {
@@ -881,7 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             map.fitBounds(flightPlanRouteGroup.getBounds().pad(0.1));
 
-            // NEW: Update and show the FPL info section in the main panel
+            // Update and show the FPL info section in the main panel
             const fplInfoSection = document.getElementById('viewed-fpl-info');
             if (fplInfoSection) {
                 document.getElementById('fpl-callsign').textContent = callsign;
