@@ -301,17 +301,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.addEventListener('keydown', resetInactivityTimer, false);
         document.addEventListener('click', resetInactivityTimer, false);
 
-        // Listener for the new flight plan logic
+        // MODIFIED: This listener now reads altitude and speed data
         document.addEventListener('click', async function (e) {
             if (e.target && e.target.classList.contains('view-fpl-btn')) {
                 e.preventDefault();
                 const flightId = e.target.getAttribute('data-flight-id');
-                const sessionId = e.target.getAttribute('data-session-id'); // Get the session ID
+                const sessionId = e.target.getAttribute('data-session-id');
                 const callsign = e.target.getAttribute('data-callsign') || 'Unknown';
+                const altitude = e.target.getAttribute('data-altitude') || 'N/A';
+                const speed = e.target.getAttribute('data-speed') || 'N/A';
                 
-                // Check for both IDs before proceeding
                 if (flightId && sessionId) {
-                    await fetchAndDisplayFlightPlan(flightId, sessionId, callsign);
+                    await fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed);
                 } else {
                     console.error("Flight ID or Session ID is missing from the button.", { flightId, sessionId });
                     alert("Could not fetch flight plan: required information is missing.");
@@ -450,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (reopenButton) reopenButton.style.display = 'none';
         
+        // MODIFIED: Added the #viewed-fpl-info block
         const content = `
             <form id="airport-form">
                 <input type="text" id="airport-input" placeholder="e.g., KLAX">
@@ -457,6 +459,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </form>
             <button id="clear-selection-btn" style="width: 100%; margin-top: 10px; background-color: #6c757d; display: none;">Clear Selection</button>
             <span id="clear-selection-text" style="font-size: 11px; color: #ccc; display: none; text-align: center;">Click to clear selection and see other airports</span>
+
+            <div id="viewed-fpl-info" class="info-card" style="display: none; border-color: var(--accent); margin-top: 15px;">
+                <h3 style="display: flex; justify-content: space-between; align-items: center; margin: 0; padding: 0; border: none;">
+                    <span>FPL: <span id="fpl-callsign" style="color: white; font-weight: bold;"></span></span>
+                    <button id="clear-fpl-btn" style="font-size: 12px; padding: 4px 8px; font-weight: 500; background-color: var(--danger-color); color: white; border-radius: 6px; box-shadow: none;">Clear</button>
+                </h3>
+                <ul style="font-size: 13px; margin-top: 8px;">
+                    <li><strong>Altitude:</strong> <span id="fpl-altitude"></span></li>
+                    <li><strong>Speed:</strong> <span id="fpl-speed"></span></li>
+                </ul>
+            </div>
             
             <h3>Filters</h3>
             
@@ -528,6 +541,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (clearText) clearText.style.display = 'none';
 
             updateAirports();
+        });
+
+        // NEW: Event listener for the "Clear FPL" button
+        mainPanel.querySelector('#clear-fpl-btn').addEventListener('click', () => {
+            flightPlanRouteGroup.clearLayers();
+            document.getElementById('viewed-fpl-info').style.display = 'none';
         });
 
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
@@ -734,6 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // MODIFIED: This function now adds speed and altitude to the FPL button
     function updateFlightMarkers(flights, sessionId) {
         const existingFlightIds = Object.keys(liveFlightMarkers);
         const incomingFlightIds = flights.map(f => f.flightId);
@@ -768,14 +788,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 className: 'custom-map-marker',
                 iconSize: [24, 24]
             });
-            // Add the data-session-id attribute to the button
+
+            // NEW: Added data-altitude and data-speed to the button
             const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
               User: ${flight.username || 'N/A'}<br>
               Altitude: ${altitudeText}<br>
               Speed: ${speedText}<br>
               ${
                 flight.flightId
-                  ? `<button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" data-session-id="${sessionId}" data-callsign="${callsign}" style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
+                  ? `<button class="cta-button view-fpl-btn" 
+                        data-flight-id="${flight.flightId}" 
+                        data-session-id="${sessionId}" 
+                        data-callsign="${callsign}"
+                        data-altitude="${altitudeText}"
+                        data-speed="${speedText}"
+                        style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
                   : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
               }`;
 
@@ -792,11 +819,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- FIXED FLIGHT PLAN FUNCTION (ALIGNED WITH IF API DOCS) ---
-    async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign) {
+    // MODIFIED: This function now accepts altitude/speed and updates the main panel
+    async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
         flightPlanRouteGroup.clearLayers();
         try {
-            // Update the fetch call to include the sessionId in the path
             const response = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flightId}`);
             if (!response.ok) {
                 const errorData = await response.json();
@@ -804,31 +830,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
 
-            // The 'result' object contains the flight plan data
-            const flightPlanItems = (data.result && data.result.flightPlanItems) || []; 
+            const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
             const allWaypoints = [];
 
-            // Parse the flightPlanItems, accounting for nested procedures
             flightPlanItems.forEach(item => {
-                // If an item has children, it's a procedure (SID, STAR, Approach).
-                // We must process the children to get the actual waypoints.
-                if (item.children && item.children.length > 0) { 
+                if (item.children && item.children.length > 0) {
                     item.children.forEach(child => {
-                        if (child.location) { 
+                        if (child.location) {
                             allWaypoints.push({
-                                name: child.name, 
+                                name: child.name,
                                 latitude: child.location.latitude,
                                 longitude: child.location.longitude
                             });
                         }
                     });
                 } else {
-                    // If no children, the item itself is a waypoint (Fix, VOR, etc.).
                     if (item.location) {
                         allWaypoints.push({
                             name: item.name,
-                            latitude: item.location.latitude, 
-                            longitude: item.location.longitude 
+                            latitude: item.location.latitude,
+                            longitude: item.location.longitude
                         });
                     }
                 }
@@ -859,6 +880,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             map.fitBounds(flightPlanRouteGroup.getBounds().pad(0.1));
+
+            // NEW: Update and show the FPL info section in the main panel
+            const fplInfoSection = document.getElementById('viewed-fpl-info');
+            if (fplInfoSection) {
+                document.getElementById('fpl-callsign').textContent = callsign;
+                document.getElementById('fpl-altitude').textContent = altitude;
+                document.getElementById('fpl-speed').textContent = speed;
+                fplInfoSection.style.display = 'block';
+            }
 
         } catch (error) {
             console.error("A critical error occurred while fetching the flight plan:", error);
