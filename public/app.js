@@ -387,7 +387,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const content = panel.querySelector('.panel-content');
             const isHidden = content.style.display === 'none';
             content.style.display = isHidden ? 'block' : 'none';
-            e.target.textContent = isHidden ? '-' : '+';
+e.target.textContent = isHidden ? '-' : '+';
         });
 
         makeDraggable(panel);
@@ -439,6 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // --- UPDATED MAIN PANEL FUNCTION ---
     function createMainPanel() {
         const existingPanel = document.getElementById('main-panel');
         if (existingPanel) {
@@ -456,23 +457,38 @@ document.addEventListener('DOMContentLoaded', () => {
             </form>
             <button id="clear-selection-btn" style="width: 100%; margin-top: 10px; background-color: #6c757d; display: none;">Clear Selection</button>
             <span id="clear-selection-text" style="font-size: 11px; color: #ccc; display: none; text-align: center;">Click to clear selection and see other airports</span>
+            
             <h3>Filters</h3>
-            <div id="airport-filters">
-                <input type="checkbox" id="filter-large" value="large_airport" checked> <label for="filter-large" style="color: #fff; font-weight: normal;">Large</label><br>
-                <input type="checkbox" id="filter-medium" value="medium_airport" checked> <label for="filter-medium" style="color: #fff; font-weight: normal;">Medium</label><br>
-                <input type="checkbox" id="filter-small" value="small_airport" checked> <label for="filter-small" style="color: #fff; font-weight: normal;">Small</label>
+            
+            <div class="filter-dropdown-container" id="airport-dropdown-container">
+                <button class="filter-dropdown-btn">Airport Type <span style="float: right;">▼</span></button>
+                <div class="filter-dropdown-content">
+                    <p class="dropdown-description">Filter airports by airspace classification.</p>
+                    <div id="airport-filters"> <label><input type="checkbox" id="filter-large" value="large_airport" checked> Bravo</label>
+                        <label><input type="checkbox" id="filter-medium" value="medium_airport" checked> Charlie</label>
+                        <label><input type="checkbox" id="filter-small" value="small_airport" checked> Small/Other</label>
+                    </div>
+                </div>
             </div>
+
             <div id="navaid-filters" style="margin-top: 10px;">
                 <input type="checkbox" id="filter-navaids" checked> <label for="filter-navaids" style="color: #fff; font-weight: normal;">Show VORs</label><br>
                 <input type="checkbox" id="filter-waypoints" checked> <label for="filter-waypoints" style="color: #fff; font-weight: normal;">Show Waypoints</label>
             </div>
+
+            <div id="final-approach-toggle" style="margin-top: 10px;">
+                <input type="checkbox" id="enable-final-approach" checked>
+                <label for="enable-final-approach" style="color: #fff; font-weight: normal;">Show 10nm Final</label>
+            </div>
+
             <h3 style="margin-top: 15px;">Tools</h3>
             <div id="drawing-toggle">
                  <input type="checkbox" id="enable-drawing">
                  <label for="enable-drawing" style="color: #fff; font-weight: normal;">Enable Drawing Mode</label>
                  <span id="drawing-mode-text" style="font-size: 11px; color: #ccc; display: none; padding-left: 18px;">Uncheck to move the map</span>
             </div>
-            <div id="line-type-selector" style="margin-top: 10px;">
+
+            <div id="line-type-selector" style="margin-top: 10px; display: none;">
                 <label style="color: #fff; font-weight: normal; width: 100%; margin-bottom: 5px;">Line Type:</label>
                 <div>
                     <span><input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label></span>
@@ -480,10 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span><input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label></span>
                 </div>
             </div>
-            <div id="final-approach-toggle" style="margin-top: 10px;">
-                <input type="checkbox" id="enable-final-approach" checked>
-                <label for="enable-final-approach" style="color: #fff; font-weight: normal;">Show 10nm Final</label>
-            </div>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px;">
                 <button id="live-mode-btn">Live Mode</button>
                 <button id="settings-btn">Settings</button>
@@ -493,6 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
         const mainPanel = createFloatingPanel('main-panel', titleHTML, '20px', '20px', content);
 
+        // --- Attach Event Listeners ---
         mainPanel.querySelector('#airport-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const icao = mainPanel.querySelector('#airport-input').value.toUpperCase();
@@ -512,26 +526,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
             updateAirports();
         });
+
+        // This listener on the parent div still works for the checkboxes inside
         mainPanel.querySelector('#airport-filters').addEventListener('change', updateAirports);
+        
         mainPanel.querySelector('#navaid-filters').addEventListener('change', (e) => {
             updateNavaids();
             updateWaypoints();
         });
 				
+        // MODIFIED: Event listener for Drawing Mode now also toggles the Line Type selector
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
             isDrawingEnabled = e.target.checked;
             const drawingText = document.getElementById('drawing-mode-text');
+            const lineSelector = document.getElementById('line-type-selector'); // Get the line selector
+
             if (isDrawingEnabled) {
                 map.dragging.disable();
                 map.getContainer().style.cursor = 'crosshair';
                 if (drawingText) drawingText.style.display = 'block';
+                if (lineSelector) lineSelector.style.display = 'block'; // Show line selector
                 createOrShowPlanPanel();
             } else {
                 map.dragging.enable();
                 map.getContainer().style.cursor = '';
                 if (drawingText) drawingText.style.display = 'none';
+                if (lineSelector) lineSelector.style.display = 'none'; // Hide line selector
             }
         });
+
+        // NEW: Event listeners for the airport filter dropdown
+        const airportDropdownContainer = mainPanel.querySelector('#airport-dropdown-container');
+        if (airportDropdownContainer) {
+            const dropdownContent = airportDropdownContainer.querySelector('.filter-dropdown-content');
+            
+            // Show dropdown on mouse enter
+            airportDropdownContainer.addEventListener('mouseenter', () => {
+                if (dropdownContent) dropdownContent.style.display = 'block';
+            });
+
+            // Hide dropdown on mouse leave
+            airportDropdownContainer.addEventListener('mouseleave', () => {
+                if (dropdownContent) dropdownContent.style.display = 'none';
+            });
+        }
+        
         mainPanel.querySelector('#line-type-selector').addEventListener('change', (e) => {
             if (e.target.name === 'line-type') {
                 currentLineType = e.target.value;
@@ -747,31 +786,31 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const data = await response.json();
 
-            // The 'result' object contains the flight plan data[cite: 12].
-            const flightPlanItems = (data.result && data.result.flightPlanItems) || []; // [cite: 15]
+            // The 'result' object contains the flight plan data.
+            const flightPlanItems = (data.result && data.result.flightPlanItems) || []; //
             const allWaypoints = [];
 
             // Parse the flightPlanItems, accounting for nested procedures
             flightPlanItems.forEach(item => {
-                // If an item has children, it's a procedure (SID, STAR, Approach)[cite: 19].
+                // If an item has children, it's a procedure (SID, STAR, Approach).
                 // We must process the children to get the actual waypoints.
-                if (item.children && item.children.length > 0) { // [cite: 18]
+                if (item.children && item.children.length > 0) { //
                     item.children.forEach(child => {
-                        if (child.location) { // [cite: 22]
+                        if (child.location) { //
                             allWaypoints.push({
-                                name: child.name, // [cite: 16]
+                                name: child.name, //
                                 latitude: child.location.latitude,
                                 longitude: child.location.longitude
                             });
                         }
                     });
                 } else {
-                    // If no children, the item itself is a waypoint (Fix, VOR, etc.)[cite: 19].
+                    // If no children, the item itself is a waypoint (Fix, VOR, etc.).
                     if (item.location) {
                         allWaypoints.push({
                             name: item.name,
-                            latitude: item.location.latitude, // [cite: 22]
-                            longitude: item.location.longitude // [cite: 22]
+                            latitude: item.location.latitude, //
+                            longitude: item.location.longitude //
                         });
                     }
                 }
