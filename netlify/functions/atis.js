@@ -1,7 +1,8 @@
 // netlify/functions/atis.js
 
 /**
- * Netlify serverless function to fetch the full ATIS text for a specific airport in a session.
+ * Netlify serverless function to act as a secure proxy for the Infinite Flight ATIS API.
+ * This version uses the corrected API endpoint path.
  */
 exports.handler = async (event, context) => {
     // Extract sessionId and icao from the URL path, e.g., /.../atis/{sessionId}/{icao}
@@ -24,13 +25,14 @@ exports.handler = async (event, context) => {
         };
     }
 
-    // This is the dedicated endpoint for fetching ATIS text.
-    const url = `https://api.infiniteflight.com/public/v2/sessions/${sessionId}/airports/${icao}/atis`;
+    // CORRECTED: The URL now uses "/airport/" (singular) as specified in the documentation.
+    const url = `https://api.infiniteflight.com/public/v2/sessions/${sessionId}/airport/${icao}/atis`;
 
     try {
         const response = await fetch(url, {
             method: 'GET',
             headers: {
+                // Sending the API key as a bearer token header [cite: 4]
                 'Authorization': `Bearer ${API_KEY}`,
                 'Content-Type': 'application/json'
             }
@@ -38,10 +40,10 @@ exports.handler = async (event, context) => {
 
         const data = await response.json();
 
-        // The Infinite Flight API returns 200 OK even if ATIS is not available (with errorCode 7).
-        // We pass this along so the frontend can handle it gracefully.
+        // Forward the successful response to the client. The client will handle
+        // the different 'errorCode' values, such as 0 for "Ok" or 7 for "NoAtisAvailable" [cite: 6]
         return {
-            statusCode: 200, // Always return 200 on successful API communication
+            statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
