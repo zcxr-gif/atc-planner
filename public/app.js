@@ -1,14 +1,26 @@
 // app.js (Updated with ATIS functionality)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
+    maptilersdk.config.apiKey = 'ety8GjHG3ccnoSZfOULB';
+
+    /* LEAFLET CODE - COMMENTED OUT
     delete L.Icon.Default.prototype._getIconUrl;
     L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
         iconUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
         shadowUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
     });
+    */
 
     // --- MAP INITIALIZATION ---
+    const map = new maptilersdk.Map({
+        container: 'map',
+        style: 'https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/style.json?key=ety8GjHG3ccnoSZfOULB',
+        center: [39.82, -98.57],
+        zoom: 4
+    });
+
+    /* LEAFLET CODE - COMMENTED OUT
     const map = L.map('map', {
         center: [39.82, -98.57],
         zoom: 5,
@@ -43,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri',
         maxZoom: 13
     });
+    */
 
     // --- GLOBAL VARIABLES & LAYER GROUPS ---
     const hubDotsGroup = new L.FeatureGroup().addTo(map);
