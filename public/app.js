@@ -62,11 +62,11 @@ document.addEventListener('DOMContentLoaded', () => {
         departure:{ 'line-color': '#FF3D00', 'line-width': 4, 'line-opacity': 1 }
     };
     const FINAL_APPROACH_STYLE = {
-        'fill-color': 'rgba(0, 255, 255, 0.2)',
+        'fill-color': 'rgba(128, 128, 128, 0.2)', // Gray with 20% opacity
         'fill-opacity': 1
     };
     const FINAL_APPROACH_CENTERLINE_STYLE = {
-        'line-color': 'rgba(0, 255, 255, 1)',
+        'line-color': '#000000', // Solid Black
         'line-width': 2,
         'line-dasharray': [5, 5]
     };
