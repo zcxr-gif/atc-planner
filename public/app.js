@@ -1734,19 +1734,89 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function createDistanceRings(lat, lon) {
-        const ringSpecs = [{ nm: 10 }, { nm: 20 }, { nm: 30 }];
-        const features = [];
+        // Defines the distances and labels for the rings
+        const ringSpecs = [
+            { nm: 10, label: "10 NM" },
+            { nm: 20, label: "20 NM" },
+            { nm: 30, label: "30 NM" }
+        ];
+
+        const ringLineFeatures = [];
+        const ringLabelFeatures = [];
+
+        // Generate the GeoJSON features for each ring
         ringSpecs.forEach(spec => {
-            const circle = turf.circle([lon, lat], spec.nm, { units: 'nauticalmiles', steps: 64 });
-            features.push(circle);
+            // Create a circle for the ring line
+            const circle = turf.circle([lon, lat], spec.nm, { units: 'nauticalmiles', steps: 128 });
+            ringLineFeatures.push(circle);
+
+            // Create a point on the ring to place the distance label
+            // Positioned at a 45-degree angle (NE) from the center
+            const labelPoint = turf.destination(
+                turf.point([lon, lat]),
+                spec.nm,
+                45, // Bearing
+                { units: 'nauticalmiles' }
+            );
+            labelPoint.properties = {
+                labelText: spec.label
+            };
+            ringLabelFeatures.push(labelPoint);
         });
 
+        const ringLinesGeoJSON = { type: 'FeatureCollection', features: ringLineFeatures };
+        const ringLabelsGeoJSON = { type: 'FeatureCollection', features: ringLabelFeatures };
+
+        // To create a "halo" effect for better visibility, we'll draw two lines:
+        // 1. A wider, darker, semi-transparent line as the background (casing).
+        // 2. A thinner, bright, dashed line on top.
+
+        // Add the background "casing" layer
+        addSourceAndLayer('distance-rings-casing',
+            { type: 'geojson', data: ringLinesGeoJSON },
+            {
+                type: 'line',
+                paint: {
+                    'line-color': '#000000', // Black
+                    'line-width': 3,         // Wider
+                    'line-opacity': 0.6      // Semi-transparent
+                }
+            }
+        );
+
+        // Add the main, visible dashed line layer
         addSourceAndLayer('distance-rings',
-            { type: 'geojson', data: { type: 'FeatureCollection', features: features } },
-            { type: 'line', paint: { 'line-color': '#FFD600', 'line-width': 2, 'line-dasharray': [5, 10] } }
+            { type: 'geojson', data: ringLinesGeoJSON },
+            {
+                type: 'line',
+                paint: {
+                    'line-color': '#FFFFFF',     // Bright white for high contrast
+                    'line-width': 1.5,
+                    'line-dasharray': [4, 6] // A clear dash pattern
+                }
+            }
+        );
+
+        // Add the text labels for each ring
+        addSourceAndLayer('distance-ring-labels',
+            { type: 'geojson', data: ringLabelsGeoJSON },
+            {
+                type: 'symbol',
+                layout: {
+                    'text-field': ['get', 'labelText'],
+                    'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+                    'text-size': 14,
+                    'text-allow-overlap': true // Ensures labels are always shown
+                },
+                paint: {
+                    'text-color': '#FFFFFF',
+                    'text-halo-color': '#000000', // Black halo for readability
+                    'text-halo-width': 2
+                }
+            }
         );
     }
-    // ... all other non-map related helper functions (getAirportColor, etc.) remain unchanged ...
+
      function getAirportColor(type) {
         switch (type) {
             case 'large_airport': return '#FF0000';
