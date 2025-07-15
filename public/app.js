@@ -84,6 +84,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let liveFlightMarkers = {};
     let isLiveModeActive = false;
     let selectedFlightId = null;
+    let atisCache = {};
+    let activeAtisStationIcaos = new Set();
+
 
     // --- Layer control with all terrain and navaid options ---
     const baseLayers = { "Dark Map": darkBaseLayer };
@@ -736,6 +739,8 @@ document.addEventListener('DOMContentLoaded', () => {
         liveAircraftGroup.clearLayers();
         liveFlightMarkers = {};
         selectedFlightId = null;
+        atisCache = {};
+        activeAtisStationIcaos.clear();
         const atcList = document.getElementById('atc-list');
         if (atcList) atcList.innerHTML = '<div>No ATC data.</div>';
     }
@@ -915,10 +920,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- ATC LIST FUNCTION (UPDATED) ---
     /**
      * Fetches and displays the active ATC frequencies for a given session.
-     * This function now includes ATIS frequencies in the list.
+     * This function now also populates a set of active ATIS station ICAOs.
      *
      * @param {string} sessionId The ID of the live server session.
      */
@@ -929,48 +933,43 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Map of frequency type codes to human-readable names.
-        // ATIS (7) is now included.
         const frequencyTypeMap = {
-            0: 'Ground',
-            1: 'Tower',
-            2: 'Unicom',
-            3: 'Clearance',
-            4: 'Approach',
-            5: 'Departure',
-            6: 'Center',
-            7: 'ATIS'
+            0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance',
+            4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS'
         };
 
         try {
             const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
             const data = await response.json();
 
+            // Clear and repopulate the set of active ATIS stations.
+            activeAtisStationIcaos.clear();
+            if (data.result) {
+                data.result.forEach(facility => {
+                    if (facility.type === 7 && facility.airportName) {
+                        activeAtisStationIcaos.add(facility.airportName);
+                    }
+                });
+            }
+
             if (!response.ok || data.errorCode !== 0 || !data.result) {
                 atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-                if (data.errorCode !== 0) {
-                    console.error("Received an API error for ATC data:", data);
-                }
+                if (data.errorCode !== 0) console.error("Received an API error for ATC data:", data);
                 return;
             }
 
-            // The filter automatically includes ATIS now that it's in the map.
             const atcByAirport = data.result
                 .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
                 .reduce((acc, facility) => {
                     const icao = facility.airportName || "Center";
                     if (!acc[icao]) {
-                        acc[icao] = {
-                            name: facility.airportName || "Center Control",
-                            frequencies: []
-                        };
+                        acc[icao] = { name: facility.airportName || "Center Control", frequencies: [] };
                     }
                     acc[icao].frequencies.push(facility);
                     return acc;
                 }, {});
 
             const airportIcaos = Object.keys(atcByAirport);
-
             if (airportIcaos.length === 0) {
                 atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
                 return;
@@ -979,7 +978,6 @@ document.addEventListener('DOMContentLoaded', () => {
             let htmlContent = airportIcaos.sort().map(icao => {
                 const airportData = atcByAirport[icao];
                 airportData.frequencies.sort((a, b) => a.type - b.type);
-
                 const frequencyItems = airportData.frequencies.map(facility => {
                     const typeName = frequencyTypeMap[facility.type];
                     const controller = facility.username || "N/A";
@@ -988,7 +986,6 @@ document.addEventListener('DOMContentLoaded', () => {
                               <span class="atc-controller">${controller}</span>
                             </li>`;
                 }).join('');
-
                 return `<div class="atc-item">
                           <div class="atc-airport-header">
                             <strong>${icao}</strong>
@@ -997,7 +994,6 @@ document.addEventListener('DOMContentLoaded', () => {
                           <ul class="atc-frequency-list">${frequencyItems}</ul>
                         </div>`;
             }).join('');
-
             atcListElement.innerHTML = htmlContent;
 
         } catch (error) {
@@ -1356,7 +1352,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- AIRPORT INFO PANEL (UPDATED) ---
+    /**
+     * Formats and displays ATIS information in the airport info panel.
+     * @param {string} atisText The raw ATIS text.
+     * @param {boolean} isStale Whether the ATIS is from a controller who is no longer active.
+     */
+    function displayAtis(atisText, isStale) {
+        const atisContentElement = document.getElementById('atis-content');
+        if (!atisContentElement) return;
+
+        // Use a regular expression to find and bold the ATIS information letter/word.
+        const formattedText = atisText.replace(/(INFORMATION\s+)(\w+)/, '$1<strong>$2</strong>');
+
+        if (isStale) {
+            atisContentElement.innerHTML = `<span style="color: var(--danger-color); font-weight: 500;">Last ATIS:</span><br>${formattedText}`;
+        } else {
+            atisContentElement.innerHTML = formattedText;
+        }
+    }
+
     async function updateAirportInfoPanel(airport, runways) {
         let airspaceClass = 'N/A';
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
@@ -1367,8 +1381,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const lon = parseFloat(airport.longitude_deg);
         let declination = 0;
         if (wmmModel) {
-            const point = wmmModel.field(lat, lon);
-            declination = point.declination;
+            declination = wmmModel.field(lat, lon).declination;
         }
         let runwaysHTML = `
             <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -1383,15 +1396,11 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         if (runways.length > 0) {
             runwaysHTML += runways.map(runway => {
-                const runwayName = (runway.le_ident && runway.he_ident) ?
-                    `${runway.le_ident}/${runway.he_ident}` :
-                    (runway.le_ident || runway.he_ident || 'Unnamed');
+                const runwayName = (runway.le_ident && runway.he_ident) ? `${runway.le_ident}/${runway.he_ident}` : (runway.le_ident || runway.he_ident || 'Unnamed');
                 let le_true_hdg = parseFloat(runway.le_heading_degT);
                 let he_true_hdg = parseFloat(runway.he_heading_degT);
-                let le_mag_hdg_raw = le_true_hdg - declination;
-                let he_mag_hdg_raw = he_true_hdg - declination;
-                le_mag_hdg_raw = (le_mag_hdg_raw + 360) % 360;
-                he_mag_hdg_raw = (he_mag_hdg_raw + 360) % 360;
+                let le_mag_hdg_raw = (le_true_hdg - declination + 360) % 360;
+                let he_mag_hdg_raw = (he_true_hdg - declination + 360) % 360;
                 const le_mag_hdg_str = !isNaN(le_mag_hdg_raw) ? Math.round(le_mag_hdg_raw).toString().padStart(3, '0') + '°' : '---';
                 const he_mag_hdg_str = !isNaN(he_mag_hdg_raw) ? Math.round(he_mag_hdg_raw).toString().padStart(3, '0') + '°' : '---';
                 const le_true_hdg_str = !isNaN(le_true_hdg) ? Math.round(le_true_hdg).toString().padStart(3, '0') + '°' : '---';
@@ -1409,7 +1418,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         runwaysHTML += '</tbody></table>';
 
-        // Panel content now includes a dedicated ATIS section.
         const content = `
             <div class="info-card">
                 <h3>General</h3>
@@ -1437,30 +1445,56 @@ document.addEventListener('DOMContentLoaded', () => {
             row.addEventListener('mouseout', () => unhighlightRunway(runwayId));
         });
 
-        // Fetch and display ATIS if in live mode.
+        // Fetch and display ATIS if in live mode, with caching.
+        const atisContentElement = document.getElementById('atis-content');
         if (isLiveModeActive) {
             const serverSelect = document.getElementById('server-select');
             const sessionId = serverSelect ? serverSelect.value : null;
+            const airportIdent = airport.ident;
 
             if (sessionId) {
-                try {
-                    const atisResponse = await fetch(`/.netlify/functions/atis/${sessionId}/${airport.ident}`);
-                    const atisData = await atisResponse.json();
-                    const atisContentElement = document.getElementById('atis-content');
+                // If an ATIS controller is active for this airport, fetch fresh data.
+                if (activeAtisStationIcaos.has(airportIdent)) {
+                    try {
+                        const atisResponse = await fetch(`/.netlify/functions/atis/${sessionId}/${airportIdent}`);
+                        const atisData = await atisResponse.json();
 
-                    if (atisResponse.ok && atisData.errorCode === 0 && atisData.result) {
-                        atisContentElement.textContent = atisData.result;
-                    } else {
-                        // Handles "NoAtisAvailable" (errorCode 7) or other API errors.
-                        atisContentElement.textContent = 'No active ATIS for this airport.';
+                        if (atisResponse.ok && atisData.errorCode === 0 && atisData.result) {
+                            // Cache the fresh data and display it.
+                            atisCache[airportIdent] = atisData.result;
+                            displayAtis(atisData.result, false);
+                        } else {
+                            // The controller is active, but ATIS fetch failed (maybe they just left).
+                            // Fallback to cache if it exists, and display as stale.
+                            if (atisCache[airportIdent]) {
+                                displayAtis(atisCache[airportIdent], true);
+                            } else {
+                                atisContentElement.textContent = 'No active ATIS for this airport.';
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch ATIS:', error);
+                        // On network error, fallback to cache if it exists, and display as stale.
+                        if (atisCache[airportIdent]) {
+                            displayAtis(atisCache[airportIdent], true);
+                        } else {
+                            atisContentElement.textContent = 'Error loading ATIS data.';
+                        }
                     }
-                } catch (error) {
-                    console.error('Failed to fetch ATIS:', error);
-                    document.getElementById('atis-content').textContent = 'Error loading ATIS data.';
+                } else {
+                    // No active controller, so rely entirely on the cache for "Last ATIS".
+                    if (atisCache[airportIdent]) {
+                        displayAtis(atisCache[airportIdent], true);
+                    } else {
+                        atisContentElement.textContent = 'No ATIS information available.';
+                    }
                 }
             } else {
-                 document.getElementById('atis-content').textContent = 'Select a server in Live Mode to view ATIS.';
+                atisContentElement.textContent = 'Select a server in Live Mode to view ATIS.';
             }
+        } else {
+            // Not in live mode.
+            atisContentElement.textContent = 'Connect to Live Mode to view ATIS.';
         }
     }
 
