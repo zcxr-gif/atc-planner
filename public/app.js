@@ -1323,6 +1323,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+	function updateWaypoints() {
+        const showWaypoints = document.getElementById('filter-waypoints')?.checked;
+        const zoom = map.getZoom();
+        waypointsGroup.clearLayers();
+        if (!showWaypoints || zoom < 8 || !waypointsDataCache) {
+            return;
+        }
+        const bounds = map.getBounds();
+        waypointsDataCache.forEach(waypoint => {
+            if (!waypoint.coords || waypoint.coords.length < 2) return;
+            const lon = parseFloat(waypoint.coords[0]);
+            const lat = parseFloat(waypoint.coords[1]);
+            if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
+                return;
+            }
+            const waypointIcon = L.divIcon({
+                className: 'custom-map-marker',
+                html: `<svg width="12" height="12" viewbox="0 0 12 12"><polygon points="6,1 11,11 1,11" fill="white"/></svg>`,
+                iconSize: [12, 12]
+            });
+            L.marker([lat, lon], { icon: waypointIcon })
+            .bindTooltip(waypoint.name, { direction: 'top' })
+            .addTo(waypointsGroup);
+        });
+    }
 
     async function drawRunwaysForAirport(icao) {
         try {
