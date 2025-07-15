@@ -808,37 +808,29 @@ document.addEventListener('DOMContentLoaded', () => {
         el.className = 'custom-map-marker';
         el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
-        const popupContent = `
-            <div class="flight-popup-container">
-                <div class="flight-popup-header">
-                    <div class="flight-popup-callsign">${callsign}</div>
-                    <div class="flight-popup-aircraft">${flight.aircraftName || 'N/A'}</div>
+       const popupContent = `
+            <div class="flight-popup-container" style="line-height: 1.4;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <strong class="flight-popup-callsign">${callsign}</strong>
+                    <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
                 </div>
-                <div class="flight-popup-body">
-                    <div class="flight-popup-row">
-                        <span class="label">User:</span>
-                        <span class="value">${flight.username || 'N/A'}</span>
-                    </div>
-                    <div class="flight-popup-row">
-                        <span class="label">Altitude:</span>
-                        <span class="value">${altitudeText}</span>
-                    </div>
-                    <div class="flight-popup-row">
-                        <span class="label">Speed:</span>
-                        <span class="value">${speedText}</span>
-                    </div>
+                <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
+                    <div><strong>Alt:</strong> ${altitudeText}</div>
+                    <div><strong>Spd:</strong> ${speedText}</div>
+                    <div><strong>User:</strong> ${flight.username || 'N/A'}</div>
                 </div>
                 ${
-                  flight.flightId
-                    ? `<div class="flight-popup-footer">
+                    flight.flightId
+                    ? `<div style="margin-top: 8px;">
                         <button class="cta-button view-fpl-btn"
+                                style="padding: 5px 10px; font-size: 12px; width: 100%;"
                                 data-flight-id="${flight.flightId}"
                                 data-session-id="${sessionId}"
                                 data-callsign="${callsign}"
                                 data-altitude="${altitudeText}"
                                 data-speed="${speedText}">View FPL</button>
                     </div>`
-                    : '<div style="padding: 5px;"></div>'
+                    : ''
                 }
             </div>
 	}`;
