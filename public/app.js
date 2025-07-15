@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const map = new maptilersdk.Map({
         container: 'map',
         style: 'https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/style.json?key=ety8GjHG3ccnoSZfOULB',
-        center: [39.82, -98.57],
+        center:  [-98.57, 39.82],
         zoom: 4
     });
 
