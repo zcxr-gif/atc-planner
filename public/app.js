@@ -852,82 +852,93 @@ document.addEventListener('DOMContentLoaded', () => {
 }
 
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
-        // Clear previous FPL
-        if (map.getLayer('flight-plan-route')) map.removeLayer('flight-plan-route');
-        if (map.getSource('flight-plan-route')) map.removeSource('flight-plan-route');
-        if (map.getLayer('flight-plan-waypoints')) map.removeLayer('flight-plan-waypoints');
-        if (map.getSource('flight-plan-waypoints')) map.removeSource('flight-plan-waypoints');
+    // Clear previous FPL
+    if (map.getLayer('flight-plan-route')) map.removeLayer('flight-plan-route');
+    if (map.getSource('flight-plan-route')) map.removeSource('flight-plan-route');
+    if (map.getLayer('flight-plan-waypoints')) map.removeLayer('flight-plan-waypoints');
+    if (map.getSource('flight-plan-waypoints')) map.removeSource('flight-plan-waypoints');
 
-        selectedFlightId = flightId;
-        if (isLiveModeActive) {
-            fetchAndDisplayData(sessionId);
-        }
-
-        try {
-            const response = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flightId}`);
-            if (!response.ok) throw new Error(`API Error: ${response.status}`);
-            const data = await response.json();
-
-            const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
-            const allWaypoints = [];
-            flightPlanItems.forEach(item => {
-                if (item.location) allWaypoints.push(item);
-                if (item.children) allWaypoints.push(...item.children.filter(c => c.location));
-            });
-
-            if (allWaypoints.length < 2) {
-                alert(`No valid flight plan route could be found for ${callsign}.`);
-                return;
-            }
-
-            const routeCoords = allWaypoints.map(wp => [wp.location.longitude, wp.location.latitude]);
-            const waypointFeatures = allWaypoints.map(wp => ({
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [wp.location.longitude, wp.location.latitude] },
-                properties: { name: wp.name }
-            }));
-
-            map.addSource('flight-plan-route', {
-                type: 'geojson',
-                data: { type: 'LineString', coordinates: routeCoords }
-            });
-            map.addLayer({
-                id: 'flight-plan-route',
-                type: 'line',
-                source: 'flight-plan-route',
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#FFD600', 'line-width': 3, 'line-dasharray': [2, 2] }
-            });
-
-            map.addSource('flight-plan-waypoints', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: waypointFeatures }
-            });
-            map.addLayer({
-                id: 'flight-plan-waypoints',
-                type: 'circle',
-                source: 'flight-plan-waypoints',
-                paint: {
-                    'circle-radius': 4,
-                    'circle-color': '#FFD600',
-                    'circle-stroke-color': '#1a1a1a',
-                    'circle-stroke-width': 2
-                }
-            });
-
-            const fplInfoSection = document.getElementById('viewed-fpl-info');
-            if (fplInfoSection) {
-                document.getElementById('fpl-callsign').textContent = callsign;
-                document.getElementById('fpl-altitude').textContent = altitude;
-                document.getElementById('fpl-speed').textContent = speed;
-                fplInfoSection.style.display = 'block';
-            }
-
-        } catch (error) {
-            console.error("Error fetching flight plan:", error);
-            alert(`Could not display the flight plan for ${callsign}.`);
-        }
+    selectedFlightId = flightId;
+    if (isLiveModeActive) {
+        fetchAndDisplayData(sessionId);
     }
+
+    try {
+        const response = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flightId}`);
+        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+        const data = await response.json();
+
+        const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
+        const allWaypoints = [];
+        
+        // --- CORRECTED LOGIC ---
+        // This new logic correctly processes nested waypoints.
+        flightPlanItems.forEach(item => {
+            // If an item has children, it's a procedure (like a SID/STAR).
+            // We should only add the children waypoints to the route.
+            if (item.children && item.children.length > 0) {
+                allWaypoints.push(...item.children.filter(c => c.location));
+            }
+            // If it has no children but has a location, it's a standalone waypoint.
+            else if (item.location) {
+                allWaypoints.push(item);
+            }
+        });
+
+
+        if (allWaypoints.length < 2) {
+            alert(`No valid flight plan route could be found for ${callsign}.`);
+            return;
+        }
+
+        const routeCoords = allWaypoints.map(wp => [wp.location.longitude, wp.location.latitude]);
+        const waypointFeatures = allWaypoints.map(wp => ({
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [wp.location.longitude, wp.location.latitude] },
+            properties: { name: wp.name }
+        }));
+
+        map.addSource('flight-plan-route', {
+            type: 'geojson',
+            data: { type: 'LineString', coordinates: routeCoords }
+        });
+        map.addLayer({
+            id: 'flight-plan-route',
+            type: 'line',
+            source: 'flight-plan-route',
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: { 'line-color': '#FFD600', 'line-width': 3, 'line-dasharray': [2, 2] }
+        });
+
+        map.addSource('flight-plan-waypoints', {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: waypointFeatures }
+        });
+        map.addLayer({
+            id: 'flight-plan-waypoints',
+            type: 'circle',
+            source: 'flight-plan-waypoints',
+            paint: {
+                'circle-radius': 4,
+                'circle-color': '#FFD600',
+                'circle-stroke-color': '#1a1a1a',
+                'circle-stroke-width': 2
+            }
+        });
+
+        const fplInfoSection = document.getElementById('viewed-fpl-info');
+        if (fplInfoSection) {
+            document.getElementById('fpl-callsign').textContent = callsign;
+            document.getElementById('fpl-altitude').textContent = altitude;
+            document.getElementById('fpl-speed').textContent = speed;
+            fplInfoSection.style.display = 'block';
+        }
+
+    } catch (error) {
+        console.error("Error fetching flight plan:", error);
+        alert(`Could not display the flight plan for ${callsign}.`);
+    }
+}
 
     async function updateAtcList(sessionId) {
         const atcListElement = document.getElementById('atc-list');
