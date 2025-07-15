@@ -808,21 +808,40 @@ document.addEventListener('DOMContentLoaded', () => {
         el.className = 'custom-map-marker';
         el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
-        const popupContent = `<b>${callsign} (${flight.aircraftName || 'N/A'})</b><br>
-          User: ${flight.username || 'N/A'}<br>
-          Altitude: ${altitudeText}<br>
-          Speed: ${speedText}<br>
-          ${
-            flight.flightId
-              ? `<button class="cta-button view-fpl-btn"
-                    data-flight-id="${flight.flightId}"
-                    data-session-id="${sessionId}"
-                    data-callsign="${callsign}"
-                    data-altitude="${altitudeText}"
-                    data-speed="${speedText}"
-                    style="width:100%; margin-top: 8px; padding: 5px 10px; font-size: 0.8rem;">View FPL</button>`
-              : `<span style="font-size:0.8rem;color:#999;">No FPL</span>`
-          }`;
+        const popupContent = `
+            <div class="flight-popup-container">
+                <div class="flight-popup-header">
+                    <div class="flight-popup-callsign">${callsign}</div>
+                    <div class="flight-popup-aircraft">${flight.aircraftName || 'N/A'}</div>
+                </div>
+                <div class="flight-popup-body">
+                    <div class="flight-popup-row">
+                        <span class="label">User:</span>
+                        <span class="value">${flight.username || 'N/A'}</span>
+                    </div>
+                    <div class="flight-popup-row">
+                        <span class="label">Altitude:</span>
+                        <span class="value">${altitudeText}</span>
+                    </div>
+                    <div class="flight-popup-row">
+                        <span class="label">Speed:</span>
+                        <span class="value">${speedText}</span>
+                    </div>
+                </div>
+                ${
+                  flight.flightId
+                    ? `<div class="flight-popup-footer">
+                        <button class="cta-button view-fpl-btn"
+                                data-flight-id="${flight.flightId}"
+                                data-session-id="${sessionId}"
+                                data-callsign="${callsign}"
+                                data-altitude="${altitudeText}"
+                                data-speed="${speedText}">View FPL</button>
+                    </div>`
+                    : '<div style="padding: 5px;"></div>'
+                }
+            </div>
+	}`;
 
         if (liveFlightMarkers[flight.flightId]) {
             // If marker already exists, just update its position and content
