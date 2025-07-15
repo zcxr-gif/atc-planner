@@ -13,12 +13,20 @@ document.addEventListener('DOMContentLoaded', () => {
     */
 
     // --- MAP INITIALIZATION ---
-    const map = new maptilersdk.Map({
-        container: 'map',
-        style: 'https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/style.json?key=ety8GjHG3ccnoSZfOULB',
-        center:  [-98.57, 39.82],
-        zoom: 4
-    });
+const map = new maptilersdk.Map({
+    container: 'map',
+    style: 'https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/style.json?key=ety8GjHG3ccnoSZfOULB',
+    center: [-98.57, 39.82],
+    zoom: 4
+});
+
+map.on('load', () => {
+    console.log('Map has finished loading.');
+    const loader = document.getElementById('loader');
+    if (loader) {
+        loader.classList.add('hidden');
+    }
+});
 
     /* LEAFLET CODE - COMMENTED OUT
     const map = L.map('map', {
