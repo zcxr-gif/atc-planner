@@ -50,9 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const RUNWAY_STYLE_HIGHLIGHT = { 'line-color': '#FFD700', 'line-width': 2, 'fill-color': '#FFD700', 'fill-opacity': 0.7 };
     const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1, 'line-dasharray': [2, 3] };
     const FLIGHT_LINE_STYLES_REGULAR = {
-        standard: { 'line-color': 'white', 'line-width': 2, 'line-opacity': 1 },
-        arrival: { 'line-color': '#64b5f6', 'line-width': 2, 'line-opacity': 1 },
-        departure: { 'line-color': '#e57373', 'line-width': 2, 'line-opacity': 1 }
+        standard: { 'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.85 },
+        arrival: { 'line-color': '#2979FF', 'line-width': 3, 'line-opacity': 1 },
+        departure: { 'line-color': '#FF3D00', 'line-width': 3, 'line-opacity': 1 }
     };
     const RUNWAY_STYLE_TERRAIN = { 'line-color': '#222', 'line-width': 2, 'fill-color': '#444', 'fill-opacity': 0.95, 'line-opacity': 1 };
     const RUNWAY_CENTERLINE_STYLE_TERRAIN = { 'line-color': '#F5F5F5', 'line-width': 2, 'line-dasharray': [2, 3], 'line-opacity': 1 };
@@ -62,12 +62,12 @@ document.addEventListener('DOMContentLoaded', () => {
         departure:{ 'line-color': '#FF3D00', 'line-width': 4, 'line-opacity': 1 }
     };
     const FINAL_APPROACH_STYLE = {
-        'fill-color': 'rgba(0, 255, 255, 0.1)',
-        'fill-opacity': 0.5
+        'fill-color': 'rgba(0, 255, 255, 0.2)',
+        'fill-opacity': 1
     };
     const FINAL_APPROACH_CENTERLINE_STYLE = {
-        'line-color': 'rgba(0, 255, 255, 0.8)',
-        'line-width': 1,
+        'line-color': 'rgba(0, 255, 255, 1)',
+        'line-width': 2,
         'line-dasharray': [5, 5]
     };
 
@@ -180,19 +180,32 @@ document.addEventListener('DOMContentLoaded', () => {
      * Clears all dynamically added layers and sources from the map.
      */
     function clearAllDynamicLayers() {
-        layerAndSourceIds.forEach(id => {
+        // Create a copy of the Set to safely iterate over.
+        const idsToRemove = new Set(layerAndSourceIds);
+
+        // First, iterate and remove only the layers.
+        // Layers must be removed before the sources they use.
+        idsToRemove.forEach(id => {
             if (map.getLayer(id)) {
                 map.removeLayer(id);
             }
+        });
+
+        // After all layers are gone, it's safe to remove the sources.
+        idsToRemove.forEach(id => {
             if (map.getSource(id)) {
                 map.removeSource(id);
             }
         });
+
         layerAndSourceIds.clear();
 
-        // Clear markers separately
+        // Clear markers separately as before.
         Object.values(liveFlightMarkers).forEach(marker => marker.remove());
+        Object.keys(liveFlightMarkers).forEach(key => delete liveFlightMarkers[key]);
+
         Object.values(planLabels).forEach(marker => marker.remove());
+        Object.keys(planLabels).forEach(key => delete planLabels[key]);
     }
 
 
@@ -818,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
             liveFlightMarkers[flight.flightId].getPopup().setHTML(popupContent);
         } else {
             // Otherwise, create a new marker
-            const marker = new maptilersdk.Marker(el)
+            const marker = new maptilersdk.Marker({ element: el })
                 .setLngLat([lon, lat])
                 .setPopup(new maptilersdk.Popup({ offset: 25 }).setHTML(popupContent))
                 .addTo(map);
