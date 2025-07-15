@@ -808,8 +808,8 @@ document.addEventListener('DOMContentLoaded', () => {
         el.className = 'custom-map-marker';
         el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
-       const popupContent = `
-            <div class="flight-popup-container" style="line-height: 1.4;">
+        const popupContent = `
+            <div class="flight-popup-container" style="line-height: 1.4; background-color: #2a2a35; color: #f0f0f0; border: 1px solid #4a4a55;">
                 <div style="display: flex; justify-content: space-between; align-items: baseline;">
                     <strong class="flight-popup-callsign">${callsign}</strong>
                     <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
@@ -833,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     : ''
                 }
             </div>
-	}`;
+        `;
 
         if (liveFlightMarkers[flight.flightId]) {
             // If marker already exists, just update its position and content
