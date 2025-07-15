@@ -24,6 +24,7 @@
             --danger-color: #dc3545;
             --departure-color: #e57373;
             --arrival-color: #64b5f6;
+            --live-color: #28a745;
         }
 
         body {
@@ -153,19 +154,7 @@
             min-height: 0;
         }
 
-        #plan-panel .panel-content {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .plan-items-container {
-            flex-grow: 1;
-            overflow-y: auto;
-            min-height: 0;
-            padding-right: 5px;
-        }
-
-        input[type="text"], input[type="number"], input[type="email"], textarea {
+        input[type="text"], input[type="number"], input[type="email"], textarea, select {
             width: 100%;
             padding: 8px 12px;
             border: 1px solid var(--border-color);
@@ -195,26 +184,41 @@
             transform: translateY(-2px); 
             box-shadow: 0 4px 30px var(--accent-glow);
         }
+        button:disabled {
+            background-color: #555;
+            color: #999;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        #connect-live-btn { background-color: var(--accent); }
+        
+        .cta-button {
+            padding: 8px 12px;
+            font-size: 14px;
+        }
 
-        #airport-form { display: flex; gap: 8px; margin-bottom: 15px; }
+        #airport-form { display: flex; gap: 8px; }
 
         .info-card { 
             margin-bottom: 15px; 
-            background-color: var(--background-light);
+            background-color: rgba(0,0,0,0.2);
             padding: 1rem;
             border-radius: 8px;
             border: 1px solid var(--border-color);
         }
+        .info-card:last-child { margin-bottom: 0; }
+
         .info-card h3 { 
-            font-size: 1.2rem; 
+            font-size: 1.1rem; 
             margin: 0 0 8px 0; 
-            padding-bottom: 5px; 
+            padding-bottom: 8px; 
             border-bottom: 1px solid var(--border-color);
             color: var(--accent);
+            font-weight: 700;
         }
         .info-card ul { list-style: none; padding: 0; margin: 0; font-size: 14px; color: var(--text-secondary);}
         .info-card ul li { padding: 4px 0; }
-        .info-card ul li strong { color: var(--text-primary); }
+        .info-card ul li strong { color: var(--text-primary); font-weight: 500; }
         
         .plan-section { margin-bottom: 10px; }
         .plan-section-header {
@@ -240,12 +244,12 @@
             margin-bottom: 8px;
             border: 1px solid var(--border-color);
         }
-        .plan-step-details { display: flex; justify-content: space-between; align-items: center; font-weight: 500; }
+        .plan-step-details { display: flex; justify-content: space-between; align-items: center; font-weight: 500; font-size: 14px;}
         .plan-step-inputs { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } 
         .plan-step-inputs > div { display: flex; flex-direction: column; }
         .plan-step-inputs label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
         
-        .delete-step-btn { background: none; border: none; color: var(--danger-color); cursor: pointer; font-weight: bold; font-size: 16px; }
+        .delete-step-btn { background: none; border: none; color: var(--danger-color); cursor: pointer; font-weight: bold; font-size: 16px; padding: 0 5px; }
 
         #msl-popup {
             position: absolute; display: none; background: rgba(20, 20, 20, 0.8); backdrop-filter: blur(5px);
@@ -258,16 +262,9 @@
           box-shadow: none !important;
         }
 
-        /* UPDATED: This class now provides a clean "halo" effect for the text */
         .drawing-temp-heading {
-            color: #FFFFFF;
-            font-family: 'Roboto Mono', monospace;
-            font-size: 20px;
-            font-weight: bold;
-            white-space: nowrap;
-            text-align: center;
-            /* This creates a black outline for high visibility on any background */
-            text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000;
+            color: #FFFFFF; font-family: 'Roboto Mono', monospace; font-size: 20px; font-weight: bold; white-space: nowrap;
+            text-align: center; text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, -2px 0 0 #000, 2px 0 0 #000, 0 -2px 0 #000, 0 2px 0 #000;
         }
         
         .flight-data-block {
@@ -279,124 +276,124 @@
         .fdb-row { display: flex; justify-content: space-around; }
 
         .fdb-data-item { text-align: center; }
-        .fdb-value {
-            display: block;
-            font-size: 14px;
-            font-weight: 700;
-        }
-        .fdb-unit {
-            display: block;
-            font-size: 10px;
-            color: var(--text-secondary);
-        }
-        .fdb-airspeed .fdb-value { color: #64b5f6; } 
-        .fdb-altitude .fdb-value { color: #81c784; }
-
-
+        .fdb-value { display: block; font-size: 14px; font-weight: 700; }
+        .fdb-unit { display: block; font-size: 10px; color: var(--text-secondary); }
+        
         .runway-label-halo {
             background-color: transparent; border: none; color: #FFFFFF; font-family: 'Inter', sans-serif;
             font-size: 16px; font-weight: bold; text-shadow: -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, -1.5px 0 0 #000, 1.5px 0 0 #000, 0 -1.5px 0 #000, 0 1.5px 0 #000;
             text-align: center; white-space: nowrap;
         }
-
-        h3 {
-             color: var(--accent);
-        }
-
-        #line-type-selector > div {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+        
+        #line-type-selector > div { display: flex; justify-content: space-around; align-items: center; }
+        #line-type-selector label { font-size: 14px; }
 		
-        .atc-airport-row {
+        /* --- NEW ATC LIST STYLES --- */
+        #atc-list {
             display: flex;
-            align-items: center;
-            padding: 10px 5px;
+            flex-direction: column;
+            gap: 12px; /* Adds space between airport cards */
+        }
+
+        .atc-item {
+            background-color: var(--background-light); 
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .atc-airport-header {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
             border-bottom: 1px solid var(--border-color);
-            font-size: 14px;
         }
-        .atc-airport-info {
-            flex: 1;
+
+        .atc-airport-header strong {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent); /* Use accent color for the ICAO */
         }
-        .atc-airport-info strong {
-            font-size: 1rem;
-            color: var(--text-primary);
-        }
-        .atc-airport-info span {
-            display: block;
+
+        .atc-airport-header span {
             font-size: 0.8rem;
             color: var(--text-secondary);
+            display: block; /* Puts the airport name on a new line */
         }
-        .atc-arrivals-info {
-            width: 60px;
-            text-align: center;
-            font-weight: bold;
-        }
-        .atc-positions {
+
+        .atc-frequency-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
             display: flex;
-            gap: 12px;
-            width: 180px;
-            justify-content: flex-end;
-            font-weight: bold;
-            font-family: 'Roboto Mono', monospace;
+            flex-direction: column;
+            gap: 8px; /* Adds space between frequency rows */
         }
-        .atc-pos-active {
-            color: #4CAF50; /* Green */
+
+        .atc-frequency {
+            display: flex;
+            justify-content: space-between; /* Aligns items to left and right */
+            align-items: center;
+            font-size: 14px;
         }
-        .atc-pos-inactive {
-            color: #555; /* Dim Gray */
+
+        .atc-type {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .atc-controller {
+            font-family: 'Roboto Mono', monospace; 
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        /* Prettier scrollbar for the ATC list */
+        #atc-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        #atc-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        #atc-list::-webkit-scrollbar-thumb {
+            background-color: var(--border-color);
+            border-radius: 6px;
+        }
+        #atc-list::-webkit-scrollbar-thumb:hover {
+            background-color: var(--accent);
+        }
+
+        /* --- END NEW ATC LIST STYLES --- */
+        
+        /* --- LIVE MODE INDICATOR --- */
+        #live-status-indicator {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #fff;
+            transition: background-color 0.3s ease;
         }
         
         /* --- NEW DROPDOWN STYLES --- */
         .filter-dropdown-container {
-            position: relative; /* Establishes a positioning context for the dropdown */
-            display: block;
-            width: 100%;
-            margin-bottom: 10px;
+            position: relative; display: block; width: 100%; margin-bottom: 10px;
         }
-
         .filter-dropdown-btn {
-            background-color: var(--background-light);
-            color: var(--text-primary);
-            padding: 10px 12px;
-            font-size: 14px;
-            font-weight: 500;
-            border: 1px solid var(--border-color);
-            cursor: pointer;
-            width: 100%;
-            text-align: left;
-            border-radius: 6px;
-            box-sizing: border-box;
+            background-color: var(--background-light); color: var(--text-primary); padding: 10px 12px;
+            font-size: 14px; font-weight: 500; border: 1px solid var(--border-color); cursor: pointer;
+            width: 100%; text-align: left; border-radius: 6px; box-sizing: border-box;
         }
-
         .filter-dropdown-content {
-            display: none; /* The dropdown is hidden by default */
-            position: absolute;
-            background-color: var(--background-dark);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            width: 100%;
-            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.3);
-            z-index: 1001; /* Ensures it appears above other panel content */
-            padding: 12px;
-            box-sizing: border-box;
+            display: none; position: absolute; background-color: var(--background-dark);
+            border: 1px solid var(--border-color); border-radius: 6px; width: 100%;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.3); z-index: 1001; padding: 12px; box-sizing: border-box;
         }
-
         .dropdown-description {
-            font-size: 11px;
-            color: var(--text-secondary);
-            margin: 0 0 8px 0;
-            padding-bottom: 5px;
+            font-size: 11px; color: var(--text-secondary); margin: 0 0 8px 0; padding-bottom: 5px;
             border-bottom: 1px solid var(--border-color);
         }
-
         .filter-dropdown-content label {
-            display: block; /* Puts each checkbox on its own line */
-            color: var(--text-primary);
-            padding: 5px 0;
-            font-weight: normal;
-            cursor: pointer;
+            display: block; color: var(--text-primary); padding: 5px 0; font-weight: normal; cursor: pointer;
         }
 
     </style>
