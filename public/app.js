@@ -833,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Otherwise, create a new marker
             const marker = new maptilersdk.Marker({ element: el })
                 .setLngLat([lon, lat])
-                .setPopup(new maptilersdk.Popup({ offset: 25 }).setHTML(popupContent))
+                .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
                 .addTo(map);
             liveFlightMarkers[flight.flightId] = marker;
         }
