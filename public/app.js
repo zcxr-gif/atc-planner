@@ -210,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setupEventListeners();
             updateAirports();
             updateNavaids();
+            updateWaypoints();
             loadPlanFromLocalStorage();
 
             const loader = document.getElementById('loader');
@@ -558,8 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Logic for final approach visibility can be tied to layer visibility property
             const finalApproachCheckbox = document.getElementById('enable-final-approach');
             const visibility = (finalApproachCheckbox && finalApproachCheckbox.checked) ? 'visible' : 'none';
-            if(map.getLayer('final-approach-cones')) map.setLayoutProperty('final-approach-cones', 'visibility', visibility);
-            if(map.getLayer('final-approach-centerlines')) map.setLayoutProperty('final-approach-centerlines', 'visibility', visibility);
+            if(map.getLayer('final-approach-cones-layer')) map.setLayoutProperty('final-approach-cones-layer', 'visibility', visibility);
+            if(map.getLayer('final-approach-centerlines-layer')) map.setLayoutProperty('final-approach-centerlines-layer', 'visibility', visibility);
         });
 
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
@@ -1054,17 +1055,144 @@ document.addEventListener('DOMContentLoaded', () => {
             'final-approach-cones', 'final-approach-centerlines',
             'distance-rings'
         ];
-        layers.forEach(id => {
-            if (map.getLayer(id)) map.removeLayer(id);
-            if (map.getSource(id)) map.removeSource(id);
+        layers.forEach(baseId => {
+			const layerId = `${baseId}-layer`;
+			const sourceId = `${baseId}-source`;
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getSource(sourceId)) map.removeSource(sourceId);
         });
     }
 
+	// --- ADDED/FIXED FUNCTIONS ---
+	async function updateNavaids() {
+		const navaidsCheckbox = document.getElementById('filter-navaids');
+		if (!navaidsCheckbox || !navaidsCheckbox.checked) {
+			if (map.getLayer('navaids-layer')) map.setLayoutProperty('navaids-layer', 'visibility', 'none');
+			return;
+		}
+
+		const zoom = map.getZoom();
+		if (zoom < 7) {
+			if (map.getLayer('navaids-layer')) map.setLayoutProperty('navaids-layer', 'visibility', 'none');
+			return;
+		}
+
+		const bounds = map.getBounds();
+		const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+
+		try {
+			const navaids = await getVORsFromOpenAIP(bbox);
+			const navaidFeatures = navaids.map(navaid => ({
+				type: 'Feature',
+				geometry: {
+					type: 'Point',
+					coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
+				},
+				properties: {
+					name: navaid.properties.name,
+					type: navaid.type // e.g., 'VOR-DME'
+				}
+			}));
+
+			const sourceId = 'navaids-source';
+			const layerId = 'navaids-layer';
+
+			if (map.getSource(sourceId)) {
+				map.getSource(sourceId).setData({ type: 'FeatureCollection', features: navaidFeatures });
+			} else {
+				map.addSource(sourceId, {
+					type: 'geojson',
+					data: { type: 'FeatureCollection', features: navaidFeatures }
+				});
+				map.addLayer({
+					id: layerId,
+					type: 'symbol',
+					source: sourceId,
+					layout: {
+						// 'icon-image': 'airport-15', // Using text instead of icon for simplicity
+						'text-field': ['get', 'name'],
+						'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+						'text-size': 10,
+						'text-anchor': 'top',
+						'text-offset': [0, 0.8]
+					},
+					paint: {
+						'text-color': '#cce5ff',
+						'text-halo-color': '#000',
+						'text-halo-width': 1
+					}
+				});
+			}
+			 if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
+
+		} catch (error) {
+			console.error("Failed to update navaids:", error);
+		}
+	}
+
+	async function updateWaypoints() {
+		const waypointsCheckbox = document.getElementById('filter-waypoints');
+		if (!waypointsCheckbox || !waypointsCheckbox.checked) {
+			if (map.getLayer('waypoints-layer')) map.setLayoutProperty('waypoints-layer', 'visibility', 'none');
+			return;
+		}
+
+		const zoom = map.getZoom();
+		if (zoom < 9) { // Only show waypoints at higher zoom levels
+			if (map.getLayer('waypoints-layer')) map.setLayoutProperty('waypoints-layer', 'visibility', 'none');
+			return;
+		}
+
+		const bounds = map.getBounds();
+		const waypoints = await getWaypoints();
+
+		const waypointFeatures = waypoints.filter(wp => {
+			const lat = wp.lat;
+			const lon = wp.lon;
+			return lat >= bounds.getSouth() && lat <= bounds.getNorth() && lon >= bounds.getWest() && lon <= bounds.getEast();
+		}).map(wp => ({
+			type: 'Feature',
+			geometry: { type: 'Point', coordinates: [wp.lon, wp.lat] },
+			properties: { name: wp.ident }
+		}));
+
+		const sourceId = 'waypoints-source';
+		const layerId = 'waypoints-layer';
+
+		if (map.getSource(sourceId)) {
+			map.getSource(sourceId).setData({ type: 'FeatureCollection', features: waypointFeatures });
+		} else {
+			map.addSource(sourceId, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: waypointFeatures }
+			});
+			map.addLayer({
+				id: layerId,
+				type: 'symbol',
+				source: sourceId,
+				layout: {
+					// 'icon-image': 'triangle-11', // Using text instead
+					'text-field': ['get', 'name'],
+					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+					'text-size': 11,
+					'text-anchor': 'bottom',
+					'text-offset': [0, -0.8]
+				},
+				paint: {
+					'text-color': '#ddd',
+					'text-halo-color': '#000',
+					'text-halo-width': 1.5
+				}
+			});
+		}
+
+		if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
+	}
 
     function updateAirports() {
         if (activeAirportIcao) {
             // If an airport is selected, don't show general dots
-            if (map.getLayer('airport-dots')) map.setLayoutProperty('airport-dots', 'visibility', 'none');
+            if (map.getLayer('airport-dots-layer')) map.setLayoutProperty('airport-dots-layer', 'visibility', 'none');
             return;
         }
 
@@ -1102,7 +1230,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }));
 
-        const sourceId = 'airport-dots';
+        const sourceId = 'airport-dots-source';
+		const layerId = 'airport-dots-layer';
         if (map.getSource(sourceId)) {
             map.getSource(sourceId).setData({ type: 'FeatureCollection', features: airportFeatures });
         } else {
@@ -1111,7 +1240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 data: { type: 'FeatureCollection', features: airportFeatures }
             });
             map.addLayer({
-                id: sourceId,
+                id: layerId,
                 type: 'circle',
                 source: sourceId,
                 paint: {
@@ -1135,15 +1264,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            map.on('click', sourceId, (e) => {
+            map.on('click', layerId, (e) => {
                 const icao = e.features[0].properties.icao;
                 displayAirportDetails(icao);
             });
 
-            map.on('mouseenter', sourceId, () => { map.getCanvas().style.cursor = 'pointer'; });
-            map.on('mouseleave', sourceId, () => { map.getCanvas().style.cursor = ''; });
+            map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
         }
-         if (map.getLayer('airport-dots')) map.setLayoutProperty('airport-dots', 'visibility', 'visible');
+         if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
     }
 
     async function displayAirportDetails(icao) {
@@ -1323,31 +1452,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-	function updateWaypoints() {
-        const showWaypoints = document.getElementById('filter-waypoints')?.checked;
-        const zoom = map.getZoom();
-        waypointsGroup.clearLayers();
-        if (!showWaypoints || zoom < 8 || !waypointsDataCache) {
-            return;
-        }
-        const bounds = map.getBounds();
-        waypointsDataCache.forEach(waypoint => {
-            if (!waypoint.coords || waypoint.coords.length < 2) return;
-            const lon = parseFloat(waypoint.coords[0]);
-            const lat = parseFloat(waypoint.coords[1]);
-            if (isNaN(lat) || isNaN(lon) || !bounds.contains([lat, lon])) {
-                return;
-            }
-            const waypointIcon = L.divIcon({
-                className: 'custom-map-marker',
-                html: `<svg width="12" height="12" viewbox="0 0 12 12"><polygon points="6,1 11,11 1,11" fill="white"/></svg>`,
-                iconSize: [12, 12]
-            });
-            L.marker([lat, lon], { icon: waypointIcon })
-            .bindTooltip(waypoint.name, { direction: 'top' })
-            .addTo(waypointsGroup);
-        });
-    }
 
     async function drawRunwaysForAirport(icao) {
         try {
@@ -1410,8 +1514,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function highlightRunway(runwayId) {
-        if (map.getLayer('runways')) {
-            map.setPaintProperty('runways', 'fill-color', [
+        if (map.getLayer('runways-layer')) {
+            map.setPaintProperty('runways-layer', 'fill-color', [
                 'case',
                 ['==', ['get', 'id'], runwayId], '#FFD700', // Highlight color
                 RUNWAY_STYLE_REGULAR['fill-color'] // Default color
@@ -1420,8 +1524,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function unhighlightRunway(runwayId) {
-        if (map.getLayer('runways')) {
-             map.setPaintProperty('runways', 'fill-color', RUNWAY_STYLE_REGULAR['fill-color']);
+        if (map.getLayer('runways-layer')) {
+             map.setPaintProperty('runways-layer', 'fill-color', RUNWAY_STYLE_REGULAR['fill-color']);
         }
     }
 
@@ -1687,8 +1791,8 @@ document.addEventListener('DOMContentLoaded', () => {
             altitudeHtml = `<div class="fdb-data-item fdb-altitude"><span class="fdb-value" style="font-size: 12px; color: #FFD700;">${(startAlt / 1000).toFixed(1).replace('.0','')}k &rarr; ${(endAlt / 1000).toFixed(1).replace('.0','')}k</span><span class="fdb-unit">ft</span></div>`;
             const color = endAlt < startAlt ? '#FF8C00' : '#39FF14';
             // Update line color if needed
-             if (map.getLayer(`plan-line-${stepId}`)) {
-                map.setPaintProperty(`plan-line-${stepId}`, 'line-color', color);
+             if (map.getLayer(`plan-line-${stepId}-layer`)) {
+                map.setPaintProperty(`plan-line-${stepId}-layer`, 'line-color', color);
             }
 
         } else {
@@ -1701,8 +1805,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Revert line color
             const style = (currentMapMode === "terrain") ? FLIGHT_LINE_STYLES_TERRAIN[legData.lineType] : FLIGHT_LINE_STYLES_REGULAR[legData.lineType];
-             if (map.getLayer(`plan-line-${stepId}`)) {
-                map.setPaintProperty(`plan-line-${stepId}`, 'line-color', style['line-color']);
+             if (map.getLayer(`plan-line-${stepId}-layer`)) {
+                map.setPaintProperty(`plan-line-${stepId}-layer`, 'line-color', style['line-color']);
             }
         }
 
@@ -1855,8 +1959,8 @@ document.addEventListener('DOMContentLoaded', () => {
         planPanel.querySelector('#clear-plan').addEventListener('click', () => {
             // Clear all plan-related layers and markers
             Object.keys(planLayers).forEach(key => {
-                 if (map.getLayer(`plan-line-${key}`)) map.removeLayer(`plan-line-${key}`);
-                 if (map.getSource(`plan-line-${key}`)) map.removeSource(`plan-line-${key}`);
+                 if (map.getLayer(`plan-line-${key}-layer`)) map.removeLayer(`plan-line-${key}-layer`);
+                 if (map.getSource(`plan-line-${key}-source`)) map.removeSource(`plan-line-${key}-source`);
                  if (planLabels[key]) planLabels[key].remove();
                  delete planLabels[key];
                  delete planLayers[key];
@@ -1953,8 +2057,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         stepDiv.querySelector('.delete-step-btn').addEventListener('click', function() {
             const idToDelete = this.getAttribute('data-step-id');
-             if (map.getLayer(`plan-line-${idToDelete}`)) map.removeLayer(`plan-line-${idToDelete}`);
-             if (map.getSource(`plan-line-${idToDelete}`)) map.removeSource(`plan-line-${idToDelete}`);
+             if (map.getLayer(`plan-line-${idToDelete}-layer`)) map.removeLayer(`plan-line-${idToDelete}-layer`);
+             if (map.getSource(`plan-line-${idToDelete}-source`)) map.removeSource(`plan-line-${idToDelete}-source`);
              if (planLabels[idToDelete]) planLabels[idToDelete].remove();
              delete planLabels[idToDelete];
              delete planLayers[idToDelete];
