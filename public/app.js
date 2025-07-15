@@ -1,4 +1,4 @@
-// app.js (Fully Fixed)
+// app.js (Updated with ATIS functionality)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     delete L.Icon.Default.prototype._getIconUrl;
@@ -915,10 +915,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- NEW ATC LIST FUNCTION ---
+    // --- ATC LIST FUNCTION (UPDATED) ---
     /**
      * Fetches and displays the active ATC frequencies for a given session.
-     * This function is designed to replace the existing implementation.
+     * This function now includes ATIS frequencies in the list.
      *
      * @param {string} sessionId The ID of the live server session.
      */
@@ -930,8 +930,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Map of frequency type codes to human-readable names.
-        // Based on the API documentation for ActiveATCFacility 'type'.
-        // ATIS (7) is excluded as per instructions.
+        // ATIS (7) is now included.
         const frequencyTypeMap = {
             0: 'Ground',
             1: 'Tower',
@@ -939,15 +938,14 @@ document.addEventListener('DOMContentLoaded', () => {
             3: 'Clearance',
             4: 'Approach',
             5: 'Departure',
-            6: 'Center'
+            6: 'Center',
+            7: 'ATIS'
         };
 
         try {
-            // 1. Fetch data from the serverless function
             const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
             const data = await response.json();
 
-            // 2. Validate the API response
             if (!response.ok || data.errorCode !== 0 || !data.result) {
                 atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
                 if (data.errorCode !== 0) {
@@ -956,7 +954,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // 3. Filter for displayable frequencies and group them by airport
+            // The filter automatically includes ATIS now that it's in the map.
             const atcByAirport = data.result
                 .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
                 .reduce((acc, facility) => {
@@ -978,10 +976,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // 4. Generate the HTML for the list
             let htmlContent = airportIcaos.sort().map(icao => {
                 const airportData = atcByAirport[icao];
-                // Sort frequencies by type for consistent order (e.g., Ground, Tower, Approach)
                 airportData.frequencies.sort((a, b) => a.type - b.type);
 
                 const frequencyItems = airportData.frequencies.map(facility => {
@@ -1002,7 +998,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>`;
             }).join('');
 
-            // 5. Render the list to the DOM
             atcListElement.innerHTML = htmlContent;
 
         } catch (error) {
@@ -1361,6 +1356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // --- AIRPORT INFO PANEL (UPDATED) ---
     async function updateAirportInfoPanel(airport, runways) {
         let airspaceClass = 'N/A';
         if (airport.type === 'large_airport') airspaceClass = 'Bravo';
@@ -1412,6 +1408,8 @@ document.addEventListener('DOMContentLoaded', () => {
             runwaysHTML += '<tr><td colspan="3" style="padding: 4px; text-align: center;">No runway data available.</td></tr>';
         }
         runwaysHTML += '</tbody></table>';
+
+        // Panel content now includes a dedicated ATIS section.
         const content = `
             <div class="info-card">
                 <h3>General</h3>
@@ -1422,16 +1420,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 </ul>
             </div>
             <div class="info-card">
+                <h3>ATIS</h3>
+                <div id="atis-content" style="font-size: 13px; white-space: pre-wrap; word-wrap: break-word;">
+                    ${isLiveModeActive ? 'Loading...' : 'Connect to Live Mode to view ATIS.'}
+                </div>
+            </div>
+            <div class="info-card">
                 <h3>Runways 🧭</h3>
                 ${runwaysHTML}
             </div>`;
+
         const panel = createFloatingPanel('airport-info-panel', `<h2>${panelTitle}</h2>`, '20px', '360px', content);
         panel.querySelectorAll('[data-runway-id]').forEach(row => {
             const runwayId = row.dataset.runwayId;
             row.addEventListener('mouseover', () => highlightRunway(runwayId));
             row.addEventListener('mouseout', () => unhighlightRunway(runwayId));
         });
+
+        // Fetch and display ATIS if in live mode.
+        if (isLiveModeActive) {
+            const serverSelect = document.getElementById('server-select');
+            const sessionId = serverSelect ? serverSelect.value : null;
+
+            if (sessionId) {
+                try {
+                    const atisResponse = await fetch(`/.netlify/functions/atis/${sessionId}/${airport.ident}`);
+                    const atisData = await atisResponse.json();
+                    const atisContentElement = document.getElementById('atis-content');
+
+                    if (atisResponse.ok && atisData.errorCode === 0 && atisData.result) {
+                        atisContentElement.textContent = atisData.result;
+                    } else {
+                        // Handles "NoAtisAvailable" (errorCode 7) or other API errors.
+                        atisContentElement.textContent = 'No active ATIS for this airport.';
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch ATIS:', error);
+                    document.getElementById('atis-content').textContent = 'Error loading ATIS data.';
+                }
+            } else {
+                 document.getElementById('atis-content').textContent = 'Select a server in Live Mode to view ATIS.';
+            }
+        }
     }
+
 
 	function updateWaypoints() {
         const showWaypoints = document.getElementById('filter-waypoints')?.checked;
