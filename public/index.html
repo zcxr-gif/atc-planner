@@ -400,7 +400,8 @@
 		
         /* --- CUSTOM POPUP STYLES --- */
         .maptiler-popup-content.custom-popup {
-            background: rgba(32, 24, 56, 0.9); /* Use theme background with transparency */
+            /* Forcing background override because the default map style is too specific. */
+            background: rgba(32, 24, 56, 0.9) !important;
             backdrop-filter: blur(10px);
             color: var(--text-primary);
             border-radius: 12px;
@@ -408,39 +409,39 @@
             border: 1px solid var(--border-color);
             font-family: 'Inter', sans-serif;
             padding: 0; /* Remove default padding to use our own structure */
-            width: 240px; /* Set a fixed width that won't change on zoom */
+            width: 220px; /* Made smaller as requested */
             overflow: hidden; /* Important for border-radius to apply correctly to children */
         }
 
         .flight-popup-header {
             background-color: rgba(0,0,0,0.2);
-            padding: 12px 15px;
+            padding: 10px 12px; /* Adjusted for smaller size */
             border-bottom: 1px solid var(--border-color);
         }
 
         .flight-popup-callsign {
-            font-size: 1.1rem;
+            font-size: 1rem; /* Adjusted for smaller size */
             font-weight: 700;
             color: var(--accent);
         }
 
         .flight-popup-aircraft {
-            font-size: 0.8rem;
+            font-size: 0.75rem; /* Adjusted for smaller size */
             color: var(--text-secondary);
         }
 
         .flight-popup-body {
-            padding: 15px;
+            padding: 12px; /* Adjusted for smaller size */
             display: flex;
             flex-direction: column;
-            gap: 8px; /* Creates space between the data rows */
+            gap: 6px; /* Adjusted for smaller size */
         }
 
         .flight-popup-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 14px;
+            font-size: 13px; /* Adjusted for smaller size */
         }
 
         .flight-popup-row .label {
@@ -453,11 +454,12 @@
         }
 
         .flight-popup-footer {
-            padding: 0 15px 15px 15px;
+            padding: 0 12px 12px 12px; /* Adjusted for smaller size */
         }
 
         .flight-popup-footer .cta-button {
              width: 100%;
+             padding: 8px 12px;
              background-color: var(--accent);
              color: var(--background-dark);
              box-shadow: 0 0 20px var(--accent-glow);
