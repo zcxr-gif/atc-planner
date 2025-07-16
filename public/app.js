@@ -1137,56 +1137,75 @@ document.addEventListener('DOMContentLoaded', () => {
      * Highlights a specific altitude on the terrain map.
      * @param {number | null} altitudeInFeet - The altitude to highlight, in feet. Pass null to clear.
      */
-    function highlightAltitude(altitudeInFeet) {
-        const layerId = 'altitude-highlight-layer';
+    /**
+ * Highlights a specific altitude on the terrain map.
+ * @param {number | null} altitudeInFeet - The altitude to highlight, in feet. Pass null to clear.
+ */
+function highlightAltitude(altitudeInFeet) {
+    const layerId = 'altitude-highlight-layer';
 
-        // If a highlight layer already exists, remove it first.
-        if (map.getLayer(layerId)) {
-            map.removeLayer(layerId);
-        }
-        
-        // If the input is null or empty, we just clear the layer and stop.
-        if (altitudeInFeet === null || altitudeInFeet === '') {
-            document.getElementById('clear-altitude-btn').style.display = 'none';
-            return;
-        }
-
-        // Convert feet to meters, as terrain data is in meters.
-        const altitudeInMeters = altitudeInFeet * 0.3048;
-
-        // Define a small buffer range (e.g., +/- 15 meters) for a more visible line.
-        const lowerBound = altitudeInMeters - 15;
-        const upperBound = altitudeInMeters + 15;
-        
-        // The map's style must have a "raster-dem" source, typically named "maptiler-terrain".
-        // Your style from api.maptiler.com includes this.
-        const terrainSource = 'maptiler-terrain'; 
-
-        map.addLayer({
-            id: layerId,
-            type: 'raster',
-            source: terrainSource,
-            paint: {
-                // 'raster-color' uses an expression to set the color of each pixel.
-                'raster-color': [
-                    'case',
-                    [
-                        // Condition: Check if the pixel's elevation ('raster-value') is within our target range.
-                        'all',
-                        ['>=', ['raster-value'], lowerBound],
-                        ['<=', ['raster-value'], upperBound]
-                    ],
-                    // If the condition is true, color the pixel yellow.
-                    '#FFD700', 
-                    // Otherwise, make it completely transparent.
-                    'rgba(0, 0, 0, 0)' 
-                ]
-            }
-        });
-
-        // Show the "Clear" button
-        document.getElementById('clear-altitude-btn').style.display = 'block';
+    // If a highlight layer already exists, remove it first.
+    if (map.getLayer(layerId)) {
+        map.removeLayer(layerId);
     }
+    
+    // If the input is null or empty, we just clear the layer and stop.
+    if (altitudeInFeet === null || altitudeInFeet === '') {
+        document.getElementById('clear-altitude-btn').style.display = 'none';
+        return;
+    }
+
+    // --- START OF NEW LOGIC ---
+    // Dynamically find the ID of the raster-dem source from the map's style
+    const style = map.getStyle();
+    let terrainSourceId = null;
+
+    for (const sourceId in style.sources) {
+        if (style.sources[sourceId].type === 'raster-dem') {
+            terrainSourceId = sourceId;
+            break; // Found it, no need to look further
+        }
+    }
+
+    if (!terrainSourceId) {
+        console.error("Could not find a 'raster-dem' source in the current map style. Terrain highlighting is not available.");
+        alert("Terrain highlighting is not available for this map style.");
+        return;
+    }
+    // --- END OF NEW LOGIC ---
+
+    // Convert feet to meters, as terrain data is in meters.
+    const altitudeInMeters = altitudeInFeet * 0.3048;
+
+    // Define a small buffer range (e.g., +/- 15 meters) for a more visible line.
+    const lowerBound = altitudeInMeters - 15;
+    const upperBound = altitudeInMeters + 15;
+    
+    map.addLayer({
+        id: layerId,
+        type: 'raster',
+        source: terrainSourceId, // Use the dynamically found source ID
+        paint: {
+            // 'raster-color' uses an expression to set the color of each pixel.
+            'raster-color': [
+                'case',
+                [
+                    // Condition: Check if the pixel's elevation ('raster-value') is within our target range.
+                    'all',
+                    ['>=', ['raster-value'], lowerBound],
+                    ['<=', ['raster-value'], upperBound]
+                ],
+                // If the condition is true, color the pixel yellow.
+                '#FFD700', 
+                // Otherwise, make it completely transparent.
+                'rgba(0, 0, 0, 0)' 
+            ]
+        }
+    });
+
+    // Show the "Clear" button
+    document.getElementById('clear-altitude-btn').style.display = 'block';
+}
 
 
     // This is a new function to clear airport-specific layers before drawing new ones.
