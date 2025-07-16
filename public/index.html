@@ -483,6 +483,51 @@
         .maptiler-popup-anchor-right .maptiler-popup-tip {
             border-left-color: var(--border-color);
         }
+		.sticky-note {
+    width: 180px;
+    background: #ffc;
+    border: 1px solid #e6b31e;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    font-family: 'Inter', sans-serif;
+}
+
+.sticky-note-header {
+    background-color: #f2d479;
+    padding: 2px 5px;
+    cursor: move;
+    font-size: 12px;
+    font-weight: 500;
+    color: #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.delete-note-btn {
+    background: none;
+    border: none;
+    color: #c0392b;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.sticky-note-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: none;
+    background: transparent;
+    padding: 8px;
+    font-size: 13px;
+    color: #333;
+    resize: vertical;
+    min-height: 80px;
+}
+
+.sticky-note-textarea:focus {
+    outline: none;
+    background: #fff9e0;
+}
 
     </style>
 </head>

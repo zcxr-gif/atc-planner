@@ -1,4 +1,4 @@
-// app.js (Updated with ATIS functionality and migrated to MapTiler SDK)
+// app.js (Updated with ATIS functionality, migrated to MapTiler SDK, and Sticky Notes feature)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     maptilersdk.config.apiKey = 'ety8GjHG3ccnoSZfOULB';
@@ -45,10 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let atisCache = {};
     let activeAtisStationIcaos = new Set();
     
-    // --- NEW: Terrain Analysis Variables ---
-    let isAnalyzingTerrain = false;
-    let analysisStartPoint = null;
-    const ANALYSIS_GRID_SIZE = 10; // 10x10 grid, 100 points
+    // --- Sticky Notes Variables ---
+    let isNoteMode = false;
+    let notes = {}; // Will store { id, lng, lat, text }
+    const noteMarkers = {}; // Will store the MapTiler marker objects
+
 
     // --- Style configs (remain mostly the same, but used differently) ---
     const RUNWAY_STYLE_REGULAR = { 'line-color': '#AAAAAA', 'line-width': 1, 'fill-color': '#707070', 'fill-opacity': 1 };
@@ -230,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateNavaids();
             updateWaypoints();
             loadPlanFromLocalStorage();
+            loadNotes();
 
             const loader = document.getElementById('loader');
             if (loader) {
@@ -503,34 +505,26 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
 
             <h3 style="margin-top: 15px;">Tools</h3>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-                <div id="drawing-toggle">
-                     <input type="checkbox" id="enable-drawing">
-                     <label for="enable-drawing" style="color: #fff; font-weight: normal;">Enable Drawing Mode</label>
-                     <span id="drawing-mode-text" style="font-size: 11px; color: #ccc; display: none; padding-left: 18px;">Uncheck to move the map</span>
-                </div>
-
-                <div id="line-type-selector" style="margin-top: 10px; display: none;">
-                    <label style="color: #fff; font-weight: normal; width: 100%; margin-bottom: 5px;">Line Type:</label>
-                    <div>
-                        <span><input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label></span>
-                        <span><input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label></span>
-                        <span><input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label></span>
-                    </div>
-                </div>
-                
-                 <div id="terrain-analysis-tool">
-                    <button id="analyze-terrain-btn" class="cta-button" style="width:100%; background-color: #17a2b8;">Terrain Analysis</button>
-                    <button id="clear-analysis-btn" class="cta-button" style="width:100%; background-color: var(--danger-color); display: none; margin-top: 5px;">Clear Analysis</button>
-                    <span id="terrain-analysis-text" style="font-size: 11px; color: #ccc; display: none; text-align: center; margin-top: 4px;">Click and drag to select an area.</span>
-                </div>
+            <div id="drawing-toggle">
+                 <input type="checkbox" id="enable-drawing">
+                 <label for="enable-drawing" style="color: #fff; font-weight: normal;">Enable Drawing Mode</label>
+                 <span id="drawing-mode-text" style="font-size: 11px; color: #ccc; display: none; padding-left: 18px;">Uncheck to move the map</span>
             </div>
 
+            <div id="line-type-selector" style="margin-top: 10px; display: none;">
+                <label style="color: #fff; font-weight: normal; width: 100%; margin-bottom: 5px;">Line Type:</label>
+                <div>
+                    <span><input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label></span>
+                    <span><input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label></span>
+                    <span><input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label></span>
+                </div>
+            </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px;">
                 <button id="live-mode-btn">Live Mode</button>
                 <button id="settings-btn">Settings</button>
                 <button id="help-btn">Help</button>
+                <button id="add-note-btn" style="grid-column: 1 / -1; margin-top: 5px; background-color: #f2d479; color: #333;">Add Note</button>
             </div>
         `;
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
@@ -596,10 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const lineSelector = document.getElementById('line-type-selector');
 
             if (isDrawingEnabled) {
-                // If terrain analysis is active, disable it first
-                if (isAnalyzingTerrain) {
-                    document.getElementById('analyze-terrain-btn').click(); 
-                }
                 map.dragPan.disable();
                 map.getCanvas().style.cursor = 'crosshair';
                 if (drawingText) drawingText.style.display = 'block';
@@ -612,41 +602,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (lineSelector) lineSelector.style.display = 'none';
             }
         });
-        
-        // --- NEW: Terrain Analysis Button Listener ---
-        const analyzeBtn = mainPanel.querySelector('#analyze-terrain-btn');
-        const analysisText = mainPanel.querySelector('#terrain-analysis-text');
-        
-        analyzeBtn.addEventListener('click', () => {
-            isAnalyzingTerrain = !isAnalyzingTerrain; // Toggle state
-            
-            if (isAnalyzingTerrain) {
-                // Deactivate drawing mode if it's on
-                const drawingCheckbox = document.getElementById('enable-drawing');
-                if (drawingCheckbox.checked) {
-                    drawingCheckbox.checked = false;
-                    // Manually trigger change event to run its logic
-                    drawingCheckbox.dispatchEvent(new Event('change'));
-                }
-                
-                analyzeBtn.style.backgroundColor = 'var(--danger-color)';
-                analyzeBtn.textContent = 'Cancel Analysis';
-                analysisText.style.display = 'block';
-                map.dragPan.disable();
-                map.getCanvas().style.cursor = 'crosshair';
-            } else {
-                analyzeBtn.style.backgroundColor = '#17a2b8';
-                analyzeBtn.textContent = 'Terrain Analysis';
-                analysisText.style.display = 'none';
-                map.dragPan.enable();
-                map.getCanvas().style.cursor = '';
-                isDrawing = false; // Ensure drawing state is reset
-                analysisStartPoint = null;
-            }
-        });
-
-        mainPanel.querySelector('#clear-analysis-btn').addEventListener('click', clearTerrainAnalysis);
-
 
         mainPanel.querySelector('#line-type-selector').addEventListener('change', (e) => {
             if (e.target.name === 'line-type') {
@@ -686,7 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
+        mainPanel.querySelector('#add-note-btn').addEventListener('click', toggleNoteMode);
     }
+    
     // ... all other UI panel creation functions (createLiveControlPanel, etc.) remain unchanged ...
      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
@@ -1142,12 +1099,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <li style="margin-bottom: 5px;">The tool will stay active to draw multiple lines. <strong>Uncheck the box</strong> when you are finished drawing to move the map again.</li>
                     <li style="margin-bottom: 5px;">In the Flight Plan panel, <strong>click the heading value</strong> to edit it manually for precise intercepts.</li>
                 </ol>
-            </div>
-            <div class="info-card">
-                <h3>Terrain Analysis</h3>
-                <p style="font-size: 14px; color: #ddd; margin: 0;">
-                    Click the <strong>'Terrain Analysis'</strong> button. Then, click and drag on the map to draw a box. The highest point in that area will be marked.
-                </p>
             </div>
             <div class="info-card">
                 <h3>Settings Panel</h3>
@@ -1642,282 +1593,118 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- DRAWING LOGIC (Rewritten for MapTiler) ---
+    // --- DRAWING AND NOTE LOGIC ---
 
     function handleMouseDown(e) {
+        if (isNoteMode) {
+            createStickyNote({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+            toggleNoteMode(); // Exit note mode after placing one
+            return;
+        }
+        
+        if (!isDrawingEnabled || e.originalEvent.button !== 0) return;
+
         // Prevent drawing when clicking on a UI panel
-        if (e.originalEvent.target.closest('.floating-panel')) return;
-        
-        // Handle drawing for flight planning
-        if (isDrawingEnabled && e.originalEvent.button === 0) {
-            isDrawing = true;
-            const startPoint = e.lngLat;
+        if (e.originalEvent.target.closest('.floating-panel') || e.originalEvent.target.closest('.sticky-note')) return;
 
-            // Initialize a GeoJSON source for the temporary line
-            if (!map.getSource('temp-line')) {
-                map.addSource('temp-line', {
-                    type: 'geojson',
-                    data: { type: 'LineString', coordinates: [] }
-                });
-                map.addLayer({
-                    id: 'temp-line',
-                    type: 'line',
-                    source: 'temp-line',
-                    paint: { 'line-color': '#007bff', 'line-width': 3, 'line-dasharray': [2, 2] }
-                });
-            }
-            map.getSource('temp-line').setData({
-                type: 'LineString',
-                coordinates: [[startPoint.lng, startPoint.lat], [startPoint.lng, startPoint.lat]]
+        isDrawing = true;
+        const startPoint = e.lngLat;
+
+        // Initialize a GeoJSON source for the temporary line
+        if (!map.getSource('temp-line')) {
+            map.addSource('temp-line', {
+                type: 'geojson',
+                data: { type: 'LineString', coordinates: [] }
             });
+            map.addLayer({
+                id: 'temp-line',
+                type: 'line',
+                source: 'temp-line',
+                paint: { 'line-color': '#007bff', 'line-width': 3, 'line-dasharray': [2, 2] }
+            });
+        }
+        map.getSource('temp-line').setData({
+            type: 'LineString',
+            coordinates: [[startPoint.lng, startPoint.lat], [startPoint.lng, startPoint.lat]]
+        });
 
-            // Create a temporary label marker
-            const el = document.createElement('div');
-            el.className = 'drawing-temp-heading';
-            el.innerHTML = '---';
-            tempLabel = new maptilersdk.Marker(el)
-                .setLngLat(startPoint)
-                .addTo(map);
-        }
-        
-        // --- NEW: Handle drawing for terrain analysis ---
-        if (isAnalyzingTerrain && e.originalEvent.button === 0) {
-            isDrawing = true;
-            analysisStartPoint = e.lngLat;
-            
-            // Add a source and layer for the temporary analysis rectangle
-            if (!map.getSource('temp-analysis-rect')) {
-                map.addSource('temp-analysis-rect', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
-                map.addLayer({
-                    id: 'temp-analysis-rect',
-                    type: 'fill',
-                    source: 'temp-analysis-rect',
-                    paint: { 'fill-color': '#17a2b8', 'fill-opacity': 0.3 }
-                });
-            }
-        }
+        // Create a temporary label marker
+        const el = document.createElement('div');
+        el.className = 'drawing-temp-heading';
+        el.innerHTML = '---';
+        tempLabel = new maptilersdk.Marker(el)
+            .setLngLat(startPoint)
+            .addTo(map);
     }
 
     function handleMouseMove(e) {
         if (!isDrawing) return;
 
-        // Handle flight plan drawing
-        if(isDrawingEnabled && tempLabel) {
-            const currentPoint = e.lngLat;
-            const source = map.getSource('temp-line');
-            const startPointLngLat = source._data.coordinates[0];
-            const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
+        const currentPoint = e.lngLat;
+        const source = map.getSource('temp-line');
+        const startPointLngLat = source._data.coordinates[0];
+        const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
 
-            source.setData({
-                type: 'LineString',
-                coordinates: [[startPoint.lng, startPoint.lat], [currentPoint.lng, currentPoint.lat]]
-            });
+        // Update the line's endpoint
+        source.setData({
+            type: 'LineString',
+            coordinates: [[startPoint.lng, startPoint.lat], [currentPoint.lng, currentPoint.lat]]
+        });
 
-            const midPoint = {
-                lat: (startPoint.lat + currentPoint.lat) / 2,
-                lng: (startPoint.lng + currentPoint.lng) / 2
-            };
-            tempLabel.setLngLat(midPoint);
+        // Update the label
+        const midPoint = {
+            lat: (startPoint.lat + currentPoint.lat) / 2,
+            lng: (startPoint.lng + currentPoint.lng) / 2
+        };
+        tempLabel.setLngLat(midPoint);
 
-            const trueHeading = calculateHeading(startPoint, currentPoint);
-            let magneticHeading = trueHeading;
-            if (wmmModel) {
-                const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
-                magneticHeading = (trueHeading - declination + 360) % 360;
-            }
-            const headingText = Math.round(magneticHeading).toString().padStart(3, '0');
-            tempLabel.getElement().innerHTML = `${headingText}° M`;
+        const trueHeading = calculateHeading(startPoint, currentPoint);
+        let magneticHeading = trueHeading;
+        if (wmmModel) {
+            const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+            magneticHeading = (trueHeading - declination + 360) % 360;
         }
-        
-        // --- NEW: Handle terrain analysis rectangle drawing ---
-        if (isAnalyzingTerrain && analysisStartPoint) {
-            const currentPoint = e.lngLat;
-            const bbox = [
-                Math.min(analysisStartPoint.lng, currentPoint.lng),
-                Math.min(analysisStartPoint.lat, currentPoint.lat),
-                Math.max(analysisStartPoint.lng, currentPoint.lng),
-                Math.max(analysisStartPoint.lat, currentPoint.lat)
-            ];
-            const polygon = turf.bboxPolygon(bbox);
-            map.getSource('temp-analysis-rect').setData(polygon);
-        }
+        const headingText = Math.round(magneticHeading).toString().padStart(3, '0');
+        tempLabel.getElement().innerHTML = `${headingText}° M`;
     }
 
     function handleMouseUp(e) {
         if (!isDrawing) return;
-        
-        // Finalize flight plan line
-        if (isDrawingEnabled) {
-            isDrawing = false;
-            const endPoint = e.lngLat;
-            const source = map.getSource('temp-line');
-            if (!source) return;
-            
-            const startPointLngLat = source._data.coordinates[0];
-            const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
+        isDrawing = false;
 
-            if (map.getLayer('temp-line')) map.removeLayer('temp-line');
-            if (map.getSource('temp-line')) map.removeSource('temp-line');
-            if (tempLabel) tempLabel.remove();
-            tempLabel = null;
+        const endPoint = e.lngLat;
+        const source = map.getSource('temp-line');
+        const startPointLngLat = source._data.coordinates[0];
+        const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
 
-            const distance = turf.distance(turf.point([startPoint.lng, startPoint.lat]), turf.point([endPoint.lng, endPoint.lat]), { units: 'meters' });
+        // Remove the temporary line and label
+        if (map.getLayer('temp-line')) map.removeLayer('temp-line');
+        if (map.getSource('temp-line')) map.removeSource('temp-line');
+        if (tempLabel) tempLabel.remove();
 
-            if (distance > 50) {
-                const trueHeading = calculateHeading(startPoint, endPoint);
-                let magneticHeading = trueHeading;
-                 if (wmmModel) {
-                    const midPoint = { lat: (startPoint.lat + endPoint.lat) / 2, lng: (startPoint.lng + endPoint.lng) / 2 };
-                    const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
-                    magneticHeading = (trueHeading - declination + 360) % 360;
-                }
-                const finalHeading = {
-                    magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
-                    true: Math.round(trueHeading).toString().padStart(3, '0')
-                };
+        const distance = turf.distance(
+            turf.point([startPoint.lng, startPoint.lat]),
+            turf.point([endPoint.lng, endPoint.lat]),
+            { units: 'meters' }
+        );
 
-                createFinalLine(startPoint, endPoint, `step-${Date.now()}`, '', '', true, currentLineType, null, null, finalHeading);
-                savePlanToLocalStorage();
+        if (distance > 50) {
+            const trueHeading = calculateHeading(startPoint, endPoint);
+            let magneticHeading = trueHeading;
+             if (wmmModel) {
+                const midPoint = { lat: (startPoint.lat + endPoint.lat) / 2, lng: (startPoint.lng + endPoint.lng) / 2 };
+                const declination = wmmModel.field(midPoint.lat, midPoint.lng).declination;
+                magneticHeading = (trueHeading - declination + 360) % 360;
             }
-        }
+            const finalHeading = {
+                magnetic: Math.round(magneticHeading).toString().padStart(3, '0'),
+                true: Math.round(trueHeading).toString().padStart(3, '0')
+            };
 
-        // --- NEW: Finalize terrain analysis ---
-        if (isAnalyzingTerrain) {
-            isDrawing = false;
-            const endPoint = e.lngLat;
-            
-            // FIX: Add a guard to ensure analysisStartPoint exists before proceeding.
-            if (!analysisStartPoint) {
-                // If there's no start point, reset the UI and exit the function.
-                document.getElementById('analyze-terrain-btn').click(); 
-                return;
-            }
-
-            // Remove the temporary drawing rectangle
-            if (map.getLayer('temp-analysis-rect')) map.removeLayer('temp-analysis-rect');
-            if (map.getSource('temp-analysis-rect')) map.removeSource('temp-analysis-rect');
-
-            // Deactivate analysis mode
-            document.getElementById('analyze-terrain-btn').click(); 
-            
-            const bbox = [
-                Math.min(analysisStartPoint.lng, endPoint.lng),
-                Math.min(analysisStartPoint.lat, endPoint.lat),
-                Math.max(analysisStartPoint.lng, endPoint.lng),
-                Math.max(analysisStartPoint.lat, endPoint.lat)
-            ];
-            
-            // Start the analysis
-            analyzeTerrainInBounds(bbox);
+            createFinalLine(startPoint, endPoint, `step-${Date.now()}`, '', '', true, currentLineType, null, null, finalHeading);
+            savePlanToLocalStorage();
         }
     }
-
-    // --- NEW: TERRAIN ANALYSIS FUNCTIONS ---
-
-    /**
-    * Analyzes a bounding box for the highest terrain elevation.
-    * @param {Array<number>} bbox - The bounding box [minLng, minLat, maxLng, maxLat].
-    */
-    async function analyzeTerrainInBounds(bbox) {
-        clearTerrainAnalysis(); // Clear any previous results first
-
-        const [minLng, minLat, maxLng, maxLat] = bbox;
-        const analysisText = document.getElementById('terrain-analysis-text');
-        
-        // Show the drawn rectangle permanently for this analysis
-        const polygon = turf.bboxPolygon(bbox);
-        addSourceAndLayer('analysis-area', { type: 'geojson', data: polygon }, {
-            type: 'fill',
-            paint: { 'fill-color': '#17a2b8', 'fill-opacity': 0.2, 'fill-outline-color': '#17a2b8' }
-        });
-
-        if (analysisText) {
-            analysisText.textContent = 'Analyzing... Please wait.';
-            analysisText.style.display = 'block';
-        }
-
-        // Create a grid of points to query
-        const lats = [];
-        const lons = [];
-        for (let i = 0; i < ANALYSIS_GRID_SIZE; i++) {
-            for (let j = 0; j < ANALYSIS_GRID_SIZE; j++) {
-                lats.push(minLat + (maxLat - minLat) * (i / (ANALYSIS_GRID_SIZE - 1)));
-                lons.push(minLng + (maxLng - minLng) * (j / (ANALYSIS_GRID_SIZE - 1)));
-            }
-        }
-
-        try {
-            const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lons.join(',')}`);
-            if (!response.ok) throw new Error('Elevation API request failed');
-            
-            const data = await response.json();
-            const elevations = data.elevation;
-
-            if (!elevations || elevations.length === 0) throw new Error('No elevation data returned');
-
-            let maxElevation = -Infinity;
-            let highestPoint = null;
-
-            for (let i = 0; i < elevations.length; i++) {
-                if (elevations[i] > maxElevation) {
-                    maxElevation = elevations[i];
-                    highestPoint = { lat: lats[i], lng: lons[i] };
-                }
-            }
-
-            if (highestPoint) {
-                const elevationFeet = Math.round(maxElevation * 3.28084);
-                
-                // Create a custom marker for the highest point
-                const el = document.createElement('div');
-                el.innerHTML = '&#9650;'; // Upward pointing triangle
-                el.style.color = 'var(--danger-color)';
-                el.style.fontSize = '24px';
-                el.style.textShadow = '0 0 4px black';
-
-                const popup = new maptilersdk.Popup({ offset: 25 })
-                    .setHTML(`<strong>Highest Terrain</strong><br>${elevationFeet.toLocaleString()} ft MSL`);
-
-                const marker = new maptilersdk.Marker({ element: el,
-                    id:'terrain-marker' // Custom ID
-                })
-                    .setLngLat(highestPoint)
-                    .setPopup(popup)
-                    .addTo(map);
-                
-                // Add marker to layer management so it can be cleared
-                layerAndSourceIds.add('terrain-analysis-marker');
-                map.terrainAnalysisMarker = marker; // Store reference for easy removal
-
-                popup.addTo(map); // Open the popup immediately
-            }
-
-            if (analysisText) analysisText.style.display = 'none';
-            document.getElementById('clear-analysis-btn').style.display = 'block';
-
-        } catch (error) {
-            console.error("Terrain analysis failed:", error);
-            if (analysisText) analysisText.textContent = 'Analysis failed.';
-            alert("Could not retrieve terrain data. Please try again.");
-        }
-    }
-
-    /**
-    * Clears the terrain analysis rectangle and marker from the map.
-    */
-    function clearTerrainAnalysis() {
-        if (map.getLayer('analysis-area-layer')) map.removeLayer('analysis-area-layer');
-        if (map.getSource('analysis-area-source')) map.removeSource('analysis-area-source');
-        
-        if (map.terrainAnalysisMarker) {
-            map.terrainAnalysisMarker.remove();
-            map.terrainAnalysisMarker = null;
-        }
-
-        const clearBtn = document.getElementById('clear-analysis-btn');
-        if (clearBtn) clearBtn.style.display = 'none';
-    }
-
 
     function createFinalLine(start, end, stepId, altitude = '', speed = '', performCollisionCheck = false, lineType = 'standard', startAltitude, endAltitude, heading) {
         const lineId = `plan-line-${stepId}`;
@@ -1967,6 +1754,109 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAltitudeForLeg(stepId);
         updateAllFlightDataBlockStyles();
     }
+
+    // --- STICKY NOTES FUNCTIONS ---
+    /**
+     * Toggles "note adding" mode.
+     */
+    function toggleNoteMode() {
+        isNoteMode = !isNoteMode;
+        const noteBtn = document.getElementById('add-note-btn');
+        map.getCanvas().style.cursor = isNoteMode ? 'crosshair' : '';
+        if (noteBtn) noteBtn.textContent = isNoteMode ? 'Cancel' : 'Add Note';
+    }
+
+    /**
+     * Creates a single sticky note element and its corresponding map marker.
+     * @param {object} noteData - Contains the id, lng, lat, and text of the note.
+     */
+    function createStickyNote(noteData) {
+        const noteId = noteData.id || `note-${Date.now()}`;
+
+        // --- 1. Create the HTML Element ---
+        const noteElement = document.createElement('div');
+        noteElement.className = 'sticky-note';
+        noteElement.innerHTML = `
+            <div class="sticky-note-header">
+                <span>Note</span>
+                <button class="delete-note-btn" title="Delete Note">&times;</button>
+            </div>
+            <textarea class="sticky-note-textarea" placeholder="Type here..."></textarea>
+        `;
+
+        const textarea = noteElement.querySelector('.sticky-note-textarea');
+        textarea.value = noteData.text || '';
+
+        // --- 2. Create the Draggable Marker ---
+        const marker = new maptilersdk.Marker({
+                element: noteElement,
+                draggable: true
+            })
+            .setLngLat([noteData.lng, noteData.lat])
+            .addTo(map);
+
+        // --- 3. Add Event Listeners ---
+        // Save text changes
+        textarea.addEventListener('input', () => {
+            notes[noteId].text = textarea.value;
+            saveNotes();
+        });
+
+        // Save position changes after dragging
+        marker.on('dragend', () => {
+            const newLngLat = marker.getLngLat();
+            notes[noteId].lng = newLngLat.lng;
+            notes[noteId].lat = newLngLat.lat;
+            saveNotes();
+        });
+
+        // Handle deletion
+        noteElement.querySelector('.delete-note-btn').addEventListener('click', () => {
+            marker.remove();
+            delete noteMarkers[noteId];
+            delete notes[noteId];
+            saveNotes();
+        });
+
+        // --- 4. Store Data and Save ---
+        if (!notes[noteId]) {
+            notes[noteId] = {
+                id: noteId,
+                lng: noteData.lng,
+                lat: noteData.lat,
+                text: textarea.value
+            };
+        }
+        noteMarkers[noteId] = marker;
+        saveNotes();
+        
+        // Focus the new note so the user can type immediately
+        if(!noteData.id) { // Only focus if it's a brand new note
+            textarea.focus();
+        }
+    }
+
+    /**
+     * Saves all notes to localStorage.
+     */
+    function saveNotes() {
+        localStorage.setItem('stickyNotes', JSON.stringify(notes));
+    }
+
+    /**
+    * Loads and renders notes from localStorage when the map is ready.
+    */
+    function loadNotes() {
+        const savedNotes = localStorage.getItem('stickyNotes');
+        if (savedNotes) {
+            notes = JSON.parse(savedNotes);
+            Object.values(notes).forEach(note => {
+                // Re-create each note on the map from saved data
+                createStickyNote(note);
+            });
+        }
+    }
+
 
     // --- HELPER FUNCTIONS (Updated for MapTiler / Turf.js) ---
 
@@ -2208,13 +2098,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         localStorage.setItem('flightPlan', JSON.stringify(planData));
     }
-    // ... all other functions should be reviewed and updated if they contained any map-specific logic.
-    // For brevity, only the most critical rewrites are shown in detail.
-    // The structure for functions like createHelpPanel, createAltitudeProfilePanel, etc., remains the same.
+    
      function loadPlanFromLocalStorage() {
         const savedPlan = localStorage.getItem('flightPlan');
         if (savedPlan) {
             const planData = JSON.parse(savedPlan);
+            if (planData.length > 0) createOrShowPlanPanel();
             planData.forEach(data => {
                 const start = { lat: data.start.lat, lng: data.start.lng };
                 const end = { lat: data.end.lat, lng: data.end.lng };
@@ -2235,6 +2124,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
+    
      async function getElevationAndMag(latlng) {
         let magVarText = "Mag Var: N/A";
         if (wmmModel) {
@@ -2259,6 +2149,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
         }
     }
+    
      function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         const startPoint = turf.point([start.lng, start.lat]);
@@ -2277,6 +2168,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lng: start.lng + (end.lng - start.lng) * 0.75
         };
     }
+    
      function createOrShowPlanPanel() {
         let planPanel = document.getElementById('plan-panel');
         if (planPanel) {
@@ -2340,6 +2232,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+    
      function addPlanStep(stepId, heading, distanceMeters, altitude = '', speed = '', lineType = 'standard') {
         createOrShowPlanPanel();
         const sectionMap = { standard: 'standard-steps', arrival: 'arrival-steps', departure: 'departure-steps' };
