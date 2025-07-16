@@ -513,13 +513,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
 
-            <h3 style="margin-top: 15px;">Terrain Tools</h3>
-            <div id="terrain-controls" style="display: flex; gap: 8px; align-items: center;">
-                <input type="number" id="altitude-input" placeholder="Altitude in feet" style="flex-grow: 1;">
-                <button id="highlight-altitude-btn" style="padding: 8px 12px;">Go</button>
-            </div>
-            <button id="clear-altitude-btn" style="width: 100%; margin-top: 10px; background-color: #6c757d; display: none;">Clear Highlight</button>
-
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px;">
                 <button id="live-mode-btn">Live Mode</button>
                 <button id="settings-btn">Settings</button>
@@ -640,30 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
-        
-        // --- TERRAIN HIGHLIGHT LISTENERS ---
-        mainPanel.querySelector('#highlight-altitude-btn').addEventListener('click', () => {
-            const altitudeInput = mainPanel.querySelector('#altitude-input');
-            const altitude = parseFloat(altitudeInput.value);
-            if (!isNaN(altitude)) {
-                highlightAltitude(altitude);
-            }
-        });
-
-        mainPanel.querySelector('#clear-altitude-btn').addEventListener('click', () => {
-            mainPanel.querySelector('#altitude-input').value = '';
-            highlightAltitude(null);
-        });
-
-        mainPanel.querySelector('#altitude-input').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                const altitude = parseFloat(e.target.value);
-                if (!isNaN(altitude)) {
-                    highlightAltitude(altitude);
-                }
-            }
-        });
     }
     // ... all other UI panel creation functions (createLiveControlPanel, etc.) remain unchanged ...
      async function createLiveControlPanel() {
@@ -1132,81 +1101,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
-
-    /**
-     * Highlights a specific altitude on the terrain map.
-     * @param {number | null} altitudeInFeet - The altitude to highlight, in feet. Pass null to clear.
-     */
-    /**
- * Highlights a specific altitude on the terrain map.
- * @param {number | null} altitudeInFeet - The altitude to highlight, in feet. Pass null to clear.
- */
-function highlightAltitude(altitudeInFeet) {
-    const layerId = 'altitude-highlight-layer';
-
-    // If a highlight layer already exists, remove it first.
-    if (map.getLayer(layerId)) {
-        map.removeLayer(layerId);
-    }
-    
-    // If the input is null or empty, we just clear the layer and stop.
-    if (altitudeInFeet === null || altitudeInFeet === '') {
-        document.getElementById('clear-altitude-btn').style.display = 'none';
-        return;
-    }
-
-    // --- START OF NEW LOGIC ---
-    // Dynamically find the ID of the raster-dem source from the map's style
-    const style = map.getStyle();
-    let terrainSourceId = null;
-
-    for (const sourceId in style.sources) {
-        if (style.sources[sourceId].type === 'raster-dem') {
-            terrainSourceId = sourceId;
-            break; // Found it, no need to look further
-        }
-    }
-
-    if (!terrainSourceId) {
-        console.error("Could not find a 'raster-dem' source in the current map style. Terrain highlighting is not available.");
-        alert("Terrain highlighting is not available for this map style.");
-        return;
-    }
-    // --- END OF NEW LOGIC ---
-
-    // Convert feet to meters, as terrain data is in meters.
-    const altitudeInMeters = altitudeInFeet * 0.3048;
-
-    // Define a small buffer range (e.g., +/- 15 meters) for a more visible line.
-    const lowerBound = altitudeInMeters - 15;
-    const upperBound = altitudeInMeters + 15;
-    
-    map.addLayer({
-        id: layerId,
-        type: 'raster',
-        source: terrainSourceId, // Use the dynamically found source ID
-        paint: {
-            // 'raster-color' uses an expression to set the color of each pixel.
-            'raster-color': [
-                'case',
-                [
-                    // Condition: Check if the pixel's elevation ('raster-value') is within our target range.
-                    'all',
-                    ['>=', ['raster-value'], lowerBound],
-                    ['<=', ['raster-value'], upperBound]
-                ],
-                // If the condition is true, color the pixel yellow.
-                '#FFD700', 
-                // Otherwise, make it completely transparent.
-                'rgba(0, 0, 0, 0)' 
-            ]
-        }
-    });
-
-    // Show the "Clear" button
-    document.getElementById('clear-altitude-btn').style.display = 'block';
-}
-
 
     // This is a new function to clear airport-specific layers before drawing new ones.
     function clearAirportLayers() {
@@ -2113,29 +2007,39 @@ function highlightAltitude(altitudeInFeet) {
         updateAllFlightDataBlockStyles();
     }
      async function getElevationAndMag(latlng) {
-        let magVarText = "Mag Var: N/A";
-        if (wmmModel) {
-             const point = wmmModel.field(latlng.lat, latlng.lng);
-             magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
-        }
-        try {
-            const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
-            if (!response.ok) throw new Error(`API error`);
-            const data = await response.json();
-            const elevationMeters = data.elevation[0];
-            let msaText = "MSA: 2,000'";
-            if (elevationMeters !== null && elevationMeters > 0) {
-                let terrainElevationFeet = elevationMeters * 3.28084;
-                let calculatedMsa = terrainElevationFeet + 2000;
-                let roundedMsa = Math.ceil(calculatedMsa / 1000) * 1000;
-                msaText = `MSA: ${roundedMsa.toLocaleString()}'`;
-            }
-            mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
-        } catch (error) {
-            console.error("Failed to fetch elevation data:", error);
-            mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
-        }
+    let magVarText = "Mag Var: N/A";
+    if (wmmModel) {
+         const point = wmmModel.field(latlng.lat, latlng.lng);
+         magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
     }
+    try {
+        const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
+        if (!response.ok) throw new Error(`API error`);
+        const data = await response.json();
+        const elevationMeters = data.elevation[0];
+
+        let msaText = "MSA: --"; 
+
+        if (elevationMeters !== null && elevationMeters >= 0) {
+            const terrainElevationFeet = elevationMeters * 3.28084;
+            
+            // 1. Calculate the base value with the 2,000-foot buffer.
+            const calculatedMsa = terrainElevationFeet + 2000;
+
+            // 2. Round that value to the nearest thousand.
+            const roundedAltitude = Math.round(calculatedMsa / 1000) * 1000;
+
+            // 3. For display, ensure the number is at least 2,000.
+            const displayAltitude = Math.max(roundedAltitude, 2000);
+            
+            msaText = `MSA: ${displayAltitude.toLocaleString()}'`;
+        }
+        mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
+    } catch (error) {
+        console.error("Failed to fetch elevation data:", error);
+        mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
+    }
+}
      function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         const startPoint = turf.point([start.lng, start.lat]);
