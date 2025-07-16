@@ -226,41 +226,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updateWaypoints();
             loadPlanFromLocalStorage();
 
-            // --- ADD TERRAIN PEAK LABELS ---
-            // This adds labels for mountain peaks using the MapTiler Planet source.
-            // The labels will only appear at zoom level 8 and higher to avoid clutter.
-            map.addLayer({
-                'id': 'mountain-peak-labels',
-                'type': 'symbol',
-                'source': 'maptiler-planet', // Standard MapTiler source for global vector data
-                'source-layer': 'mountain_peak', // The specific data layer for peaks
-                'minzoom': 8, // Set the minimum zoom level for visibility
-                'layout': {
-                    // Formats the text to show the peak name and its elevation in feet
-                    'text-field': [
-                        'format',
-                        ['get', 'name:en'], // Get the English name of the peak
-                        {'font-scale': 1.0, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold']},
-                        '\n', {},
-                        // Concatenate the formatted elevation number with " ft"
-                        ['concat', ['number-format', ['get', 'ele_ft'], {}], ' ft'],
-                        {'font-scale': 0.8, 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold']}
-                    ],
-                    'text-size': 14,
-                    'symbol-placement': 'point',
-                    'text-allow-overlap': false, // Prevents labels from overlapping
-                    'text-pitch-alignment': 'viewport'
-                },
-                'paint': {
-                    // Styles the text for high visibility on a dark map
-                    'text-color': '#FFFFFF',
-                    'text-halo-color': '#000000',
-                    'text-halo-width': 1.5,
-                    'text-halo-blur': 1
-                }
-            });
-
-
             const loader = document.getElementById('loader');
             if (loader) {
                 loader.classList.add('hidden');
