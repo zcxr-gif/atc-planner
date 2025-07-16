@@ -1755,7 +1755,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllFlightDataBlockStyles();
     }
 
-    // --- STICKY NOTES FUNCTIONS ---
+    // --- STICKY NOTES FUNCTIONS (FIXED) ---
     /**
      * Toggles "note adding" mode.
      */
@@ -1784,6 +1784,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <textarea class="sticky-note-textarea" placeholder="Type here..."></textarea>
         `;
 
+        // --- FIX: Prevent map drag when interacting with the note, allowing typing.
+        noteElement.addEventListener('mousedown', (e) => e.stopPropagation());
+
         const textarea = noteElement.querySelector('.sticky-note-textarea');
         textarea.value = noteData.text || '';
 
@@ -1791,15 +1794,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const marker = new maptilersdk.Marker({
                 element: noteElement,
                 draggable: true
+                // NOTE: By default, MapTiler SDK markers do NOT scale with zoom.
+                // They maintain their pixel size on the screen, which is the desired behavior.
             })
             .setLngLat([noteData.lng, noteData.lat])
             .addTo(map);
 
         // --- 3. Add Event Listeners ---
-        // Save text changes
+        
+        // Function to auto-resize textarea height based on its content
+        const autoResizeTextarea = () => {
+            textarea.style.height = 'auto'; // Reset height to allow shrinking
+            textarea.style.height = `${textarea.scrollHeight}px`; // Set height to content
+        };
+
+        // Save text changes and auto-resize
         textarea.addEventListener('input', () => {
             notes[noteId].text = textarea.value;
             saveNotes();
+            autoResizeTextarea(); // Adjust height on every input
         });
 
         // Save position changes after dragging
@@ -1834,6 +1847,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!noteData.id) { // Only focus if it's a brand new note
             textarea.focus();
         }
+
+        // Set initial height correctly when a note is loaded or created
+        // A slight delay allows the browser to render and calculate scrollHeight accurately.
+        setTimeout(autoResizeTextarea, 10);
     }
 
     /**
