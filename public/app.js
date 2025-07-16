@@ -1,4 +1,4 @@
-// app.js (Updated with ATIS functionality and migrated to MapTiler SDK)
+// app.js (Updated with ATIS functionality, migrated to MapTiler SDK, and Sticky Notes feature)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     maptilersdk.config.apiKey = 'ety8GjHG3ccnoSZfOULB';
@@ -44,6 +44,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedFlightId = null;
     let atisCache = {};
     let activeAtisStationIcaos = new Set();
+    
+    // --- Sticky Notes Variables ---
+    let isNoteMode = false;
+    let notes = {}; // Will store { id, lng, lat, text }
+    const noteMarkers = {}; // Will store the MapTiler marker objects
+
 
     // --- Style configs (remain mostly the same, but used differently) ---
     const RUNWAY_STYLE_REGULAR = { 'line-color': '#AAAAAA', 'line-width': 1, 'fill-color': '#707070', 'fill-opacity': 1 };
@@ -225,6 +231,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateNavaids();
             updateWaypoints();
             loadPlanFromLocalStorage();
+            loadNotes();
 
             const loader = document.getElementById('loader');
             if (loader) {
@@ -517,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="live-mode-btn">Live Mode</button>
                 <button id="settings-btn">Settings</button>
                 <button id="help-btn">Help</button>
+                <button id="add-note-btn" style="grid-column: 1 / -1; margin-top: 5px; background-color: #f2d479; color: #333;">Add Note</button>
             </div>
         `;
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
@@ -633,7 +641,9 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
+        mainPanel.querySelector('#add-note-btn').addEventListener('click', toggleNoteMode);
     }
+    
     // ... all other UI panel creation functions (createLiveControlPanel, etc.) remain unchanged ...
      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
@@ -1583,13 +1593,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- DRAWING LOGIC (Rewritten for MapTiler) ---
+    // --- DRAWING AND NOTE LOGIC ---
 
     function handleMouseDown(e) {
+        if (isNoteMode) {
+            createStickyNote({ lng: e.lngLat.lng, lat: e.lngLat.lat });
+            toggleNoteMode(); // Exit note mode after placing one
+            return;
+        }
+        
         if (!isDrawingEnabled || e.originalEvent.button !== 0) return;
 
         // Prevent drawing when clicking on a UI panel
-        if (e.originalEvent.target.closest('.floating-panel')) return;
+        if (e.originalEvent.target.closest('.floating-panel') || e.originalEvent.target.closest('.sticky-note')) return;
 
         isDrawing = true;
         const startPoint = e.lngLat;
@@ -1738,6 +1754,126 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAltitudeForLeg(stepId);
         updateAllFlightDataBlockStyles();
     }
+
+    // --- STICKY NOTES FUNCTIONS (FIXED) ---
+    /**
+     * Toggles "note adding" mode.
+     */
+    function toggleNoteMode() {
+        isNoteMode = !isNoteMode;
+        const noteBtn = document.getElementById('add-note-btn');
+        map.getCanvas().style.cursor = isNoteMode ? 'crosshair' : '';
+        if (noteBtn) noteBtn.textContent = isNoteMode ? 'Cancel' : 'Add Note';
+    }
+
+    /**
+     * Creates a single sticky note element and its corresponding map marker.
+     * @param {object} noteData - Contains the id, lng, lat, and text of the note.
+     */
+    function createStickyNote(noteData) {
+        const noteId = noteData.id || `note-${Date.now()}`;
+
+        // --- 1. Create the HTML Element ---
+        const noteElement = document.createElement('div');
+        noteElement.className = 'sticky-note';
+        noteElement.innerHTML = `
+            <div class="sticky-note-header">
+                <span>Note</span>
+                <button class="delete-note-btn" title="Delete Note">&times;</button>
+            </div>
+            <textarea class="sticky-note-textarea" placeholder="Type here..."></textarea>
+        `;
+
+        // --- FIX: Prevent map drag when interacting with the note, allowing typing.
+        noteElement.addEventListener('mousedown', (e) => e.stopPropagation());
+
+        const textarea = noteElement.querySelector('.sticky-note-textarea');
+        textarea.value = noteData.text || '';
+
+        // --- 2. Create the Draggable Marker ---
+        const marker = new maptilersdk.Marker({
+                element: noteElement,
+                draggable: true
+                // NOTE: By default, MapTiler SDK markers do NOT scale with zoom.
+                // They maintain their pixel size on the screen, which is the desired behavior.
+            })
+            .setLngLat([noteData.lng, noteData.lat])
+            .addTo(map);
+
+        // --- 3. Add Event Listeners ---
+        
+        // Function to auto-resize textarea height based on its content
+        const autoResizeTextarea = () => {
+            textarea.style.height = 'auto'; // Reset height to allow shrinking
+            textarea.style.height = `${textarea.scrollHeight}px`; // Set height to content
+        };
+
+        // Save text changes and auto-resize
+        textarea.addEventListener('input', () => {
+            notes[noteId].text = textarea.value;
+            saveNotes();
+            autoResizeTextarea(); // Adjust height on every input
+        });
+
+        // Save position changes after dragging
+        marker.on('dragend', () => {
+            const newLngLat = marker.getLngLat();
+            notes[noteId].lng = newLngLat.lng;
+            notes[noteId].lat = newLngLat.lat;
+            saveNotes();
+        });
+
+        // Handle deletion
+        noteElement.querySelector('.delete-note-btn').addEventListener('click', () => {
+            marker.remove();
+            delete noteMarkers[noteId];
+            delete notes[noteId];
+            saveNotes();
+        });
+
+        // --- 4. Store Data and Save ---
+        if (!notes[noteId]) {
+            notes[noteId] = {
+                id: noteId,
+                lng: noteData.lng,
+                lat: noteData.lat,
+                text: textarea.value
+            };
+        }
+        noteMarkers[noteId] = marker;
+        saveNotes();
+        
+        // Focus the new note so the user can type immediately
+        if(!noteData.id) { // Only focus if it's a brand new note
+            textarea.focus();
+        }
+
+        // Set initial height correctly when a note is loaded or created
+        // A slight delay allows the browser to render and calculate scrollHeight accurately.
+        setTimeout(autoResizeTextarea, 10);
+    }
+
+    /**
+     * Saves all notes to localStorage.
+     */
+    function saveNotes() {
+        localStorage.setItem('stickyNotes', JSON.stringify(notes));
+    }
+
+    /**
+    * Loads and renders notes from localStorage when the map is ready.
+    */
+    function loadNotes() {
+        const savedNotes = localStorage.getItem('stickyNotes');
+        if (savedNotes) {
+            notes = JSON.parse(savedNotes);
+            Object.values(notes).forEach(note => {
+                // Re-create each note on the map from saved data
+                createStickyNote(note);
+            });
+        }
+    }
+
 
     // --- HELPER FUNCTIONS (Updated for MapTiler / Turf.js) ---
 
@@ -1979,13 +2115,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         localStorage.setItem('flightPlan', JSON.stringify(planData));
     }
-    // ... all other functions should be reviewed and updated if they contained any map-specific logic.
-    // For brevity, only the most critical rewrites are shown in detail.
-    // The structure for functions like createHelpPanel, createAltitudeProfilePanel, etc., remains the same.
+    
      function loadPlanFromLocalStorage() {
         const savedPlan = localStorage.getItem('flightPlan');
         if (savedPlan) {
             const planData = JSON.parse(savedPlan);
+            if (planData.length > 0) createOrShowPlanPanel();
             planData.forEach(data => {
                 const start = { lat: data.start.lat, lng: data.start.lng };
                 const end = { lat: data.end.lat, lng: data.end.lng };
@@ -2006,6 +2141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
+    
      async function getElevationAndMag(latlng) {
         let magVarText = "Mag Var: N/A";
         if (wmmModel) {
@@ -2030,6 +2166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
         }
     }
+    
      function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         const startPoint = turf.point([start.lng, start.lat]);
@@ -2048,6 +2185,7 @@ document.addEventListener('DOMContentLoaded', () => {
             lng: start.lng + (end.lng - start.lng) * 0.75
         };
     }
+    
      function createOrShowPlanPanel() {
         let planPanel = document.getElementById('plan-panel');
         if (planPanel) {
@@ -2111,6 +2249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+    
      function addPlanStep(stepId, heading, distanceMeters, altitude = '', speed = '', lineType = 'standard') {
         createOrShowPlanPanel();
         const sectionMap = { standard: 'standard-steps', arrival: 'arrival-steps', departure: 'departure-steps' };
