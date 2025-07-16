@@ -513,6 +513,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             </div>
 
+            <h3 style="margin-top: 15px;">Terrain Tools</h3>
+            <div id="terrain-controls" style="display: flex; gap: 8px; align-items: center;">
+                <input type="number" id="altitude-input" placeholder="Altitude in feet" style="flex-grow: 1;">
+                <button id="highlight-altitude-btn" style="padding: 8px 12px;">Go</button>
+            </div>
+            <button id="clear-altitude-btn" style="width: 100%; margin-top: 10px; background-color: #6c757d; display: none;">Clear Highlight</button>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 15px;">
                 <button id="live-mode-btn">Live Mode</button>
                 <button id="settings-btn">Settings</button>
@@ -633,6 +640,30 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
+        
+        // --- TERRAIN HIGHLIGHT LISTENERS ---
+        mainPanel.querySelector('#highlight-altitude-btn').addEventListener('click', () => {
+            const altitudeInput = mainPanel.querySelector('#altitude-input');
+            const altitude = parseFloat(altitudeInput.value);
+            if (!isNaN(altitude)) {
+                highlightAltitude(altitude);
+            }
+        });
+
+        mainPanel.querySelector('#clear-altitude-btn').addEventListener('click', () => {
+            mainPanel.querySelector('#altitude-input').value = '';
+            highlightAltitude(null);
+        });
+
+        mainPanel.querySelector('#altitude-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const altitude = parseFloat(e.target.value);
+                if (!isNaN(altitude)) {
+                    highlightAltitude(altitude);
+                }
+            }
+        });
     }
     // ... all other UI panel creation functions (createLiveControlPanel, etc.) remain unchanged ...
      async function createLiveControlPanel() {
@@ -1101,6 +1132,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
+
+    /**
+     * Highlights a specific altitude on the terrain map.
+     * @param {number | null} altitudeInFeet - The altitude to highlight, in feet. Pass null to clear.
+     */
+    function highlightAltitude(altitudeInFeet) {
+        const layerId = 'altitude-highlight-layer';
+
+        // If a highlight layer already exists, remove it first.
+        if (map.getLayer(layerId)) {
+            map.removeLayer(layerId);
+        }
+        
+        // If the input is null or empty, we just clear the layer and stop.
+        if (altitudeInFeet === null || altitudeInFeet === '') {
+            document.getElementById('clear-altitude-btn').style.display = 'none';
+            return;
+        }
+
+        // Convert feet to meters, as terrain data is in meters.
+        const altitudeInMeters = altitudeInFeet * 0.3048;
+
+        // Define a small buffer range (e.g., +/- 15 meters) for a more visible line.
+        const lowerBound = altitudeInMeters - 15;
+        const upperBound = altitudeInMeters + 15;
+        
+        // The map's style must have a "raster-dem" source, typically named "maptiler-terrain".
+        // Your style from api.maptiler.com includes this.
+        const terrainSource = 'maptiler-terrain'; 
+
+        map.addLayer({
+            id: layerId,
+            type: 'raster',
+            source: terrainSource,
+            paint: {
+                // 'raster-color' uses an expression to set the color of each pixel.
+                'raster-color': [
+                    'case',
+                    [
+                        // Condition: Check if the pixel's elevation ('raster-value') is within our target range.
+                        'all',
+                        ['>=', ['raster-value'], lowerBound],
+                        ['<=', ['raster-value'], upperBound]
+                    ],
+                    // If the condition is true, color the pixel yellow.
+                    '#FFD700', 
+                    // Otherwise, make it completely transparent.
+                    'rgba(0, 0, 0, 0)' 
+                ]
+            }
+        });
+
+        // Show the "Clear" button
+        document.getElementById('clear-altitude-btn').style.display = 'block';
+    }
+
 
     // This is a new function to clear airport-specific layers before drawing new ones.
     function clearAirportLayers() {
