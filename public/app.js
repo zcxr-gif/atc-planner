@@ -1786,6 +1786,13 @@ document.addEventListener('DOMContentLoaded', () => {
             isDrawing = false;
             const endPoint = e.lngLat;
             
+            // FIX: Add a guard to ensure analysisStartPoint exists before proceeding.
+            if (!analysisStartPoint) {
+                // If there's no start point, reset the UI and exit the function.
+                document.getElementById('analyze-terrain-btn').click(); 
+                return;
+            }
+
             // Remove the temporary drawing rectangle
             if (map.getLayer('temp-analysis-rect')) map.removeLayer('temp-analysis-rect');
             if (map.getSource('temp-analysis-rect')) map.removeSource('temp-analysis-rect');
