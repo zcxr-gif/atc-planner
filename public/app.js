@@ -1,4 +1,4 @@
-// app.js (Updated with ATIS functionality and migrated to MapTiler SDK)
+// app.js (Updated with ATIS functionality, migrated to MapTiler SDK, and Peak Finder tool)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     maptilersdk.config.apiKey = 'ety8GjHG3ccnoSZfOULB';
@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let appSettings = { dataBlockScale: 1.0, showDataBlocks: true, useTrueHeading: false };
     let altitudeChart = null;
     let wmmModel = null;
+    let peakMarker = null; // Variable for Peak Finder tool
 
     // --- Live Mode Variables ---
     let inactivityTimer;
@@ -518,6 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="settings-btn">Settings</button>
                 <button id="help-btn">Help</button>
             </div>
+            <button id="find-peak-btn" style="width: 100%; margin-top: 10px;">Find Peak Elevation</button>
         `;
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
         const mainPanel = createFloatingPanel('main-panel', titleHTML, '20px', '20px', content);
@@ -633,6 +635,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#settings-btn').addEventListener('click', createSettingsPanel);
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
+        mainPanel.querySelector('#find-peak-btn').addEventListener('click', findHighestPeakInView);
     }
     // ... all other UI panel creation functions (createLiveControlPanel, etc.) remain unchanged ...
      async function createLiveControlPanel() {
@@ -2344,5 +2347,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
         startAltInput.addEventListener('input', updateFromInput);
         endAltInput.addEventListener('input', updateFromInput);
+    }
+    
+    /**
+     * Scans the current map view to find the highest elevation point and calculates its MSA.
+     */
+    async function findHighestPeakInView() {
+        const findButton = document.getElementById('find-peak-btn');
+        if (!findButton) return;
+
+        // --- 1. Provide user feedback ---
+        findButton.disabled = true;
+        findButton.textContent = 'Scanning...';
+        if (peakMarker) {
+            peakMarker.remove(); // Remove previous marker
+            peakMarker = null;
+        }
+
+        try {
+            // --- 2. Get map bounds and define a grid ---
+            const bounds = map.getBounds();
+            const sw = bounds.getSouthWest();
+            const ne = bounds.getNorthEast();
+            const gridSize = 20; // 20x20 grid = 400 sample points
+
+            const latitudes = [];
+            const longitudes = [];
+
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    const lat = sw.lat + (ne.lat - sw.lat) * (i / (gridSize - 1));
+                    const lon = sw.lng + (ne.lng - sw.lng) * (j / (gridSize - 1));
+                    latitudes.push(lat.toFixed(4));
+                    longitudes.push(lon.toFixed(4));
+                }
+            }
+
+            // --- 3. Call the elevation API with all points at once ---
+            const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latitudes.join(',')}&longitude=${longitudes.join(',')}`);
+            if (!response.ok) throw new Error('Failed to fetch elevation data.');
+            const data = await response.json();
+            if (!data.elevation || data.elevation.length === 0) throw new Error('No elevation data returned.');
+
+            // --- 4. Find the highest point from the results ---
+            let highestElevation = -Infinity;
+            let peakIndex = -1;
+
+            for (let i = 0; i < data.elevation.length; i++) {
+                if (data.elevation[i] > highestElevation) {
+                    highestElevation = data.elevation[i];
+                    peakIndex = i;
+                }
+            }
+
+            if (peakIndex === -1) throw new Error('Could not determine highest point.');
+
+            const peakLat = latitudes[peakIndex];
+            const peakLon = longitudes[peakIndex];
+            const highestElevationFeet = highestElevation * 3.28084;
+
+            // --- 5. Calculate the MSA for the highest point ---
+            const calculatedMsa = highestElevationFeet + 2000;
+            const roundedAltitude = Math.round(calculatedMsa / 1000) * 1000;
+            const displayAltitude = Math.max(roundedAltitude, 2000);
+
+            // --- 6. Display the calculated MSA on the map ---
+            const popup = new maptilersdk.Popup({ offset: 25, closeButton: false })
+                .setHTML(`<div style="text-align: center;"><strong>Peak MSA</strong><br>${displayAltitude.toLocaleString()}'</div>`);
+
+            const el = document.createElement('div');
+            el.className = 'peak-marker';
+
+            peakMarker = new maptilersdk.Marker({ element: el, color: '#FF4136' })
+                .setLngLat([peakLon, peakLat])
+                .setPopup(popup)
+                .addTo(map)
+                .togglePopup();
+            
+            map.flyTo({ center: [peakLon, peakLat], zoom: map.getZoom() + 1 });
+
+        } catch (error) {
+            console.error("Error finding peak elevation:", error);
+            alert("Could not find the peak elevation. Please try again.");
+        } finally {
+            // --- 7. Reset the button ---
+            findButton.disabled = false;
+            findButton.textContent = 'Find Peak Elevation';
+        }
     }
 });
