@@ -2007,29 +2007,39 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAllFlightDataBlockStyles();
     }
      async function getElevationAndMag(latlng) {
-        let magVarText = "Mag Var: N/A";
-        if (wmmModel) {
-             const point = wmmModel.field(latlng.lat, latlng.lng);
-             magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
-        }
-        try {
-            const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
-            if (!response.ok) throw new Error(`API error`);
-            const data = await response.json();
-            const elevationMeters = data.elevation[0];
-            let msaText = "MSA: 2,000'";
-            if (elevationMeters !== null && elevationMeters > 0) {
-                let terrainElevationFeet = elevationMeters * 3.28084;
-                let calculatedMsa = terrainElevationFeet + 2000;
-                let roundedMsa = Math.ceil(calculatedMsa / 1000) * 1000;
-                msaText = `MSA: ${roundedMsa.toLocaleString()}'`;
-            }
-            mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
-        } catch (error) {
-            console.error("Failed to fetch elevation data:", error);
-            mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
-        }
+    let magVarText = "Mag Var: N/A";
+    if (wmmModel) {
+         const point = wmmModel.field(latlng.lat, latlng.lng);
+         magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
     }
+    try {
+        const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`);
+        if (!response.ok) throw new Error(`API error`);
+        const data = await response.json();
+        const elevationMeters = data.elevation[0];
+
+        let msaText = "MSA: --"; 
+
+        if (elevationMeters !== null && elevationMeters >= 0) {
+            const terrainElevationFeet = elevationMeters * 3.28084;
+            
+            // 1. Calculate the base value with the 2,000-foot buffer.
+            const calculatedMsa = terrainElevationFeet + 2000;
+
+            // 2. Round that value to the nearest thousand.
+            const roundedAltitude = Math.round(calculatedMsa / 1000) * 1000;
+
+            // 3. For display, ensure the number is at least 2,000.
+            const displayAltitude = Math.max(roundedAltitude, 2000);
+            
+            msaText = `MSA: ${displayAltitude.toLocaleString()}'`;
+        }
+        mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
+    } catch (error) {
+        console.error("Failed to fetch elevation data:", error);
+        mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
+    }
+}
      function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         const startPoint = turf.point([start.lng, start.lat]);
