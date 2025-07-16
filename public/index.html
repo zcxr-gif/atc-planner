@@ -6,7 +6,8 @@
     <title>ATC Approach Planner</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23493D71' /><path d='M 50 50 L 85 25' stroke='%23EABFFF' stroke-width='4'/><circle cx='65' cy='70' r='5' fill='%23EABFFF' /></svg>">
     
-    <link href="https://cdn.maptiler.com/maptiler-sdk-js/v2.0.3/maptiler-sdk.css" rel="stylesheet" />
+    <script src="https://cdn.maptiler.com/maptiler-sdk-js/v3.5.0/maptiler-sdk.umd.min.js"></script>
+    <link href="https://cdn.maptiler.com/maptiler-sdk-js/v3.5.0/maptiler-sdk.css" rel="stylesheet" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -396,6 +397,92 @@
         .filter-dropdown-content label {
             display: block; color: var(--text-primary); padding: 5px 0; font-weight: normal; cursor: pointer;
         }
+		
+        /* --- CUSTOM POPUP STYLES --- */
+        .maptiler-popup-content.custom-popup {
+            /* Forcing background override because the default map style is too specific. */
+            background: rgba(32, 24, 56, 0.9) !important;
+            backdrop-filter: blur(10px);
+            color: var(--text-primary);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            border: 1px solid var(--border-color);
+            font-family: 'Inter', sans-serif;
+            padding: 0; /* Remove default padding to use our own structure */
+            width: 220px; /* Made smaller as requested */
+            overflow: hidden; /* Important for border-radius to apply correctly to children */
+        }
+
+        .flight-popup-header {
+            background-color: rgba(0,0,0,0.2);
+            padding: 10px 12px; /* Adjusted for smaller size */
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .flight-popup-callsign {
+            font-size: 1rem; /* Adjusted for smaller size */
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .flight-popup-aircraft {
+            font-size: 0.75rem; /* Adjusted for smaller size */
+            color: var(--text-secondary);
+        }
+
+        .flight-popup-body {
+            padding: 12px; /* Adjusted for smaller size */
+            display: flex;
+            flex-direction: column;
+            gap: 6px; /* Adjusted for smaller size */
+        }
+
+        .flight-popup-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px; /* Adjusted for smaller size */
+        }
+
+        .flight-popup-row .label {
+            color: var(--text-secondary);
+        }
+
+        .flight-popup-row .value {
+            font-family: 'Roboto Mono', monospace;
+            font-weight: 500;
+        }
+
+        .flight-popup-footer {
+            padding: 0 12px 12px 12px; /* Adjusted for smaller size */
+        }
+
+        .flight-popup-footer .cta-button {
+             width: 100%;
+             padding: 8px 12px;
+             background-color: var(--accent);
+             color: var(--background-dark);
+             box-shadow: 0 0 20px var(--accent-glow);
+             font-weight: 700;
+        }
+         .flight-popup-footer .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 30px var(--accent-glow);
+        }
+
+        /* Style the popup's pointer arrow to match the new dark theme */
+        .maptiler-popup-anchor-bottom .maptiler-popup-tip {
+            border-top-color: var(--border-color);
+        }
+        .maptiler-popup-anchor-top .maptiler-popup-tip {
+            border-bottom-color: var(--border-color);
+        }
+        .maptiler-popup-anchor-left .maptiler-popup-tip {
+            border-right-color: var(--border-color);
+        }
+        .maptiler-popup-anchor-right .maptiler-popup-tip {
+            border-left-color: var(--border-color);
+        }
 
     </style>
 </head>
@@ -409,7 +496,6 @@
     <a href="#" id="reopen-main-panel" class="reopen-button" style="display: none;">Show Planner</a>
     <div id="msl-popup"></div>
 
-    <script src="https://cdn.maptiler.com/maptiler-sdk-js/v2.0.3/maptiler-sdk.js"></script>
     <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-dragdata@2.2.3/dist/chartjs-plugin-dragdata.min.js"></script>
