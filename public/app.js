@@ -1770,6 +1770,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * Creates a single sticky note element and its corresponding map marker.
      * @param {object} noteData - Contains the id, lng, lat, and text of the note.
      */
+    /**
+     * Creates a single sticky note element and its corresponding map marker.
+     * @param {object} noteData - Contains the id, lng, lat, and text of the note.
+     */
     function createStickyNote(noteData) {
         const noteId = noteData.id || `note-${Date.now()}`;
 
@@ -1783,10 +1787,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <textarea class="sticky-note-textarea" placeholder="Type here..."></textarea>
         `;
-
-        // --- FIX: Prevent map drag when interacting with the note, allowing typing.
-        noteElement.addEventListener('mousedown', (e) => e.stopPropagation());
-
+        
         const textarea = noteElement.querySelector('.sticky-note-textarea');
         textarea.value = noteData.text || '';
 
@@ -1794,14 +1795,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const marker = new maptilersdk.Marker({
                 element: noteElement,
                 draggable: true
-                // NOTE: By default, MapTiler SDK markers do NOT scale with zoom.
-                // They maintain their pixel size on the screen, which is the desired behavior.
             })
             .setLngLat([noteData.lng, noteData.lat])
             .addTo(map);
 
         // --- 3. Add Event Listeners ---
-        
+
+        // --- FIX: Disable dragging when mouse is over the textarea to allow typing ---
+        textarea.addEventListener('mouseenter', () => {
+            marker.setDraggable(false);
+        });
+        textarea.addEventListener('mouseleave', () => {
+            marker.setDraggable(true);
+        });
+        // --- END FIX ---
+
         // Function to auto-resize textarea height based on its content
         const autoResizeTextarea = () => {
             textarea.style.height = 'auto'; // Reset height to allow shrinking
@@ -1849,7 +1857,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Set initial height correctly when a note is loaded or created
-        // A slight delay allows the browser to render and calculate scrollHeight accurately.
         setTimeout(autoResizeTextarea, 10);
     }
 
