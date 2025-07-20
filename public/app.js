@@ -211,44 +211,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
     async function initializeApp() {
-    // --- Phase 1: Minimal setup that doesn't block the UI ---
-    loadSettings();
-    createMainPanel();
-    await initializeWMM(); // This is a small local script, it's fine to await.
+        loadSettings();
+        createMainPanel();
+        await initializeWMM();
 
-    // --- Phase 2: Load the map and show the UI ---
-    // The 'load' event fires once the map's visual components are ready.
-    map.on('load', async () => { // Note: this callback is now async
-        // Hide the loader immediately to give the user a responsive feel.
-        const loader = document.getElementById('loader');
-        if (loader) {
-            loader.classList.add('hidden');
-        }
+        await getAirports();
+        await getRunways();
+        await getWaypoints();
 
-        // Set up essential event listeners and load any saved user work.
-        setupEventListeners();
-        loadPlanFromLocalStorage();
-
-        // --- Phase 3: Fetch data in the background and update the map ---
-        // The user can already see the map while this is happening.
-        try {
-            await Promise.all([
-                getAirports(),
-                getRunways(),
-                getWaypoints()
-            ]);
-
-            // Once the data has arrived, draw the initial layers on the map.
+        map.on('load', () => {
+            setupEventListeners();
             updateAirports();
             updateNavaids();
             updateWaypoints();
+            loadPlanFromLocalStorage();
 
-        } catch (error) {
-            console.error("Failed to load map data. Some features may be unavailable.", error);
-            alert("Error: Could not load airport or navigation data. Some map features will not be available.");
-        }
-    });
-}
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.classList.add('hidden');
+            }
+        });
+    }
+    initializeApp();
 
     // --- LIVE MODE: INACTIVITY TIMER (no changes) ---
     function startInactivityTimer() {
@@ -1048,74 +1032,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function createSettingsPanel() {
-    // First, remove the old panel if it exists
-    const oldPanel = document.getElementById('settings-panel');
-    if (oldPanel) {
-        oldPanel.remove();
+        const content = `
+            <div class="info-card">
+                <h3>Display</h3>
+                <div style="padding-bottom: 10px;">
+                     <label for="heading-type-toggle" style="display: flex; align-items: center; justify-content: space-between;">
+                        Use True Heading
+                        <input type="checkbox" id="heading-type-toggle" ${appSettings.useTrueHeading ? 'checked' : ''}>
+                    </label>
+                    <p style="font-size: 11px; color: #bbb; margin: 4px 0 0 0;">Toggles the primary heading on data blocks between Magnetic and True.</p>
+                </div>
+                <hr style="border-color: var(--border-color); margin: 10px 0;">
+                <div style="padding-bottom: 10px;">
+                    <label for="show-data-blocks-toggle" style="display: flex; align-items: center; justify-content: space-between;">
+                        Show Data Blocks
+                        <input type="checkbox" id="show-data-blocks-toggle" ${appSettings.showDataBlocks ? 'checked' : ''}>
+                    </label>
+                </div>
+                <div>
+                    <label for="data-block-scale-slider">Data Block Size: <span id="data-block-scale-value">${appSettings.dataBlockScale.toFixed(1)}x</span></label>
+                    <input type="range" id="data-block-scale-slider" min="0.5" max="1.5" step="0.1" value="${appSettings.dataBlockScale}" style="width: 100%;">
+                </div>
+            </div>
+             <div class="info-card">
+                <h3>Data Source</h3>
+                <p style="font-size: 12px; color: #ddd; margin: 0;">
+                    Runway data from an open-source project may have inaccuracies. Use the INFO panel to manually correct magnetic variation if needed.
+                </p>
+            </div>
+        `;
+        createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
+
+        const settingsPanel = document.getElementById('settings-panel');
+        settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
+            appSettings.useTrueHeading = e.target.checked;
+            updateAllFlightDataBlockStyles();
+            saveSettings();
+        });
+
+        settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
+            appSettings.showDataBlocks = e.target.checked;
+            toggleDataBlockVisibility();
+            saveSettings();
+        });
+
+        const scaleSlider = settingsPanel.querySelector('#data-block-scale-slider');
+        const scaleValueLabel = settingsPanel.querySelector('#data-block-scale-value');
+        scaleSlider.addEventListener('input', (e) => {
+            appSettings.dataBlockScale = parseFloat(e.target.value);
+            scaleValueLabel.textContent = `${appSettings.dataBlockScale.toFixed(1)}x`;
+            updateAllFlightDataBlockStyles();
+        });
+        scaleSlider.addEventListener('change', saveSettings);
     }
-
-    const content = `
-        <div class="info-card" style="padding: 10px 15px;">
-            <div class="setting-item">
-                <div class="setting-item-text">
-                    <h4>Show Data Blocks</h4>
-                    <p>Toggles visibility of all flight plan data blocks.</p>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="show-data-blocks-toggle" ${appSettings.showDataBlocks ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-            <div class="setting-item">
-                <div class="setting-item-text">
-                    <h4>Use True Heading</h4>
-                    <p>Toggles the primary heading between Magnetic and True.</p>
-                </div>
-                <label class="toggle-switch">
-                    <input type="checkbox" id="heading-type-toggle" ${appSettings.useTrueHeading ? 'checked' : ''}>
-                    <span class="toggle-slider"></span>
-                </label>
-            </div>
-        </div>
-        <div class="info-card" style="padding: 15px;">
-             <div>
-                <label for="data-block-scale-slider" style="display: block; margin-bottom: 8px;">Data Block Size: <span id="data-block-scale-value">${appSettings.dataBlockScale.toFixed(1)}x</span></label>
-                <input type="range" id="data-block-scale-slider" min="0.5" max="1.5" step="0.1" value="${appSettings.dataBlockScale}" style="width: 100%;">
-            </div>
-        </div>
-         <div class="info-card">
-            <h3>Data Source</h3>
-            <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">
-                Runway data from an open-source project may have inaccuracies. Use the INFO panel to manually correct magnetic variation if needed.
-            </p>
-        </div>
-    `;
-
-    // Position the panel to the right of the main panel to avoid overlap
-    const settingsPanel = createFloatingPanel('settings-panel', '<h2>Settings</h2>', '20px', '360px', content);
-
-    // --- Re-attach Event Listeners ---
-    settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
-        appSettings.useTrueHeading = e.target.checked;
-        updateAllFlightDataBlockStyles();
-        saveSettings();
-    });
-
-    settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
-        appSettings.showDataBlocks = e.target.checked;
-        toggleDataBlockVisibility(); // This function will now work correctly
-        saveSettings();
-    });
-
-    const scaleSlider = settingsPanel.querySelector('#data-block-scale-slider');
-    const scaleValueLabel = settingsPanel.querySelector('#data-block-scale-value');
-    scaleSlider.addEventListener('input', (e) => {
-        appSettings.dataBlockScale = parseFloat(e.target.value);
-        scaleValueLabel.textContent = `${appSettings.dataBlockScale.toFixed(1)}x`;
-        updateAllFlightDataBlockStyles();
-    });
-    scaleSlider.addEventListener('change', saveSettings);
-}
 
     function createHelpPanel() {
         const helpContent = `
@@ -1149,12 +1118,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // This is a new function to clear airport-specific layers before drawing new ones.
     function clearAirportLayers() {
-    const layers = [
-        'runways', 'runway-centerlines', 'runway-labels',
-        'final-approach-cones', 'final-approach-centerlines',
-        'distance-rings-casing', 'distance-rings', 'distance-ring-labels'
-    ];
-    layers.forEach(baseId => {
+        const layers = [
+            'runways', 'runway-centerlines', 'runway-labels',
+            'final-approach-cones', 'final-approach-centerlines',
+            'distance-rings'
+        ];
+        layers.forEach(baseId => {
 			const layerId = `${baseId}-layer`;
 			const sourceId = `${baseId}-source`;
             if (map.getLayer(layerId)) map.removeLayer(layerId);
