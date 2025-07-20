@@ -1072,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
             appSettings.showDataBlocks = e.target.checked;
-            toggleDataBlockVisibility();
+            updateAllFlightDataBlockStyles(); // Changed from toggleDataBlockVisibility()
             saveSettings();
         });
 
