@@ -763,108 +763,107 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateFlightMarkers(flights, sessionId) {
-        const bounds = map.getBounds();
-        const visibleFlights = flights.filter(flight => {
-            const lat = Number(flight.latitude);
-            const lon = Number(flight.longitude);
-            if (isNaN(lat) || isNaN(lon)) {
-                return false;
-            }
-            return bounds.contains([lon, lat]);
-        });
+    // Get the current visible map area (the bounding box)
+    const bounds = map.getBounds();
 
-        const visibleFlightIds = new Set(visibleFlights.map(f => f.flightId));
+    // Filter the full list of flights to only include those currently visible on the map.
+    // This is the key fix for both performance and the visual glitch.
+    const visibleFlights = flights.filter(flight => {
+        const lat = Number(flight.latitude);
+        const lon = Number(flight.longitude);
+        if (isNaN(lat) || isNaN(lon)) {
+            return false;
+        }
+        // Check if the flight's coordinates are within the map's current bounds.
+        return bounds.contains([lon, lat]);
+    });
 
-        Object.keys(liveFlightMarkers).forEach(flightId => {
-            if (!visibleFlightIds.has(flightId)) {
-                liveFlightMarkers[flightId].remove();
-                delete liveFlightMarkers[flightId];
-            }
-        });
+    const visibleFlightIds = new Set(visibleFlights.map(f => f.flightId));
 
-        visibleFlights.forEach(flight => {
-            const lat = Number(flight.latitude);
-            const lon = Number(flight.longitude);
-            const heading = flight.heading;
-            const callsign = flight.callsign || 'N/A';
-            const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
-            const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
-            const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
-            const speedText = speed !== null ? `${speed} kts GS` : '---';
-            const isSelected = flight.flightId === selectedFlightId;
+    // Remove markers for flights that are no longer visible.
+    // This cleans up the map as you pan around.
+    Object.keys(liveFlightMarkers).forEach(flightId => {
+        if (!visibleFlightIds.has(flightId)) {
+            liveFlightMarkers[flightId].remove();
+            delete liveFlightMarkers[flightId];
+        }
+    });
 
-            // --- MODIFICATION START ---
-            // Determine the correct icon path based on aircraft type
-            let iconPath;
-            const aircraftName = flight.aircraftName || '';
-            if (aircraftName.toLowerCase().includes('a380')) {
-                iconPath = 'a380.png'; // Use A380 image
-            } else {
-                iconPath = isSelected ? '/whiteplane.png' : '/plane.png'; // Default icons
-            }
-            // --- MODIFICATION END ---
+    // Iterate over only the visible flights to add new ones or update existing ones.
+    visibleFlights.forEach(flight => {
+        const lat = Number(flight.latitude);
+        const lon = Number(flight.longitude);
 
-            const el = document.createElement('div');
-            el.className = 'custom-map-marker';
-            el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+        // This part remains the same as your original code.
+        const heading = flight.heading;
+        const callsign = flight.callsign || 'N/A';
+        const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
+        const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
+        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
+        const speedText = speed !== null ? `${speed} kts GS` : '---';
 
-            const popupContent = `
-                <div class="flight-popup-container" style="line-height: 1.4; background-color: #2a2a35; color: #f0f0f0; border: 1px solid #4a4a55;">
-                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                        <strong class="flight-popup-callsign">${callsign}</strong>
-                        <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
-                    </div>
-                    <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
-                        <div><strong>Alt:</strong> ${altitudeText}</div>
-                        <div><strong>Spd:</strong> ${speedText}</div>
-                        <div><strong>User:</strong> ${flight.username || 'N/A'}</div>
-                    </div>
-                    ${
-                        flight.flightId
-                        ? `<div style="margin-top: 8px;">
-                            <button class="cta-button view-fpl-btn"
-                                    style="padding: 5px 10px; font-size: 12px; width: 100%;"
-                                    data-flight-id="${flight.flightId}"
-                                    data-session-id="${sessionId}"
-                                    data-callsign="${callsign}"
-                                    data-altitude="${altitudeText}"
-                                    data-speed="${speedText}">View FPL</button>
-                        </div>`
-                        : ''
-                    }
+        const isSelected = flight.flightId === selectedFlightId;
+        const iconPath = isSelected ? '/whiteplane.png' : '/plane.png';
+        const el = document.createElement('div');
+        el.className = 'custom-map-marker';
+        el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+
+        const popupContent = `
+            <div class="flight-popup-container" style="line-height: 1.4; background-color: #2a2a35; color: #f0f0f0; border: 1px solid #4a4a55;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <strong class="flight-popup-callsign">${callsign}</strong>
+                    <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
                 </div>
-            `;
-
-            if (liveFlightMarkers[flight.flightId]) {
-                const marker = liveFlightMarkers[flight.flightId];
-                marker.setLngLat([lon, lat]);
-
-                const iconElement = marker.getElement().getElementsByTagName('img')[0];
-                if (iconElement) {
-                    iconElement.style.transform = `rotate(${heading}deg)`;
-                    
-                    // --- MODIFICATION START ---
-                    // This ensures the icon source is updated correctly if the aircraft type or selection changes
-                    if (!iconElement.src.endsWith(iconPath)) {
-                       iconElement.src = iconPath;
-                    }
-                    // --- MODIFICATION END ---
+                <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
+                    <div><strong>Alt:</strong> ${altitudeText}</div>
+                    <div><strong>Spd:</strong> ${speedText}</div>
+                    <div><strong>User:</strong> ${flight.username || 'N/A'}</div>
+                </div>
+                ${
+                    flight.flightId
+                    ? `<div style="margin-top: 8px;">
+                        <button class="cta-button view-fpl-btn"
+                                style="padding: 5px 10px; font-size: 12px; width: 100%;"
+                                data-flight-id="${flight.flightId}"
+                                data-session-id="${sessionId}"
+                                data-callsign="${callsign}"
+                                data-altitude="${altitudeText}"
+                                data-speed="${speedText}">View FPL</button>
+                    </div>`
+                    : ''
                 }
-                
-                if (marker.getPopup().isOpen()) {
-                    marker.getPopup().setHTML(popupContent);
-                }
+            </div>
+        `;
 
-            } else {
-                const marker = new maptilersdk.Marker({ element: el })
-                    .setLngLat([lon, lat])
-                    .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
-                    .addTo(map);
-                liveFlightMarkers[flight.flightId] = marker;
+        if (liveFlightMarkers[flight.flightId]) {
+        // --- MARKER EXISTS: UPDATE IT EFFICIENTLY ---
+        const marker = liveFlightMarkers[flight.flightId];
+        marker.setLngLat([lon, lat]);
+
+        const iconElement = marker.getElement().getElementsByTagName('img')[0];
+        if (iconElement) {
+            iconElement.style.transform = `rotate(${heading}deg)`;
+            
+            const newIconPath = isSelected ? '/whiteplane.png' : '/plane.png';
+            if (iconElement.src.endsWith(newIconPath) === false) {
+               iconElement.src = newIconPath;
             }
-        });
-    }
+        }
+        
+        if (marker.getPopup().isOpen()) {
+            marker.getPopup().setHTML(popupContent);
+        }
 
+    } else {
+        // --- MARKER DOES NOT EXIST: CREATE A NEW ONE ---
+        const marker = new maptilersdk.Marker({ element: el })
+            .setLngLat([lon, lat])
+            .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
+            .addTo(map);
+        liveFlightMarkers[flight.flightId] = marker;
+    }
+ });
+}
 
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
     // Clear previous FPL
