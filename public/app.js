@@ -1072,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
             appSettings.showDataBlocks = e.target.checked;
-            toggleDataBlockVisibility();
+            updateAllFlightDataBlockStyles();
             saveSettings();
         });
 
@@ -1750,7 +1750,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         addPlanStep(stepId, heading, turf.distance([start.lng, start.lat], [end.lng, end.lat], {units: 'meters'}), altitude, speed, lineType);
         updateAltitudeForLeg(stepId);
-        updateAllFlightDataBlockStyles();
     }
 
     // --- HELPER FUNCTIONS (Updated for MapTiler / Turf.js) ---
@@ -1906,12 +1905,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const allRunways = await getRunways();
         return allRunways.filter(r => r.airport_ident === icao);
     }
-    function toggleDataBlockVisibility() {
-        const visibility = appSettings.showDataBlocks ? 'visible' : 'none';
-        Object.values(planLabels).forEach(marker => {
-            marker.getElement().style.visibility = visibility;
-        });
-    }
 
      function updateAllFlightDataBlockStyles() {
         Object.keys(planLayers).forEach(stepId => updateDataBlock(stepId));
@@ -1959,8 +1952,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${altitudeHtml}
                             </div>
                           </div>`;
-
-        legData.label.getElement().innerHTML = fullHtml;
+        
+        const markerElement = legData.label.getElement();
+        markerElement.innerHTML = fullHtml;
+        markerElement.style.visibility = appSettings.showDataBlocks ? 'visible' : 'none';
     }
      function saveSettings() {
         localStorage.setItem('atcPlannerSettings', JSON.stringify(appSettings));
@@ -2015,10 +2010,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     planLayers[data.stepId].hasBeenDragged = true;
                 }
             });
-            // adjustAllLabelPositions();
+            updateAllFlightDataBlockStyles();
         }
-        toggleDataBlockVisibility();
-        updateAllFlightDataBlockStyles();
     }
      async function getElevationAndMag(latlng) {
     let magVarText = "Mag Var: N/A";
