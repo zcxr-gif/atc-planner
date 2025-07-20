@@ -1118,18 +1118,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // This is a new function to clear airport-specific layers before drawing new ones.
     function clearAirportLayers() {
-        const layers = [
-            'runways', 'runway-centerlines', 'runway-labels',
-            'final-approach-cones', 'final-approach-centerlines',
-            'distance-rings'
-        ];
-        layers.forEach(baseId => {
-			const layerId = `${baseId}-layer`;
-			const sourceId = `${baseId}-source`;
-            if (map.getLayer(layerId)) map.removeLayer(layerId);
-            if (map.getSource(sourceId)) map.removeSource(sourceId);
-        });
-    }
+    const layers = [
+        'runways', 'runway-centerlines', 'runway-labels',
+        'final-approach-cones', 'final-approach-centerlines',
+        'distance-rings-casing', // Added
+        'distance-rings',
+        'distance-ring-labels' // Added
+    ];
+    layers.forEach(baseId => {
+        const layerId = `${baseId}-layer`;
+        const sourceId = `${baseId}-source`;
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+    });
+}
 
 	// --- ADDED/FIXED FUNCTIONS ---
 	async function updateNavaids() {
