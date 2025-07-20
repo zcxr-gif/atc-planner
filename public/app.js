@@ -836,19 +836,33 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         if (liveFlightMarkers[flight.flightId]) {
-            // If marker already exists, just update its position and content
-            liveFlightMarkers[flight.flightId].setLngLat([lon, lat]);
-            liveFlightMarkers[flight.flightId].getElement().innerHTML = el.innerHTML;
-            liveFlightMarkers[flight.flightId].getPopup().setHTML(popupContent);
-        } else {
-            // Otherwise, create a new marker
-            const marker = new maptilersdk.Marker({ element: el })
-                .setLngLat([lon, lat])
-                .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
-                .addTo(map);
-            liveFlightMarkers[flight.flightId] = marker;
+        // --- MARKER EXISTS: UPDATE IT EFFICIENTLY ---
+        const marker = liveFlightMarkers[flight.flightId];
+        marker.setLngLat([lon, lat]);
+
+        const iconElement = marker.getElement().getElementsByTagName('img')[0];
+        if (iconElement) {
+            iconElement.style.transform = `rotate(${heading}deg)`;
+            
+            const newIconPath = isSelected ? '/whiteplane.png' : '/plane.png';
+            if (iconElement.src.endsWith(newIconPath) === false) {
+               iconElement.src = newIconPath;
+            }
         }
-    });
+        
+        if (marker.getPopup().isOpen()) {
+            marker.getPopup().setHTML(popupContent);
+        }
+
+    } else {
+        // --- MARKER DOES NOT EXIST: CREATE A NEW ONE ---
+        const marker = new maptilersdk.Marker({ element: el })
+            .setLngLat([lon, lat])
+            .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
+            .addTo(map);
+        liveFlightMarkers[flight.flightId] = marker;
+    }
+ });
 }
 
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
