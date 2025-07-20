@@ -211,28 +211,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- INITIALIZATION ---
     async function initializeApp() {
-        loadSettings();
-        createMainPanel();
-        await initializeWMM();
+    // --- Phase 1: Minimal setup that doesn't block the UI ---
+    loadSettings();
+    createMainPanel();
+    await initializeWMM(); // This is a small local script, it's fine to await.
 
-        await getAirports();
-        await getRunways();
-        await getWaypoints();
+    // --- Phase 2: Load the map and show the UI ---
+    // The 'load' event fires once the map's visual components are ready.
+    map.on('load', async () => { // Note: this callback is now async
+        // Hide the loader immediately to give the user a responsive feel.
+        const loader = document.getElementById('loader');
+        if (loader) {
+            loader.classList.add('hidden');
+        }
 
-        map.on('load', () => {
-            setupEventListeners();
+        // Set up essential event listeners and load any saved user work.
+        setupEventListeners();
+        loadPlanFromLocalStorage();
+
+        // --- Phase 3: Fetch data in the background and update the map ---
+        // The user can already see the map while this is happening.
+        try {
+            await Promise.all([
+                getAirports(),
+                getRunways(),
+                getWaypoints()
+            ]);
+
+            // Once the data has arrived, draw the initial layers on the map.
             updateAirports();
             updateNavaids();
             updateWaypoints();
-            loadPlanFromLocalStorage();
 
-            const loader = document.getElementById('loader');
-            if (loader) {
-                loader.classList.add('hidden');
-            }
-        });
-    }
-    initializeApp();
+        } catch (error) {
+            console.error("Failed to load map data. Some features may be unavailable.", error);
+            alert("Error: Could not load airport or navigation data. Some map features will not be available.");
+        }
+    });
+}
 
     // --- LIVE MODE: INACTIVITY TIMER (no changes) ---
     function startInactivityTimer() {
