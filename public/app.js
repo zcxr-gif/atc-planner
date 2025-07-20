@@ -762,26 +762,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateFlightMarkers(flights, sessionId) {
-    // Get the current visible map area (the bounding box)
-    const bounds = map.getBounds();
+   // app.js
 
-    // Filter the full list of flights to only include those currently visible on the map.
-    // This is the key fix for both performance and the visual glitch.
+function updateFlightMarkers(flights, sessionId) {
+    const bounds = map.getBounds();
     const visibleFlights = flights.filter(flight => {
         const lat = Number(flight.latitude);
         const lon = Number(flight.longitude);
         if (isNaN(lat) || isNaN(lon)) {
             return false;
         }
-        // Check if the flight's coordinates are within the map's current bounds.
         return bounds.contains([lon, lat]);
     });
 
     const visibleFlightIds = new Set(visibleFlights.map(f => f.flightId));
 
-    // Remove markers for flights that are no longer visible.
-    // This cleans up the map as you pan around.
     Object.keys(liveFlightMarkers).forEach(flightId => {
         if (!visibleFlightIds.has(flightId)) {
             liveFlightMarkers[flightId].remove();
@@ -789,20 +784,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Iterate over only the visible flights to add new ones or update existing ones.
     visibleFlights.forEach(flight => {
+        // --- THIS IS THE DEBUGGING LINE TO ADD ---
+        console.log('Flight Data:', flight); 
+        // -----------------------------------------
+
         const lat = Number(flight.latitude);
         const lon = Number(flight.longitude);
-
-        // This part remains the same as your original code.
         const heading = flight.heading;
         const callsign = flight.callsign || 'N/A';
         const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
         const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
         const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
         const speedText = speed !== null ? `${speed} kts GS` : '---';
-
         const isSelected = flight.flightId === selectedFlightId;
+
         const iconPath = getAircraftIconPath(flight.aircraftName, isSelected);
         const el = document.createElement('div');
         el.className = 'custom-map-marker';
@@ -836,33 +832,27 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         if (liveFlightMarkers[flight.flightId]) {
-        // --- MARKER EXISTS: UPDATE IT EFFICIENTLY ---
-        const marker = liveFlightMarkers[flight.flightId];
-        marker.setLngLat([lon, lat]);
-
-        const iconElement = marker.getElement().getElementsByTagName('img')[0];
-        if (iconElement) {
-            iconElement.style.transform = `rotate(${heading}deg)`;
-            
-            const newIconPath = getAircraftIconPath(flight.aircraftName, isSelected);
-            if (iconElement.src.endsWith(newIconPath) === false) {
-               iconElement.src = newIconPath;
+            const marker = liveFlightMarkers[flight.flightId];
+            marker.setLngLat([lon, lat]);
+            const iconElement = marker.getElement().getElementsByTagName('img')[0];
+            if (iconElement) {
+                iconElement.style.transform = `rotate(${heading}deg)`;
+                const newIconPath = getAircraftIconPath(flight.aircraftName, isSelected);
+                if (iconElement.src.endsWith(newIconPath) === false) {
+                   iconElement.src = newIconPath;
+                }
             }
+            if (marker.getPopup().isOpen()) {
+                marker.getPopup().setHTML(popupContent);
+            }
+        } else {
+            const marker = new maptilersdk.Marker({ element: el })
+                .setLngLat([lon, lat])
+                .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
+                .addTo(map);
+            liveFlightMarkers[flight.flightId] = marker;
         }
-        
-        if (marker.getPopup().isOpen()) {
-            marker.getPopup().setHTML(popupContent);
-        }
-
-    } else {
-        // --- MARKER DOES NOT EXIST: CREATE A NEW ONE ---
-        const marker = new maptilersdk.Marker({ element: el })
-            .setLngLat([lon, lat])
-            .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
-            .addTo(map);
-        liveFlightMarkers[flight.flightId] = marker;
-    }
- });
+    });
 }
 
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
