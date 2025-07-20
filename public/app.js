@@ -803,7 +803,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const speedText = speed !== null ? `${speed} kts GS` : '---';
 
         const isSelected = flight.flightId === selectedFlightId;
-        const iconPath = isSelected ? '/whiteplane.png' : '/plane.png';
+        const iconPath = getAircraftIconPath(flight.aircraftName, isSelected);
         const el = document.createElement('div');
         el.className = 'custom-map-marker';
         el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
@@ -844,7 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (iconElement) {
             iconElement.style.transform = `rotate(${heading}deg)`;
             
-            const newIconPath = isSelected ? '/whiteplane.png' : '/plane.png';
+            const newIconPath = getAircraftIconPath(flight.aircraftName, isSelected);
             if (iconElement.src.endsWith(newIconPath) === false) {
                iconElement.src = newIconPath;
             }
@@ -1756,6 +1756,43 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- HELPER FUNCTIONS (Updated for MapTiler / Turf.js) ---
+
+    /**
+     * Determines the appropriate icon path for an aircraft based on its type.
+     * @param {string} aircraftName - The name of the aircraft (e.g., "Airbus A380-800").
+     * @param {boolean} isSelected - Whether the aircraft is currently selected.
+     * @returns {string} The path to the icon image.
+     */
+    function getAircraftIconPath(aircraftName, isSelected) {
+        // If the flight is selected, always use the highlight icon to show its state.
+        if (isSelected) {
+            return '/whiteplane.png';
+        }
+
+        // Use a case-insensitive search for robust matching.
+        const lowerCaseName = (aircraftName || "").toLowerCase();
+
+        // --- Aircraft to Image Mapping ---
+        // Add more mappings here as you add more aircraft images.
+        const aircraftMap = {
+            'a380': '/a380.png',
+            'a320': '/a320.png', // Example: for Airbus A320
+            '737': '/b737.png',   // Example: for Boeing 737
+            '777': '/b777.png',   // Example: for Boeing 777
+            '787': '/b787.png',   // Example: for Boeing 787
+            'dc-10': '/dc10.png'  // Example: for DC-10
+        };
+
+        // Find the first matching keyword in the aircraft name.
+        for (const key in aircraftMap) {
+            if (lowerCaseName.includes(key)) {
+                return aircraftMap[key]; // Return the custom image path.
+            }
+        }
+
+        // If no specific type is found, return the default icon.
+        return '/plane.png';
+    }
 
     function calculateHeading(start, end) {
         // Turf.js calculates bearing from north, which is what we need.
