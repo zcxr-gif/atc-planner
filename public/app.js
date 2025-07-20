@@ -531,7 +531,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#clear-selection-btn').addEventListener('click', () => {
             activeAirportIcao = null;
             // Clear airport-specific layers
-            clearAllDynamicLayers();
+            clearAirportLayers();
             updateAirports(); // Re-render general airport dots
 
             const infoPanel = document.getElementById('airport-info-panel');
@@ -1344,7 +1344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function displayAirportDetails(icao) {
-        clearAllDynamicLayers(); // Clear everything
+        clearAirportLayers(); // Clear everything
         activeAirportIcao = icao;
         updateAirports(); // This will now hide the airport dots
 
@@ -2214,14 +2214,27 @@ document.addEventListener('DOMContentLoaded', () => {
             this.closest('.plan-step').remove();
         });
         document.getElementById(`alt-${stepId}`).addEventListener('input', (e) => {
-            const legData = planLayers[stepId];
-            const newAlt = parseInt(e.target.value);
+    const legData = planLayers[stepId];
+    const value = e.target.value;
+
+    // Treat an empty input as clearing the altitude values to undefined.
+    if (value === '') {
+        legData.altitude = undefined;
+        legData.startAltitude = undefined;
+        legData.endAltitude = undefined;
+    } else {
+        // Otherwise, parse the number and update the state if it's valid.
+        const newAlt = parseInt(value, 10);
+        if (!isNaN(newAlt)) {
             legData.altitude = newAlt;
             legData.startAltitude = newAlt;
             legData.endAltitude = newAlt;
-            updateAltitudeForLeg(stepId);
-            savePlanToLocalStorage();
-        });
+        }
+    }
+    // Update the UI and save the changes.
+    updateAltitudeForLeg(stepId);
+    savePlanToLocalStorage();
+});
         document.getElementById(`speed-${stepId}`).addEventListener('input', (e) => {
             const legData = planLayers[stepId];
             legData.speed = e.target.value;
