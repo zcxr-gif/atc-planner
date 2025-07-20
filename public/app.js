@@ -1032,59 +1032,74 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function createSettingsPanel() {
-        const content = `
-            <div class="info-card">
-                <h3>Display</h3>
-                <div style="padding-bottom: 10px;">
-                     <label for="heading-type-toggle" style="display: flex; align-items: center; justify-content: space-between;">
-                        Use True Heading
-                        <input type="checkbox" id="heading-type-toggle" ${appSettings.useTrueHeading ? 'checked' : ''}>
-                    </label>
-                    <p style="font-size: 11px; color: #bbb; margin: 4px 0 0 0;">Toggles the primary heading on data blocks between Magnetic and True.</p>
-                </div>
-                <hr style="border-color: var(--border-color); margin: 10px 0;">
-                <div style="padding-bottom: 10px;">
-                    <label for="show-data-blocks-toggle" style="display: flex; align-items: center; justify-content: space-between;">
-                        Show Data Blocks
-                        <input type="checkbox" id="show-data-blocks-toggle" ${appSettings.showDataBlocks ? 'checked' : ''}>
-                    </label>
-                </div>
-                <div>
-                    <label for="data-block-scale-slider">Data Block Size: <span id="data-block-scale-value">${appSettings.dataBlockScale.toFixed(1)}x</span></label>
-                    <input type="range" id="data-block-scale-slider" min="0.5" max="1.5" step="0.1" value="${appSettings.dataBlockScale}" style="width: 100%;">
-                </div>
-            </div>
-             <div class="info-card">
-                <h3>Data Source</h3>
-                <p style="font-size: 12px; color: #ddd; margin: 0;">
-                    Runway data from an open-source project may have inaccuracies. Use the INFO panel to manually correct magnetic variation if needed.
-                </p>
-            </div>
-        `;
-        createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
-
-        const settingsPanel = document.getElementById('settings-panel');
-        settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
-            appSettings.useTrueHeading = e.target.checked;
-            updateAllFlightDataBlockStyles();
-            saveSettings();
-        });
-
-        settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
-            appSettings.showDataBlocks = e.target.checked;
-            toggleDataBlockVisibility();
-            saveSettings();
-        });
-
-        const scaleSlider = settingsPanel.querySelector('#data-block-scale-slider');
-        const scaleValueLabel = settingsPanel.querySelector('#data-block-scale-value');
-        scaleSlider.addEventListener('input', (e) => {
-            appSettings.dataBlockScale = parseFloat(e.target.value);
-            scaleValueLabel.textContent = `${appSettings.dataBlockScale.toFixed(1)}x`;
-            updateAllFlightDataBlockStyles();
-        });
-        scaleSlider.addEventListener('change', saveSettings);
+    // First, remove the old panel if it exists
+    const oldPanel = document.getElementById('settings-panel');
+    if (oldPanel) {
+        oldPanel.remove();
     }
+
+    const content = `
+        <div class="info-card" style="padding: 10px 15px;">
+            <div class="setting-item">
+                <div class="setting-item-text">
+                    <h4>Show Data Blocks</h4>
+                    <p>Toggles visibility of all flight plan data blocks.</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="show-data-blocks-toggle" ${appSettings.showDataBlocks ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div class="setting-item-text">
+                    <h4>Use True Heading</h4>
+                    <p>Toggles the primary heading between Magnetic and True.</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="heading-type-toggle" ${appSettings.useTrueHeading ? 'checked' : ''}>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="info-card" style="padding: 15px;">
+             <div>
+                <label for="data-block-scale-slider" style="display: block; margin-bottom: 8px;">Data Block Size: <span id="data-block-scale-value">${appSettings.dataBlockScale.toFixed(1)}x</span></label>
+                <input type="range" id="data-block-scale-slider" min="0.5" max="1.5" step="0.1" value="${appSettings.dataBlockScale}" style="width: 100%;">
+            </div>
+        </div>
+         <div class="info-card">
+            <h3>Data Source</h3>
+            <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">
+                Runway data from an open-source project may have inaccuracies. Use the INFO panel to manually correct magnetic variation if needed.
+            </p>
+        </div>
+    `;
+
+    // Position the panel to the right of the main panel to avoid overlap
+    const settingsPanel = createFloatingPanel('settings-panel', '<h2>Settings</h2>', '20px', '360px', content);
+
+    // --- Re-attach Event Listeners ---
+    settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
+        appSettings.useTrueHeading = e.target.checked;
+        updateAllFlightDataBlockStyles();
+        saveSettings();
+    });
+
+    settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
+        appSettings.showDataBlocks = e.target.checked;
+        toggleDataBlockVisibility(); // This function will now work correctly
+        saveSettings();
+    });
+
+    const scaleSlider = settingsPanel.querySelector('#data-block-scale-slider');
+    const scaleValueLabel = settingsPanel.querySelector('#data-block-scale-value');
+    scaleSlider.addEventListener('input', (e) => {
+        appSettings.dataBlockScale = parseFloat(e.target.value);
+        scaleValueLabel.textContent = `${appSettings.dataBlockScale.toFixed(1)}x`;
+        updateAllFlightDataBlockStyles();
+    });
+    scaleSlider.addEventListener('change', saveSettings);
+}
 
     function createHelpPanel() {
         const helpContent = `
