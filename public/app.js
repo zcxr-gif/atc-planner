@@ -979,6 +979,9 @@ function updateFlightMarkers(flights, sessionId) {
                             lat: parseFloat(airportInfo.latitude_deg),
                             lon: parseFloat(airportInfo.longitude_deg)
                         };
+                    } else {
+                        // This is the added line for debugging
+                        console.warn(`ATC facility "${icao}" is active but could not be found in the airport database. It will not be displayed on the map.`);
                     }
                 }
                 if (acc[icao]) {
