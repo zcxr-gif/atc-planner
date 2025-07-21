@@ -12,12 +12,13 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- GLOBAL VARIABLES & LAYER MANAGEMENT ---
+    // Instead of FeatureGroups, we'll manage layers and sources directly
     const layerAndSourceIds = new Set();
+    const liveFlightMarkers = {};
     const planLabels = {};
 
     const mslPopup = document.getElementById('msl-popup');
     const reopenButton = document.getElementById('reopen-main-panel');
-    let activeFlightPopup = null; // To manage the single flight popup
 
     let isDrawingEnabled = false;
     let isDrawing = false;
@@ -202,6 +203,9 @@ document.addEventListener('DOMContentLoaded', () => {
         layerAndSourceIds.clear();
 
         // Clear markers separately as before.
+        Object.values(liveFlightMarkers).forEach(marker => marker.remove());
+        Object.keys(liveFlightMarkers).forEach(key => delete liveFlightMarkers[key]);
+
         Object.values(planLabels).forEach(marker => marker.remove());
         Object.keys(planLabels).forEach(key => delete planLabels[key]);
     }
@@ -217,46 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await getRunways();
         await getWaypoints();
 
-        map.on('load', async () => {
-            // Pre-load all potential aircraft icons into the map's style
-            const icons = {
-                'plane-default': '/plane.png',
-                'plane-selected': '/whiteplane.png',
-                'plane-heavy': '/a380.png'
-            };
-
-            for (const [id, url] of Object.entries(icons)) {
-                try {
-                    const image = await map.loadImage(url);
-                    if (!map.hasImage(id)) {
-                        map.addImage(id, image.data);
-                    }
-                } catch (e) {
-                    console.error(`Failed to load icon: ${id}`, e);
-                }
-            }
-
-            // Add the source and layer for live flights. This layer will be empty initially.
-            // It's added here so we can guarantee it's drawn *under* the airport dots.
-            map.addSource('live-flights-source', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-            });
-
-            map.addLayer({
-                id: 'live-flights-layer',
-                type: 'symbol',
-                source: 'live-flights-source',
-                layout: {
-                    'icon-image': ['get', 'iconId'], // Get the icon ID from the GeoJSON properties
-                    'icon-size': 1.0,
-                    'icon-rotate': ['get', 'heading'],
-                    'icon-rotation-alignment': 'map',
-                    'icon-allow-overlap': true,
-                    'icon-ignore-placement': true
-                }
-            });
-
+        map.on('load', () => {
             setupEventListeners();
             updateAirports();
             updateNavaids();
@@ -303,6 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
         map.on('moveend', handleMapMoveEnd);
 
         function handleMapMoveEnd() {
+            // No direct equivalent for checkAirportDetailsVisibility etc.
+            // Visibility is now handled by zoom levels in layer styles or by re-rendering.
             adjustAllLabelPositions();
 
             clearTimeout(airportUpdateTimeout);
@@ -314,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(navaidRequestTimeout);
             navaidRequestTimeout = setTimeout(updateNavaids, 500);
         }
+
 
         map.on('mousemove', (e) => {
             if (isDrawingEnabled || !mslPopup) return;
@@ -344,49 +312,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 createMainPanel();
             });
         }
-        
-        // --- CLICK HANDLER FOR FLIGHTS (NEW) ---
-        map.on('click', 'live-flights-layer', (e) => {
-            if (e.features.length === 0) return;
-            const properties = e.features[0].properties;
-
-            // Close the previous popup if it exists
-            if (activeFlightPopup) {
-                activeFlightPopup.remove();
-            }
-
-            const popupContent = `
-                <div class="flight-popup-container">
-                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                        <strong class="flight-popup-callsign">${properties.callsign}</strong>
-                        <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${properties.aircraftName || 'N/A'}</span>
-                    </div>
-                    <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
-                        <div><strong>Alt:</strong> ${properties.altitudeText}</div>
-                        <div><strong>Spd:</strong> ${properties.speedText}</div>
-                        <div><strong>User:</strong> ${properties.username || 'N/A'}</div>
-                    </div>
-                    <div style="margin-top: 8px;">
-                        <button class="cta-button view-fpl-btn"
-                                style="padding: 5px 10px; font-size: 12px; width: 100%;"
-                                data-flight-id="${properties.flightId}"
-                                data-session-id="${properties.sessionId}"
-                                data-callsign="${properties.callsign}"
-                                data-altitude="${properties.altitudeText}"
-                                data-speed="${properties.speedText}">View FPL</button>
-                    </div>
-                </div>
-            `;
-
-            activeFlightPopup = new maptilersdk.Popup({ offset: 25, className: 'custom-popup' })
-                .setLngLat(e.features[0].geometry.coordinates)
-                .setHTML(popupContent)
-                .addTo(map);
-        });
-
-        map.on('mouseenter', 'live-flights-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', 'live-flights-layer', () => { map.getCanvas().style.cursor = ''; });
-
 
         // DOM event listeners remain the same
         document.addEventListener('mousemove', resetInactivityTimer, false);
@@ -824,17 +749,7 @@ document.addEventListener('DOMContentLoaded', () => {
             pulseAnimationId = null;
         }
 
-        // Clear live data from the map layer
-        const flightSource = map.getSource('live-flights-source');
-        if (flightSource) {
-            flightSource.setData({ type: 'FeatureCollection', features: [] });
-        }
-        
-        if (activeFlightPopup) {
-            activeFlightPopup.remove();
-            activeFlightPopup = null;
-        }
-
+        Object.values(liveFlightMarkers).forEach(marker => marker.remove());
         selectedFlightId = null;
         atisCache = {};
         activeAtisStationIcaos.clear();
@@ -867,56 +782,98 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function getIconId(aircraftName, isSelected) {
-        if (isSelected) {
-            return 'plane-selected';
-        }
-        const lowerCaseName = (aircraftName || "").toLowerCase();
-        if (lowerCaseName.includes('a380') || lowerCaseName.includes('747')) {
-            return 'plane-heavy';
-        }
-        return 'plane-default';
-    }
+   // app.js
 
-    function updateFlightMarkers(flights, sessionId) {
-        const flightSource = map.getSource('live-flights-source');
-        if (!flightSource) return;
-    
-        const flightFeatures = flights.map(flight => {
-            const lat = Number(flight.latitude);
-            const lon = Number(flight.longitude);
-            if (isNaN(lat) || isNaN(lon)) {
-                return null;
-            }
-    
-            const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
-            const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
-    
-            return {
-                type: 'Feature',
-                geometry: {
-                    type: 'Point',
-                    coordinates: [lon, lat]
-                },
-                properties: {
-                    flightId: flight.flightId,
-                    sessionId: sessionId,
-                    heading: flight.heading,
-                    callsign: flight.callsign || 'N/A',
-                    altitudeText: altitude !== null ? `${altitude.toLocaleString()} ft` : '---',
-                    speedText: speed !== null ? `${speed} kts GS` : '---',
-                    username: flight.username || 'N/A',
-                    aircraftName: flight.aircraftName || 'N/A',
-                    iconId: getIconId(flight.aircraftName, flight.flightId === selectedFlightId)
+function updateFlightMarkers(flights, sessionId) {
+    const bounds = map.getBounds();
+    const visibleFlights = flights.filter(flight => {
+        const lat = Number(flight.latitude);
+        const lon = Number(flight.longitude);
+        if (isNaN(lat) || isNaN(lon)) {
+            return false;
+        }
+        return bounds.contains([lon, lat]);
+    });
+
+    const visibleFlightIds = new Set(visibleFlights.map(f => f.flightId));
+
+    Object.keys(liveFlightMarkers).forEach(flightId => {
+        if (!visibleFlightIds.has(flightId)) {
+            liveFlightMarkers[flightId].remove();
+            delete liveFlightMarkers[flightId];
+        }
+    });
+
+    visibleFlights.forEach(flight => {
+        // --- THIS IS THE DEBUGGING LINE TO ADD ---
+        // console.log('Flight Data:', flight); 
+        // -----------------------------------------
+
+        const lat = Number(flight.latitude);
+        const lon = Number(flight.longitude);
+        const heading = flight.heading;
+        const callsign = flight.callsign || 'N/A';
+        const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
+        const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
+        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
+        const speedText = speed !== null ? `${speed} kts GS` : '---';
+        const isSelected = flight.flightId === selectedFlightId;
+
+        const iconPath = getAircraftIconPath(flight.aircraftName, isSelected);
+        const el = document.createElement('div');
+        el.className = 'custom-map-marker';
+        el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
+
+        const popupContent = `
+            <div class="flight-popup-container" style="line-height: 1.4; background-color: #2a2a35; color: #f0f0f0; border: 1px solid #4a4a55;">
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <strong class="flight-popup-callsign">${callsign}</strong>
+                    <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
+                </div>
+                <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
+                    <div><strong>Alt:</strong> ${altitudeText}</div>
+                    <div><strong>Spd:</strong> ${speedText}</div>
+                    <div><strong>User:</strong> ${flight.username || 'N/A'}</div>
+                </div>
+                ${
+                    flight.flightId
+                    ? `<div style="margin-top: 8px;">
+                        <button class="cta-button view-fpl-btn"
+                                style="padding: 5px 10px; font-size: 12px; width: 100%;"
+                                data-flight-id="${flight.flightId}"
+                                data-session-id="${sessionId}"
+                                data-callsign="${callsign}"
+                                data-altitude="${altitudeText}"
+                                data-speed="${speedText}">View FPL</button>
+                    </div>`
+                    : ''
                 }
-            };
-        }).filter(Boolean); // Filter out any null entries from failed parsing
-    
-        flightSource.setData({
-            type: 'FeatureCollection',
-            features: flightFeatures
-        });
-    }
+            </div>
+        `;
+
+        if (liveFlightMarkers[flight.flightId]) {
+            const marker = liveFlightMarkers[flight.flightId];
+            marker.setLngLat([lon, lat]);
+            const iconElement = marker.getElement().getElementsByTagName('img')[0];
+            if (iconElement) {
+                iconElement.style.transform = `rotate(${heading}deg)`;
+                const newIconPath = getAircraftIconPath(flight.aircraftName, isSelected);
+                if (iconElement.src.endsWith(newIconPath) === false) {
+                   iconElement.src = newIconPath;
+                }
+            }
+            if (marker.getPopup().isOpen()) {
+                marker.getPopup().setHTML(popupContent);
+            }
+        } else {
+            const marker = new maptilersdk.Marker({ element: el })
+                .setLngLat([lon, lat])
+                .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
+                .addTo(map);
+            liveFlightMarkers[flight.flightId] = marker;
+        }
+    });
+}
 
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
     // Clear previous FPL
@@ -925,21 +882,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (map.getLayer('flight-plan-waypoints')) map.removeLayer('flight-plan-waypoints');
     if (map.getSource('flight-plan-waypoints')) map.removeSource('flight-plan-waypoints');
 
-    const oldSelectedId = selectedFlightId;
     selectedFlightId = flightId;
-    
-    // Update the icon for the newly selected flight without a full data refetch
     if (isLiveModeActive) {
-        const flightSource = map.getSource('live-flights-source');
-        if (flightSource && flightSource._data) {
-            const features = flightSource._data.features.map(f => {
-                const newProps = { ...f.properties };
-                const isSelected = newProps.flightId === selectedFlightId;
-                newProps.iconId = getIconId(newProps.aircraftName, isSelected);
-                return { ...f, properties: newProps };
-            });
-            flightSource.setData({ type: 'FeatureCollection', features: features });
-        }
+        fetchAndDisplayData(sessionId);
     }
 
     try {
@@ -950,10 +895,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
         const allWaypoints = [];
         
+        // --- CORRECTED LOGIC ---
+        // This new logic correctly processes nested waypoints.
         flightPlanItems.forEach(item => {
+            // If an item has children, it's a procedure (like a SID/STAR).
+            // We should only add the children waypoints to the route.
             if (item.children && item.children.length > 0) {
                 allWaypoints.push(...item.children.filter(c => c.location));
             }
+            // If it has no children but has a location, it's a standalone waypoint.
             else if (item.location) {
                 allWaypoints.push(item);
             }
@@ -1321,6 +1271,7 @@ document.addEventListener('DOMContentLoaded', () => {
 				type: 'symbol',
 				source: sourceId,
 				layout: {
+					// 'icon-image': 'triangle-11', // Using text instead
 					'text-field': ['get', 'name'],
 					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
 					'text-size': 11,
@@ -1339,116 +1290,123 @@ document.addEventListener('DOMContentLoaded', () => {
 	}
 
     function updateAirports() {
-        if (activeAirportIcao) {
-            // If an airport is selected, hide the general airport dots and pulse layer.
-            if (map.getLayer('airport-dots-layer')) map.setLayoutProperty('airport-dots-layer', 'visibility', 'none');
-            if (map.getLayer('airport-dots-pulse-layer')) map.setLayoutProperty('airport-dots-pulse-layer', 'visibility', 'none');
-            return;
-        }
-    
-        const zoom = map.getZoom();
-        if (!airportsDataCache) return;
-    
-        const mainPanel = document.getElementById('main-panel');
-        if (!mainPanel) return;
-        const selectedTypes = Array.from(mainPanel.querySelectorAll('#airport-filters input:checked')).map(input => input.value);
-        const bounds = map.getBounds();
-    
-        const airportFeatures = airportsDataCache.filter(airport => {
-            if (!selectedTypes.includes(airport.type)) return false;
-            const lat = parseFloat(airport.latitude_deg);
-            const lon = parseFloat(airport.longitude_deg);
-            if (isNaN(lat) || isNaN(lon)) return false;
-    
-            const sw = bounds.getSouthWest();
-            const ne = bounds.getNorthEast();
-    
-            if (lat < sw.lat || lat > ne.lat || lon < sw.lng || lon > ne.lng) return false;
-    
-            if (zoom < 6) return airport.type === 'large_airport';
-            if (zoom < 8) return ['large_airport', 'medium_airport'].includes(airport.type);
-            return true;
-        }).map(airport => ({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [parseFloat(airport.longitude_deg), parseFloat(airport.latitude_deg)]
-            },
-            properties: {
-                icao: airport.ident,
-                type: airport.type,
-                // Add a property to track if ATC is active, used for the pulse filter
-                hasActiveAtc: isLiveModeActive && activeAtcAirportIcaos.has(airport.ident)
-            }
-        }));
-    
-        const sourceId = 'airport-dots-source';
-        const layerId = 'airport-dots-layer';
-        const pulseLayerId = 'airport-dots-pulse-layer';
-    
-        if (map.getSource(sourceId)) {
-            map.getSource(sourceId).setData({ type: 'FeatureCollection', features: airportFeatures });
-        } else {
-            map.addSource(sourceId, {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: airportFeatures }
-            });
-    
-            // Add the pulse layer first, so it appears underneath the main dot
-            map.addLayer({
-                id: pulseLayerId,
-                type: 'circle',
-                source: sourceId,
-                filter: ['==', ['get', 'hasActiveAtc'], true], // Only show for active airports
-                paint: {
-                    'circle-radius': 10, // This will be animated
-                    'circle-color': '#EABFFF', // Accent Purple
-                    'circle-opacity': 0.5, // This will be animated
-                    'circle-stroke-width': 2,
-                    'circle-stroke-color': '#FFFFFF'
-                }
-            });
-    
-            // Add the main airport dot layer
-            map.addLayer({
-                id: layerId,
-                type: 'circle',
-                source: sourceId,
-                paint: {
-                    'circle-radius': ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3],
-                    'circle-color': [
-                        'case',
-                        // If the airport has active ATC, color it dark blue
-                        ['==', ['get', 'hasActiveAtc'], true],
-                        '#4169E1', // RoyalBlue for active airports
-                        // Otherwise, use the standard color based on type
-                        ['match', ['get', 'type'],
-                            'large_airport', '#FF0000',      // Red for Bravo
-                            'medium_airport', '#FFA500',     // Orange for Charlie
-                            'small_airport', '#2980b9',      // Light Blue for Small
-                            '#95a5a6'                        // Default
-                        ]
-                    ],
-                    'circle-stroke-color': '#000',
-                    'circle-stroke-width': 1
-                }
-            });
-    
-            map.on('click', layerId, (e) => {
-                // Prevent airport click if a flight was also clicked in the same event
-                if (e.defaultPrevented) return;
-                const icao = e.features[0].properties.icao;
-                displayAirportDetails(icao);
-            });
-    
-            map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
-            map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
-        }
-    
-        // Ensure layers are visible
-        if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
-        if (map.getLayer(pulseLayerId)) map.setLayoutProperty(pulseLayerId, 'visibility', 'visible');
+    if (activeAirportIcao) {
+        // If an airport is selected, hide the general airport dots and pulse layer.
+        if (map.getLayer('airport-dots-layer')) map.setLayoutProperty('airport-dots-layer', 'visibility', 'none');
+        if (map.getLayer('airport-dots-pulse-layer')) map.setLayoutProperty('airport-dots-pulse-layer', 'visibility', 'none');
+        return;
     }
+
+    const zoom = map.getZoom();
+    if (!airportsDataCache) return;
+
+    const mainPanel = document.getElementById('main-panel');
+    if (!mainPanel) return;
+    const selectedTypes = Array.from(mainPanel.querySelectorAll('#airport-filters input:checked')).map(input => input.value);
+    const bounds = map.getBounds();
+
+    const airportFeatures = airportsDataCache.filter(airport => {
+        if (!selectedTypes.includes(airport.type)) return false;
+        const lat = parseFloat(airport.latitude_deg);
+        const lon = parseFloat(airport.longitude_deg);
+        if (isNaN(lat) || isNaN(lon)) return false;
+
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+
+        if (lat < sw.lat || lat > ne.lat || lon < sw.lng || lon > ne.lng) return false;
+
+        if (zoom < 6) return airport.type === 'large_airport';
+        if (zoom < 8) return ['large_airport', 'medium_airport'].includes(airport.type);
+        return true;
+    }).map(airport => ({
+        type: 'Feature',
+        geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(airport.longitude_deg), parseFloat(airport.latitude_deg)]
+        },
+        properties: {
+            icao: airport.ident,
+            type: airport.type,
+            // Add a property to track if ATC is active, used for the pulse filter
+            hasActiveAtc: isLiveModeActive && activeAtcAirportIcaos.has(airport.ident)
+        }
+    }));
+
+    const sourceId = 'airport-dots-source';
+    const layerId = 'airport-dots-layer';
+    const pulseLayerId = 'airport-dots-pulse-layer';
+
+    if (map.getSource(sourceId)) {
+        map.getSource(sourceId).setData({ type: 'FeatureCollection', features: airportFeatures });
+    } else {
+        map.addSource(sourceId, {
+            type: 'geojson',
+            data: { type: 'FeatureCollection', features: airportFeatures }
+        });
+
+        // Add the pulse layer first, so it appears underneath the main dot
+        map.addLayer({
+            id: pulseLayerId,
+            type: 'circle',
+            source: sourceId,
+            filter: ['==', ['get', 'hasActiveAtc'], true], // Only show for active airports
+            paint: {
+                'circle-radius': 10, // This will be animated
+                'circle-color': '#EABFFF', // Accent Purple
+                'circle-opacity': 0.5, // This will be animated
+                'circle-stroke-width': 2,
+                'circle-stroke-color': '#FFFFFF'
+            }
+        });
+
+        // Add the main airport dot layer
+        map.addLayer({
+            id: layerId,
+            type: 'circle',
+            source: sourceId,
+            paint: {
+                'circle-radius': ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3],
+                // --- MODIFICATION START ---
+                // This 'case' expression checks for active ATC first.
+                // If an airport has active ATC, its color is set to a dark blue.
+                // Otherwise, it falls back to the color based on airport type.
+                'circle-color': [
+                    'case',
+                    ['==', ['get', 'hasActiveAtc'], true],
+                    '#4169E1', // Royal Blue for active ATC
+                    ['match', ['get', 'type'],
+                        'large_airport', '#FF0000',     // Bravo
+                        'medium_airport', '#FFA500',    // Charlie
+                        'small_airport', '#2980b9',     // Small/Other
+                        '#95a5a6'                       // Default fallback
+                    ]
+                ],
+                // --- MODIFICATION END ---
+                'circle-stroke-color': '#000',
+                'circle-stroke-width': 1
+            }
+        });
+
+        // Technical Note on Layering: The plane icons (maptilersdk.Marker) are HTML elements
+        // that are rendered on top of the map canvas. The airport dots are GeoJSON layers
+        // drawn directly on the canvas. Because of this, the HTML markers for planes will
+        // always appear on top of the canvas-drawn airport dots. Changing this behavior
+        // would require refactoring the flight markers to be a GeoJSON symbol layer.
+
+        map.on('click', layerId, (e) => {
+            const icao = e.features[0].properties.icao;
+            displayAirportDetails(icao);
+        });
+
+        map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+        map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+    }
+
+    // Ensure layers are visible
+    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
+    if (map.getLayer(pulseLayerId)) map.setLayoutProperty(pulseLayerId, 'visibility', 'visible');
+}
     
     /**
      * Animates the pulsating halo for active airports.
@@ -1890,6 +1848,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- HELPER FUNCTIONS (Updated for MapTiler / Turf.js) ---
+
+    /**
+     * Determines the appropriate icon path for an aircraft based on its type.
+     * @param {string} aircraftName - The name of the aircraft (e.g., "Airbus A380-800").
+     * @param {boolean} isSelected - Whether the aircraft is currently selected.
+     * @returns {string} The path to the icon image.
+     */
+    function getAircraftIconPath(aircraftName, isSelected) {
+        // If the flight is selected, always use the highlight icon to show its state.
+        if (isSelected) {
+            return '/whiteplane.png';
+        }
+
+        // Use a case-insensitive search for robust matching.
+        const lowerCaseName = (aircraftName || "").toLowerCase();
+
+        // --- Aircraft to Image Mapping ---
+        // Add more mappings here as you add more aircraft images.
+        const aircraftMap = {
+            'a380': '/a380.png',
+            '747': '/a380.png', 
+        };
+
+        // Find the first matching keyword in the aircraft name.
+        for (const key in aircraftMap) {
+            if (lowerCaseName.includes(key)) {
+                return aircraftMap[key]; // Return the custom image path.
+            }
+        }
+
+        // If no specific type is found, return the default icon.
+        return '/plane.png';
+    }
 
     function calculateHeading(start, end) {
         // Turf.js calculates bearing from north, which is what we need.
