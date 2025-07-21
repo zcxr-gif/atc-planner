@@ -1766,7 +1766,7 @@ function updateFlightMarkers(flights, sessionId) {
         // Add more mappings here as you add more aircraft images.
         const aircraftMap = {
             'a380': '/a380.png',
-            '747': '/747.png', 
+            '747': '/a380.png', 
         };
 
         // Find the first matching keyword in the aircraft name.
