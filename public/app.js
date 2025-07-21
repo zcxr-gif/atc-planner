@@ -1766,11 +1766,7 @@ function updateFlightMarkers(flights, sessionId) {
         // Add more mappings here as you add more aircraft images.
         const aircraftMap = {
             'a380': '/a380.png',
-            'a320': '/a320.png', // Example: for Airbus A320
-            '737': '/b737.png',   // Example: for Boeing 737
-            '777': '/b777.png',   // Example: for Boeing 777
-            '787': '/b787.png',   // Example: for Boeing 787
-            'dc-10': '/dc10.png'  // Example: for DC-10
+            '747': '/747.png', 
         };
 
         // Find the first matching keyword in the aircraft name.
