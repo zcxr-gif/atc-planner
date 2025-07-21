@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Instead of FeatureGroups, we'll manage layers and sources directly
     const layerAndSourceIds = new Set();
     const liveFlightMarkers = {};
+    const atcAirportMarkers = {};
     const planLabels = {};
 
     const mslPopup = document.getElementById('msl-popup');
@@ -732,8 +733,13 @@ document.addEventListener('DOMContentLoaded', () => {
         clearInterval(liveUpdateInterval);
         clearTimeout(inactivityTimer);
         isLiveModeActive = false;
+
         Object.values(liveFlightMarkers).forEach(marker => marker.remove());
-        // liveFlightMarkers = {};
+        Object.keys(liveFlightMarkers).forEach(key => delete liveFlightMarkers[key]);
+
+        Object.values(atcAirportMarkers).forEach(marker => marker.remove());
+        Object.keys(atcAirportMarkers).forEach(key => delete atcAirportMarkers[key]);
+
         selectedFlightId = null;
         atisCache = {};
         activeAtisStationIcaos.clear();
@@ -749,7 +755,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateFlightMarkers(flightsData.result, sessionId);
             }
 
-            await updateAtcList(sessionId);
+            const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
+            const atcData = await atcResponse.json();
+            const atcByAirport = processAtcData(atcData);
+            
+            updateAtcList(atcByAirport);
+            updateAtcMapMarkers(atcByAirport);
 
         } catch (error) {
             console.error("Failed to fetch live data:", error);
@@ -761,8 +772,6 @@ document.addEventListener('DOMContentLoaded', () => {
             stopLiveUpdates();
         }
     }
-
-   // app.js
 
 function updateFlightMarkers(flights, sessionId) {
     const bounds = map.getBounds();
@@ -785,10 +794,6 @@ function updateFlightMarkers(flights, sessionId) {
     });
 
     visibleFlights.forEach(flight => {
-        // --- THIS IS THE DEBUGGING LINE TO ADD ---
-        console.log('Flight Data:', flight); 
-        // -----------------------------------------
-
         const lat = Number(flight.latitude);
         const lon = Number(flight.longitude);
         const heading = flight.heading;
@@ -805,30 +810,33 @@ function updateFlightMarkers(flights, sessionId) {
         el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
         const popupContent = `
-            <div class="flight-popup-container" style="line-height: 1.4; background-color: #2a2a35; color: #f0f0f0; border: 1px solid #4a4a55;">
-                <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                    <strong class="flight-popup-callsign">${callsign}</strong>
-                    <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
-                </div>
-                <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
-                    <div><strong>Alt:</strong> ${altitudeText}</div>
-                    <div><strong>Spd:</strong> ${speedText}</div>
-                    <div><strong>User:</strong> ${flight.username || 'N/A'}</div>
-                </div>
-                ${
-                    flight.flightId
-                    ? `<div style="margin-top: 8px;">
-                        <button class="cta-button view-fpl-btn"
-                                style="padding: 5px 10px; font-size: 12px; width: 100%;"
-                                data-flight-id="${flight.flightId}"
-                                data-session-id="${sessionId}"
-                                data-callsign="${callsign}"
-                                data-altitude="${altitudeText}"
-                                data-speed="${speedText}">View FPL</button>
-                    </div>`
-                    : ''
-                }
+            <div class="flight-popup-header">
+                <span class="flight-popup-callsign">${callsign}</span>
+                <span class="flight-popup-aircraft">${flight.aircraftName || 'N/A'}</span>
             </div>
+            <div class="flight-popup-body">
+                <div class="flight-popup-row">
+                    <span class="label">Altitude:</span>
+                    <span class="value">${altitudeText}</span>
+                </div>
+                <div class="flight-popup-row">
+                    <span class="label">Speed:</span>
+                    <span class="value">${speedText}</span>
+                </div>
+                 <div class="flight-popup-row">
+                    <span class="label">User:</span>
+                    <span class="value">${flight.username || 'N/A'}</span>
+                </div>
+            </div>
+            ${ flight.flightId ? `
+            <div class="flight-popup-footer">
+                <button class="cta-button view-fpl-btn"
+                        data-flight-id="${flight.flightId}"
+                        data-session-id="${sessionId}"
+                        data-callsign="${callsign}"
+                        data-altitude="${altitudeText}"
+                        data-speed="${speedText}">View FPL</button>
+            </div>` : ''}
         `;
 
         if (liveFlightMarkers[flight.flightId]) {
@@ -842,9 +850,8 @@ function updateFlightMarkers(flights, sessionId) {
                    iconElement.src = newIconPath;
                 }
             }
-            if (marker.getPopup().isOpen()) {
-                marker.getPopup().setHTML(popupContent);
-            }
+             // Always update popup content in case it's open and data changes
+            marker.getPopup().setHTML(popupContent);
         } else {
             const marker = new maptilersdk.Marker({ element: el })
                 .setLngLat([lon, lat])
@@ -875,15 +882,10 @@ function updateFlightMarkers(flights, sessionId) {
         const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
         const allWaypoints = [];
         
-        // --- CORRECTED LOGIC ---
-        // This new logic correctly processes nested waypoints.
         flightPlanItems.forEach(item => {
-            // If an item has children, it's a procedure (like a SID/STAR).
-            // We should only add the children waypoints to the route.
             if (item.children && item.children.length > 0) {
                 allWaypoints.push(...item.children.filter(c => c.location));
             }
-            // If it has no children but has a location, it's a standalone waypoint.
             else if (item.location) {
                 allWaypoints.push(item);
             }
@@ -943,11 +945,54 @@ function updateFlightMarkers(flights, sessionId) {
         alert(`Could not display the flight plan for ${callsign}.`);
     }
 }
+    
+    function processAtcData(data) {
+        const frequencyTypeMap = {
+            0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance',
+            4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS'
+        };
 
-    async function updateAtcList(sessionId) {
+        activeAtisStationIcaos.clear();
+        if (data.result) {
+            data.result.forEach(facility => {
+                if (facility.type === 7 && facility.airportName) { // 7 is ATIS
+                    activeAtisStationIcaos.add(facility.airportName);
+                }
+            });
+        }
+
+        if (!data.result || data.errorCode !== 0) {
+            if (data.errorCode !== 0) console.error("Received an API error for ATC data:", data);
+            return {};
+        }
+
+        const atcByAirport = data.result
+            .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type) && facility.airportName)
+            .reduce((acc, facility) => {
+                const icao = facility.airportName;
+                if (!acc[icao]) {
+                    const airportInfo = airportsDataCache ? airportsDataCache.find(a => a.ident === icao) : null;
+                    if (airportInfo) {
+                        acc[icao] = {
+                            name: airportInfo.name || facility.airportName,
+                            frequencies: [],
+                            lat: parseFloat(airportInfo.latitude_deg),
+                            lon: parseFloat(airportInfo.longitude_deg)
+                        };
+                    }
+                }
+                if (acc[icao]) {
+                    acc[icao].frequencies.push(facility);
+                }
+                return acc;
+            }, {});
+            
+        return atcByAirport;
+    }
+
+    function updateAtcList(atcByAirport) {
         const atcListElement = document.getElementById('atc-list');
         if (!atcListElement) {
-            console.error("ATC list container element ('atc-list') not found.");
             return;
         }
 
@@ -956,67 +1001,100 @@ function updateFlightMarkers(flights, sessionId) {
             4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS'
         };
 
-        try {
-            const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
-            const data = await response.json();
+        const airportIcaos = Object.keys(atcByAirport);
+        if (airportIcaos.length === 0) {
+            atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+            return;
+        }
 
-            // Clear and repopulate the set of active ATIS stations.
-            activeAtisStationIcaos.clear();
-            if (data.result) {
-                data.result.forEach(facility => {
-                    if (facility.type === 7 && facility.airportName) {
-                        activeAtisStationIcaos.add(facility.airportName);
-                    }
-                });
-            }
-
-            if (!response.ok || data.errorCode !== 0 || !data.result) {
-                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-                if (data.errorCode !== 0) console.error("Received an API error for ATC data:", data);
-                return;
-            }
-
-            const atcByAirport = data.result
-                .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
-                .reduce((acc, facility) => {
-                    const icao = facility.airportName || "Center";
-                    if (!acc[icao]) {
-                        acc[icao] = { name: facility.airportName || "Center Control", frequencies: [] };
-                    }
-                    acc[icao].frequencies.push(facility);
-                    return acc;
-                }, {});
-
-            const airportIcaos = Object.keys(atcByAirport);
-            if (airportIcaos.length === 0) {
-                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-                return;
-            }
-
-            let htmlContent = airportIcaos.sort().map(icao => {
-                const airportData = atcByAirport[icao];
-                airportData.frequencies.sort((a, b) => a.type - b.type);
-                const frequencyItems = airportData.frequencies.map(facility => {
-                    const typeName = frequencyTypeMap[facility.type];
-                    const controller = facility.username || "N/A";
-                    return `<li class="atc-frequency">
-                              <span class="atc-type">${typeName}</span>
-                              <span class="atc-controller">${controller}</span>
-                            </li>`;
-                }).join('');
-                return `<div class="atc-item">
-                          <div class="atc-airport-header">
-                            <strong>${icao}</strong>
-                            <span>${(icao !== "Center" && airportData.name) ? ` - ${airportData.name}` : ''}</span>
-                          </div>
-                          <ul class="atc-frequency-list">${frequencyItems}</ul>
-                        </div>`;
+        let htmlContent = airportIcaos.sort().map(icao => {
+            const airportData = atcByAirport[icao];
+            airportData.frequencies.sort((a, b) => a.type - b.type);
+            const frequencyItems = airportData.frequencies.map(facility => {
+                const typeName = frequencyTypeMap[facility.type];
+                const controller = facility.username || "N/A";
+                return `<li class="atc-frequency">
+                            <span class="atc-type">${typeName}</span>
+                            <span class="atc-controller">${controller}</span>
+                        </li>`;
             }).join('');
-            atcListElement.innerHTML = htmlContent;
+            return `<div class="atc-item">
+                        <div class="atc-airport-header">
+                        <strong>${icao}</strong>
+                        <span>${(icao !== "Center" && airportData.name) ? ` - ${airportData.name.split(',')[0]}` : ''}</span>
+                        </div>
+                        <ul class="atc-frequency-list">${frequencyItems}</ul>
+                    </div>`;
+        }).join('');
+        atcListElement.innerHTML = htmlContent;
+    }
 
-        } catch (error) {
-            console.error("Failed to fetch or render ATC data:", error);
-            atcListElement.innerHTML = '<div class="atc-item" style="color: var(--danger-color);">Error loading ATC data.</div>';
+    async function updateAtcMapMarkers(atcByAirport) {
+        if (!airportsDataCache) await getAirports();
+
+        const activeIcaos = new Set(Object.keys(atcByAirport));
+
+        // Remove markers for airports that are no longer active
+        Object.keys(atcAirportMarkers).forEach(icao => {
+            if (!activeIcaos.has(icao)) {
+                atcAirportMarkers[icao].remove();
+                delete atcAirportMarkers[icao];
+            }
+        });
+
+        const frequencyTypeMap = {
+            0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance',
+            4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS'
+        };
+
+        for (const icao of activeIcaos) {
+            const airportData = atcByAirport[icao];
+            if (!airportData || isNaN(airportData.lat) || isNaN(airportData.lon)) {
+                continue; // Skip if data is incomplete or has no coordinates
+            }
+
+            // Sort frequencies and create popup content
+            airportData.frequencies.sort((a, b) => a.type - b.type);
+            const frequencyItems = airportData.frequencies.map(facility => {
+                 const typeName = frequencyTypeMap[facility.type] || 'Unknown';
+                 const freq = (facility.frequency / 1_000_000).toFixed(3);
+                 return `<div class="atc-popup-row">
+                           <span class="atc-popup-type">${typeName}</span>
+                           <span class="atc-popup-freq">${freq}</span>
+                         </div>`;
+            }).join('');
+
+            const popupHTML = `
+                <div class="atc-popup-header">
+                    <strong class="atc-popup-icao">${icao}</strong>
+                    <span class="atc-popup-name">${(airportData.name || '').split(',')[0]}</span>
+                </div>
+                <div class="atc-popup-body">
+                    ${frequencyItems}
+                </div>`;
+
+            if (atcAirportMarkers[icao]) {
+                // Marker exists, just update its popup content
+                atcAirportMarkers[icao].getPopup().setHTML(popupHTML);
+            } else {
+                // Create a new marker if it doesn't exist
+                const el = document.createElement('div');
+                el.className = 'atc-airport-marker';
+                el.title = `${icao} - Active ATC`;
+
+                const popup = new maptilersdk.Popup({
+                    offset: 25,
+                    closeButton: false,
+                    className: 'custom-popup atc-popup'
+                }).setHTML(popupHTML);
+
+                const marker = new maptilersdk.Marker({ element: el })
+                    .setLngLat([airportData.lon, airportData.lat])
+                    .setPopup(popup)
+                    .addTo(map);
+
+                atcAirportMarkers[icao] = marker;
+            }
         }
     }
 
