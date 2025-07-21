@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 2. Fetch elevation data for the entire grid in a single API call.
-            const response = await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${latitudes.join(',')}&longitude=${longitudes.join(',')}`);
+            const response = await fetch(`/.netlify/functions/elevation?latitude=${latitudes.join(',')}&longitude=${longitudes.join(',')}`);
             if (!response.ok) throw new Error('Failed to fetch elevation data');
             const data = await response.json();
             const elevations = data.elevation;
