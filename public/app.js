@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
  */
 async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
     // The 'dataset' variable is now used to build the URL dynamically.
-    const API_ENDPOINT = `http://141.148.20.78:5000/v1/${dataset}?locations=${latlng.lat},${latlng.lng}`;
+    const API_ENDPOINT = `/.netlify/functions/elevation?dataset=${dataset}&locations=${latlng.lat},${latlng.lng}`;
 
     try {
         const response = await fetch(API_ENDPOINT);

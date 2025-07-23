@@ -1,39 +1,40 @@
-// You may need to install node-fetch: npm install node-fetch
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+// File location: netlify/functions/elevation.js
 
-exports.handler = async function(event) {
-    // Extract the latitude and longitude query parameters from the request URL
-    const { latitude, longitude } = event.queryStringParameters;
+// Replace with your server's actual public IP address
+const ORACLE_IP = '141.148.20.78';
 
-    // Check if the required parameters are present
-    if (!latitude || !longitude) {
+exports.handler = async function(event, context) {
+    // Get the 'locations' and 'dataset' parameters from the request URL
+    const locations = event.queryStringParameters.locations;
+    const dataset = event.queryStringParameters.dataset || 'srtm30m'; // Default to srtm30m
+
+    if (!locations) {
         return {
             statusCode: 400,
-            body: JSON.stringify({ error: 'Missing latitude or longitude parameters' }),
+            body: JSON.stringify({ error: "Missing 'locations' parameter." }),
         };
     }
 
-    // Construct the URL for the external Open-Meteo API
-    const API_ENDPOINT = `https://api.open-meteo.com/v1/elevation?latitude=${latitude}&longitude=${longitude}`;
+    // Construct the URL to your private server
+    const targetURL = `http://${ORACLE_IP}:5000/v1/${dataset}?locations=${locations}`;
 
     try {
-        // Forward the request to the Open-Meteo API
-        const response = await fetch(API_ENDPOINT);
-        if (!response.ok) {
-            throw new Error(`API responded with status: ${response.status}`);
-        }
+        // Fetch data from your Oracle server
+        const response = await fetch(targetURL);
         const data = await response.json();
 
-        // Return the data from the API to the client
+        // Return the data back to your web app
         return {
             statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data),
         };
+
     } catch (error) {
-        console.error("Elevation Proxy Error:", error);
+        console.error("Error fetching from Oracle server:", error);
         return {
             statusCode: 502, // Bad Gateway
-            body: JSON.stringify({ error: 'Failed to fetch elevation data from the provider.' }),
+            body: JSON.stringify({ error: "Failed to connect to the elevation service." }),
         };
     }
 };
