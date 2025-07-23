@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const liveFlightMarkers = {};
     const planLabels = {};
 
+    const mslPopup = document.getElementById('msl-popup');
     const reopenButton = document.getElementById('reopen-main-panel');
 
     let isDrawingEnabled = false;
@@ -92,6 +93,44 @@ document.addEventListener('DOMContentLoaded', () => {
         airportsDataCache = data;
         return data;
     }
+	
+	// app.js
+
+/**
+ * Fetches elevation from your self-hosted OpenTopoData API.
+ * @param {object} latlng - An object with lat and lng properties.
+ * @returns {Promise<number|null>} The elevation in meters, or null if an error occurs.
+ */
+/**
+ * Fetches elevation from your self-hosted OpenTopoData API.
+ * @param {object} latlng - An object with lat and lng properties.
+ * @param {string} [dataset='srtm30m'] - The dataset to query (e.g., 'srtm30m', 'srtm90m'). Defaults to 'srtm30m'.
+ * @returns {Promise<number|null>} The elevation in meters, or null if an error occurs.
+ */
+async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
+    // The 'dataset' variable is now used to build the URL dynamically.
+    const API_ENDPOINT = `http://141.148.20.78:5000/v1/${dataset}?locations=${latlng.lat},${latlng.lng}`;
+
+    try {
+        const response = await fetch(API_ENDPOINT);
+        if (!response.ok) {
+            console.error(`Self-hosted elevation API returned an error for dataset ${dataset}:`, response.status);
+            return null;
+        }
+
+        const data = await response.json();
+
+        if (data.results && data.results.length > 0 && data.results[0].elevation !== null) {
+            return data.results[0].elevation;
+        } else {
+            console.warn(`API did not return elevation for this location from dataset ${dataset}.`, data);
+            return null;
+        }
+    } catch (error) {
+        console.error(`Failed to connect to self-hosted elevation API for dataset ${dataset}:`, error);
+        return null;
+    }
+}
 
     async function getRunways() {
         if (runwaysDataCache) return runwaysDataCache;
@@ -146,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("World Magnetic Model loaded (from geomag.min.js).");
         } catch (error) {
             console.error("Fatal Error: Could not initialize WMM. The geomag.min.js library might be missing.", error);
+            mslPopup.innerHTML = "Mag Var: Error";
         }
     }
 
@@ -220,34 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
         await getWaypoints();
 
         map.on('load', () => {
-            // Add a source and layer for displaying terrain peak labels.
-            map.addSource('peaks-source', {
-                type: 'geojson',
-                data: { type: 'FeatureCollection', features: [] }
-            });
-
-            map.addLayer({
-                id: 'peaks-layer',
-                type: 'symbol',
-                source: 'peaks-source',
-                minzoom: 10, // Only show the layer at zoom 10 or higher
-                layout: {
-                    // Display a mountain icon and the elevation in feet.
-                    'text-field': ['concat', '▲ ', ['get', 'elevation_ft'], "'"],
-                    'text-font': ['Roboto Mono Bold', 'Arial Unicode MS Bold'],
-                    'text-size': 13,
-                    'text-allow-overlap': false, // Prevents labels from piling up
-                    'text-anchor': 'bottom',
-                    'text-offset': [0, -0.5]
-                },
-                paint: {
-                    'text-color': '#FFFFFF',
-                    'text-halo-color': '#000000',
-                    'text-halo-width': 2,
-                    'text-halo-blur': 1
-                }
-            });
-
             setupEventListeners();
             updateAirports();
             updateNavaids();
@@ -261,119 +273,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     initializeApp();
-
-    // --- PEAK LABEL FUNCTIONS ---
-    /**
-     * A utility function to delay the execution of a function until after a certain time has passed
-     * without it being called again. This is used to prevent too many API calls while moving the map.
-     * @param {Function} func The function to debounce.
-     * @param {number} wait The delay in milliseconds.
-     * @returns {Function} The debounced function.
-     */
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    /**
-     * Fetches elevation data for the current map view, identifies the highest peaks,
-     * and displays them as labels on the map.
-     */
-    async function updatePeakLabels() {
-        const zoom = map.getZoom();
-        const peaksSource = map.getSource('peaks-source');
-
-        // Only show peaks at a reasonable zoom level to avoid clutter.
-        if (zoom < 10 || !peaksSource) {
-            if (peaksSource) peaksSource.setData({ type: 'FeatureCollection', features: [] });
-            return;
-        }
-
-        const bounds = map.getBounds();
-        const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-        const gridSize = 30; // 30x30 grid = 900 points.
-        const maxPeaksToShow = 15; // Limit the number of labels to keep the map clean.
-
-        try {
-            // 1. Generate a grid of coordinates within the current map view.
-            const latitudes = [];
-            const longitudes = [];
-            const latStep = (bbox[3] - bbox[1]) / (gridSize - 1);
-            const lonStep = (bbox[2] - bbox[0]) / (gridSize - 1);
-
-            for (let i = 0; i < gridSize; i++) {
-                for (let j = 0; j < gridSize; j++) {
-                    latitudes.push((bbox[1] + i * latStep));
-                    longitudes.push((bbox[0] + j * lonStep));
-                }
-            }
-
-            // 2. Fetch elevation data for the entire grid in a single API call.
-            const response = await fetch(`/.netlify/functions/elevation?latitude=${latitudes.join(',')}&longitude=${longitudes.join(',')}`);
-            if (!response.ok) throw new Error('Failed to fetch elevation data');
-            const data = await response.json();
-            const elevations = data.elevation;
-
-            // 3. Identify local maxima (peaks) from the grid data.
-            const allPeaks = [];
-            for (let i = 1; i < gridSize - 1; i++) {
-                for (let j = 1; j < gridSize - 1; j++) {
-                    const index = i * gridSize + j;
-                    const currentElevation = elevations[index];
-                    if (currentElevation === null || currentElevation < 0) continue;
-
-                    let isPeak = true;
-                    // Check the 8 surrounding neighbors.
-                    for (let ni = -1; ni <= 1; ni++) {
-                        for (let nj = -1; nj <= 1; nj++) {
-                            if (ni === 0 && nj === 0) continue;
-                            const neighborElevation = elevations[(i + ni) * gridSize + (j + nj)];
-                            if (neighborElevation !== null && neighborElevation >= currentElevation) {
-                                isPeak = false;
-                                break;
-                            }
-                        }
-                        if (!isPeak) break;
-                    }
-
-                    if (isPeak) {
-                        allPeaks.push({
-                            lon: longitudes[index],
-                            lat: latitudes[index],
-                            elevation: currentElevation
-                        });
-                    }
-                }
-            }
-
-            // 4. Sort peaks by elevation and take the highest ones to display.
-            allPeaks.sort((a, b) => b.elevation - a.elevation);
-            const topPeaks = allPeaks.slice(0, maxPeaksToShow);
-
-            const peakFeatures = topPeaks.map(peak => ({
-                type: 'Feature',
-                geometry: { type: 'Point', coordinates: [peak.lon, peak.lat] },
-                properties: {
-                    elevation_ft: Math.round(peak.elevation * 3.28084)
-                }
-            }));
-
-            // 5. Update the map source with the new peak features.
-            peaksSource.setData({ type: 'FeatureCollection', features: peakFeatures });
-
-        } catch (error) {
-            console.error("Could not update peak labels:", error);
-            peaksSource.setData({ type: 'FeatureCollection', features: [] }); // Clear on error
-        }
-    }
-
 
     // --- LIVE MODE: INACTIVITY TIMER (no changes) ---
     function startInactivityTimer() {
@@ -420,12 +319,30 @@ document.addEventListener('DOMContentLoaded', () => {
             clearTimeout(navaidRequestTimeout);
             navaidRequestTimeout = setTimeout(updateNavaids, 500);
         }
-        
-        // Debounce the peak update function to avoid excessive API calls during map movement.
-        const debouncedUpdate = debounce(updatePeakLabels, 1000);
 
-        // Add the listener for map movement.
-        map.on('moveend', debouncedUpdate);
+
+        map.on('mousemove', (e) => {
+            if (isDrawingEnabled || !mslPopup) return;
+            mslPopup.style.left = `${e.point.x + 15}px`;
+            mslPopup.style.top = `${e.point.y}px`;
+            mslPopup.style.display = 'block';
+
+            let magVarText = "Mag Var: N/A";
+            if (wmmModel) {
+                const point = wmmModel.field(e.lngLat.lat, e.lngLat.lng);
+                const declination = point.declination;
+                magVarText = `Mag Var: ${declination.toFixed(2)}°`;
+            }
+
+            mslPopup.innerHTML = 'MSA: Loading...<br>' + magVarText;
+
+            clearTimeout(elevationRequestTimeout);
+            elevationRequestTimeout = setTimeout(() => getElevationAndMag(e.lngLat), 50);
+        });
+
+        map.on('mouseout', () => {
+            if (mslPopup) mslPopup.style.display = 'none';
+        });
 
         if (reopenButton) {
             reopenButton.addEventListener('click', (e) => {
@@ -2279,7 +2196,38 @@ function updateFlightMarkers(flights, sessionId) {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
+     // app.js (Original function)
 
+// app.js (Updated function)
+
+async function getElevationAndMag(latlng) {
+    let magVarText = "Mag Var: N/A";
+    if (wmmModel) {
+         const point = wmmModel.field(latlng.lat, latlng.lng);
+         magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
+    }
+    try {
+        // --- THIS IS THE ONLY PART THAT CHANGES ---
+        // We now call our new function instead of the old public API.
+        const elevationMeters = await getSelfHostedElevation(latlng);
+        // ------------------------------------------
+
+        let msaText = "MSA: --";
+
+        if (elevationMeters !== null && elevationMeters >= 0) {
+            const terrainElevationFeet = elevationMeters * 3.28084;
+            const calculatedMsa = terrainElevationFeet + 2000;
+            const roundedAltitude = Math.round(calculatedMsa / 1000) * 1000;
+            const displayAltitude = Math.max(roundedAltitude, 2000);
+            msaText = `MSA: ${displayAltitude.toLocaleString()}'`;
+        }
+        mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
+    } catch (error) {
+        // This will now catch errors from our self-hosted API function as well.
+        console.error("Failed to display elevation data:", error);
+        mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
+    }
+}
      function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         const startPoint = turf.point([start.lng, start.lat]);
