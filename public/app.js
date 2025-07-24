@@ -878,18 +878,14 @@ function updateFlightMarkers(flights, sessionId) {
     });
 
     visibleFlights.forEach(flight => {
-        // --- THIS IS THE DEBUGGING LINE TO ADD ---
-        // console.log('Flight Data:', flight); 
-        // -----------------------------------------
-
         const lat = Number(flight.latitude);
         const lon = Number(flight.longitude);
         const heading = flight.heading;
         const callsign = flight.callsign || 'N/A';
         const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
         const speed = (typeof flight.speed === 'number') ? Math.round(flight.speed) : null;
-        const altitudeText = altitude !== null ? `${altitude.toLocaleString()} ft` : '---';
-        const speedText = speed !== null ? `${speed} kts GS` : '---';
+        const altitudeText = altitude !== null ? `${altitude.toLocaleString()}` : 'N/A';
+        const speedText = speed !== null ? `${speed}` : 'N/A';
         const isSelected = flight.flightId === selectedFlightId;
 
         const iconPath = getAircraftIconPath(flight.aircraftName, isSelected);
@@ -898,30 +894,36 @@ function updateFlightMarkers(flights, sessionId) {
         el.innerHTML = `<img src="${iconPath}" width="24" height="24" style="transform: rotate(${heading}deg);">`;
 
         const popupContent = `
-            <div class="flight-popup-container" style="line-height: 1.4; background-color: #2a2a35; color: #f0f0f0; border: 1px solid #4a4a55;">
-                <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                    <strong class="flight-popup-callsign">${callsign}</strong>
-                    <span class="flight-popup-aircraft" style="font-size: 0.8em; opacity: 0.7;">${flight.aircraftName || 'N/A'}</span>
+            <div class="flight-popup-header">
+                <div class="flight-popup-callsign">${callsign}</div>
+                <div class="flight-popup-aircraft">${flight.aircraftName || 'N/A'}</div>
+            </div>
+            <div class="flight-popup-body">
+                <div class="flight-popup-row">
+                    <span class="label">Altitude:</span>
+                    <span class="value">${altitudeText} ft</span>
                 </div>
-                <div style="font-size: 0.9em; margin-top: 4px; border-top: 1px solid #444; padding-top: 4px;">
-                    <div><strong>Alt:</strong> ${altitudeText}</div>
-                    <div><strong>Spd:</strong> ${speedText}</div>
-                    <div><strong>User:</strong> ${flight.username || 'N/A'}</div>
+                <div class="flight-popup-row">
+                    <span class="label">Speed:</span>
+                    <span class="value">${speedText} kts</span>
                 </div>
-                ${
-                    flight.flightId
-                    ? `<div style="margin-top: 8px;">
+                <div class="flight-popup-row">
+                    <span class="label">User:</span>
+                    <span class="value">${flight.username || 'N/A'}</span>
+                </div>
+            </div>
+            ${
+                flight.flightId
+                ? `<div class="flight-popup-footer">
                         <button class="cta-button view-fpl-btn"
-                                style="padding: 5px 10px; font-size: 12px; width: 100%;"
                                 data-flight-id="${flight.flightId}"
                                 data-session-id="${sessionId}"
                                 data-callsign="${callsign}"
-                                data-altitude="${altitudeText}"
-                                data-speed="${speedText}">View FPL</button>
-                    </div>`
-                    : ''
-                }
-            </div>
+                                data-altitude="${altitudeText} ft"
+                                data-speed="${speedText} kts GS">View FPL</button>
+                   </div>`
+                : ''
+            }
         `;
 
         if (liveFlightMarkers[flight.flightId]) {
@@ -936,17 +938,28 @@ function updateFlightMarkers(flights, sessionId) {
                 }
             }
             if (marker.getPopup().isOpen()) {
+                // Update the content of the already open popup
                 marker.getPopup().setHTML(popupContent);
+            } else {
+                 // Set the HTML for when it opens next
+                marker.getPopup()._content = popupContent;
             }
         } else {
+            const popup = new maptilersdk.Popup({
+                offset: 25,
+                className: 'custom-popup',
+                closeButton: false
+            }).setHTML(popupContent);
+
             const marker = new maptilersdk.Marker({ element: el })
                 .setLngLat([lon, lat])
-                .setPopup(new maptilersdk.Popup({ offset: 25, className: 'custom-popup' }).setHTML(popupContent))
+                .setPopup(popup)
                 .addTo(map);
             liveFlightMarkers[flight.flightId] = marker;
         }
     });
 }
+
 
     async function fetchAndDisplayFlightPlan(flightId, sessionId, callsign, altitude, speed) {
     // Clear previous FPL
