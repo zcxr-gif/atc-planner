@@ -299,9 +299,15 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
     // --- EVENT HANDLERS (Updated for MapTiler) ---
     function setupEventListeners() {
         map.getCanvas().addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // UPDATED: Added touch handlers for mobile support
         map.on('mousedown', handleMouseDown);
         map.on('mousemove', handleMouseMove);
         map.on('mouseup', handleMouseUp);
+        map.on('touchstart', handleMouseDown);
+        map.on('touchmove', handleMouseMove);
+        map.on('touchend', handleMouseUp);
+        
         map.on('zoomend', handleMapMoveEnd);
         map.on('moveend', handleMapMoveEnd);
 
@@ -379,7 +385,14 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
     // --- UI PANELS (no changes here) ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
         const existingPanel = document.getElementById(id);
-        if (existingPanel) existingPanel.remove();
+        if (existingPanel) {
+            // UPDATED: On mobile, just make it visible instead of removing/recreating
+            if (window.innerWidth <= 768) {
+                existingPanel.classList.add('visible');
+                return existingPanel;
+            }
+            existingPanel.remove();
+        }
 
         const panel = document.createElement('div');
         panel.id = id;
@@ -401,6 +414,14 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
         `;
         document.body.appendChild(panel);
 
+        // UPDATED: If on mobile, immediately add the 'visible' class to trigger the slide-up animation
+        if (window.innerWidth <= 768) {
+            // Use a short timeout to allow the element to be added to the DOM before transitioning
+            setTimeout(() => {
+                panel.classList.add('visible');
+            }, 10);
+        }
+
         // Prevent map interaction when clicking on panel
         panel.addEventListener('mousedown', (e) => e.stopPropagation());
         panel.addEventListener('wheel', (e) => e.stopPropagation());
@@ -408,21 +429,28 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
 
         const closeButton = panel.querySelector('.close-panel');
         closeButton.addEventListener('click', () => {
-            if (panel.id === 'main-panel') {
-                if (reopenButton) reopenButton.style.display = 'block';
-                panel.style.display = 'none';
-            } else if (panel.id === 'plan-panel') {
-                const drawingCheckbox = document.getElementById('enable-drawing');
-                if (drawingCheckbox) drawingCheckbox.checked = false;
-                isDrawingEnabled = false;
-                panel.style.display = 'none';
-                const reopenPlanButton = document.getElementById('reopen-plan-panel');
-                if(reopenPlanButton) reopenPlanButton.style.display = 'block';
-            } else if (panel.id === 'live-control-panel') {
-                panel.style.display = 'none';
-            }
-            else {
-                panel.remove();
+            // UPDATED: Modified close logic for mobile vs desktop
+            if (window.innerWidth <= 768) {
+                // On mobile, just hide the panel by removing the 'visible' class
+                panel.classList.remove('visible');
+            } else {
+                // Original desktop behavior
+                if (panel.id === 'main-panel') {
+                    if (reopenButton) reopenButton.style.display = 'block';
+                    panel.style.display = 'none';
+                } else if (panel.id === 'plan-panel') {
+                    const drawingCheckbox = document.getElementById('enable-drawing');
+                    if (drawingCheckbox) drawingCheckbox.checked = false;
+                    isDrawingEnabled = false;
+                    panel.style.display = 'none';
+                    const reopenPlanButton = document.getElementById('reopen-plan-panel');
+                    if(reopenPlanButton) reopenPlanButton.style.display = 'block';
+                } else if (panel.id === 'live-control-panel') {
+                    panel.style.display = 'none';
+                }
+                else {
+                    panel.remove();
+                }
             }
         });
 
@@ -438,6 +466,11 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
     }
 
     function makeDraggable(element) {
+        // UPDATED: Disable dragging on mobile devices
+        if (window.innerWidth <= 768) {
+            return;
+        }
+
         let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
         const header = element.querySelector(".panel-header");
         if (header) {
@@ -486,6 +519,7 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
         const existingPanel = document.getElementById('main-panel');
         if (existingPanel) {
             existingPanel.style.display = 'block';
+            if (window.innerWidth <= 768) existingPanel.classList.add('visible'); // Mobile support
             if (reopenButton) reopenButton.style.display = 'none';
             return;
         }
@@ -679,6 +713,7 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
         const existingPanel = document.getElementById('live-control-panel');
         if (existingPanel) {
             existingPanel.style.display = 'block';
+             if (window.innerWidth <= 768) existingPanel.classList.add('visible');
             return;
         }
 
@@ -1732,7 +1767,7 @@ function updateFlightMarkers(flights, sessionId) {
     // --- DRAWING LOGIC (Rewritten for MapTiler) ---
 
     function handleMouseDown(e) {
-        if (!isDrawingEnabled || e.originalEvent.button !== 0) return;
+        if (!isDrawingEnabled || (e.originalEvent.button && e.originalEvent.button !== 0)) return;
 
         // Prevent drawing when clicking on a UI panel
         if (e.originalEvent.target.closest('.floating-panel')) return;
@@ -1772,6 +1807,8 @@ function updateFlightMarkers(flights, sessionId) {
 
         const currentPoint = e.lngLat;
         const source = map.getSource('temp-line');
+        if (!source || !source._data.coordinates[0]) return; // Guard against race condition
+        
         const startPointLngLat = source._data.coordinates[0];
         const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
 
@@ -1804,6 +1841,8 @@ function updateFlightMarkers(flights, sessionId) {
 
         const endPoint = e.lngLat;
         const source = map.getSource('temp-line');
+        if (!source || !source._data.coordinates[0]) return; // Guard
+        
         const startPointLngLat = source._data.coordinates[0];
         const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
 
@@ -2250,6 +2289,7 @@ async function getElevationAndMag(latlng) {
         let planPanel = document.getElementById('plan-panel');
         if (planPanel) {
             planPanel.style.display = 'block';
+            if (window.innerWidth <= 768) planPanel.classList.add('visible');
             const reopenPlanButton = document.getElementById('reopen-plan-panel');
             if (reopenPlanButton) reopenPlanButton.style.display = 'none';
             return;
