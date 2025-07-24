@@ -33,7 +33,7 @@ exports.handler = async function(event, context) {
     } catch (error) {
         console.error("Error fetching from Oracle server:", error);
         return {
-            statusCode: 502, // Bad Gateway
+            statusCode: 500, // Bad Gateway
             body: JSON.stringify({ error: "Failed to connect to the elevation service." }),
         };
     }
