@@ -301,6 +301,25 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
                 'minzoom': 8 
             });
             // --- MOUNTAIN PEAKS MBTILES DATA - END ---
+
+            // --- START DEBUGGER ---
+            // This code will run once after the map moves or zooms.
+            map.once('moveend', () => {
+                // Important: Zoom in past level 8 to ensure the layer is active.
+                const features = map.queryRenderedFeatures({ layers: ['peaks-labels-layer'] });
+
+                if (features.length > 0) {
+                    console.log("✅ Peak features found:", features);
+                    console.log("➡️ Properties of the first feature:", features[0].properties);
+                } else {
+                    console.warn("❌ No peak features were found at this location/zoom.");
+                    console.log("Troubleshooting tips:");
+                    console.log("1. Make sure you are zoomed in past level 8.");
+                    console.log("2. Check that the 'source-layer' name in your app.js ('peak') is correct.");
+                    console.log("3. Check the 'Network' tab in your browser's developer tools to see if 'peaks.mbtiles' loaded successfully.");
+                }
+            });
+            // --- END DEBUGGER ---
             
             setupEventListeners();
             updateAirports();
