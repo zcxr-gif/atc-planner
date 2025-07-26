@@ -282,7 +282,7 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
                 'layout': {
                     // *** IMPORTANT: This must match the property in your data that holds the peak's name.
                     // Based on your screenshot, this is 'name_en'.
-                    'text-field': ['get', 'name_en'],
+                    'text-field': ['get', 'name'],
                     
                     'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
                     'text-size': [ // Text size will increase slightly with zoom to improve readability
