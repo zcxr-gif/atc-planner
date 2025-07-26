@@ -260,6 +260,48 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
         await getWaypoints();
 
         map.on('load', () => {
+            // --- MOUNTAIN PEAKS MBTILES DATA - START ---
+            // This section adds your custom mountain peak data from Google Cloud Storage.
+            
+            // 1. Add the MBTiles file as a new vector source.
+            map.addSource('peaks-source', {
+                type: 'vector',
+                url: 'https://storage.googleapis.com/peaks_mountains/peaks.mbtiles',
+            });
+    
+            // 2. Add a layer to display the data from the source.
+            map.addLayer({
+                'id': 'peaks-labels-layer', // A unique ID for this new layer
+                'type': 'symbol',           // We are displaying text labels
+                'source': 'peaks-source',   // Links this layer to the source we just defined
+                
+                // *** IMPORTANT: You must know the name of the data layer inside your MBTiles file.
+                // Based on your screenshot, it is likely 'peak'.
+                'source-layer': 'peak', 
+                
+                'layout': {
+                    // *** IMPORTANT: This must match the property in your data that holds the peak's name.
+                    // Based on your screenshot, this is 'name_en'.
+                    'text-field': ['get', 'name_en'],
+                    
+                    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                    'text-size': [ // Text size will increase slightly with zoom to improve readability
+                        'interpolate', ['linear'], ['zoom'],
+                        8, 9,   // At zoom level 8, text size is 9px
+                        14, 12  // At zoom level 14, text size is 12px
+                    ],
+                    'text-optional': true, // Helps with label decluttering
+                },
+                'paint': {
+                    'text-color': '#E0E0E0',      // A light gray for the text
+                    'text-halo-color': '#111111', // A dark outline to make text stand out
+                    'text-halo-width': 1.5
+                },
+                // To avoid cluttering the map, only show these labels at zoom level 8 and higher.
+                'minzoom': 8 
+            });
+            // --- MOUNTAIN PEAKS MBTILES DATA - END ---
+            
             setupEventListeners();
             updateAirports();
             updateNavaids();
