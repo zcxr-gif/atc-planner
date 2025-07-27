@@ -93,44 +93,36 @@ document.addEventListener('DOMContentLoaded', () => {
         airportsDataCache = data;
         return data;
     }
-	
-	// app.js
 
-/**
- * Fetches elevation from your self-hosted OpenTopoData API.
- * @param {object} latlng - An object with lat and lng properties.
- * @returns {Promise<number|null>} The elevation in meters, or null if an error occurs.
- */
-/**
- * Fetches elevation from your self-hosted OpenTopoData API.
- * @param {object} latlng - An object with lat and lng properties.
- * @param {string} [dataset='srtm30m'] - The dataset to query (e.g., 'srtm30m', 'srtm90m'). Defaults to 'srtm30m'.
- * @returns {Promise<number|null>} The elevation in meters, or null if an error occurs.
- */
-async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
-    // The 'dataset' variable is now used to build the URL dynamically.
-    const API_ENDPOINT = `/.netlify/functions/elevation?dataset=${dataset}&locations=${latlng.lat},${latlng.lng}`;
+	/**
+	 * Fetches elevation from the public Open-Meteo Elevation API.
+	 * @param {object} latlng - An object with lat and lng properties.
+	 * @returns {Promise<number|null>} The elevation in meters, or null if an error occurs.
+	 */
+	async function getPublicElevation(latlng) {
+		const API_ENDPOINT = `https://api.open-meteo.com/v1/elevation?latitude=${latlng.lat}&longitude=${latlng.lng}`;
 
-    try {
-        const response = await fetch(API_ENDPOINT);
-        if (!response.ok) {
-            console.error(`Self-hosted elevation API returned an error for dataset ${dataset}:`, response.status);
-            return null;
-        }
+		try {
+			const response = await fetch(API_ENDPOINT);
+			if (!response.ok) {
+				console.error(`Public elevation API returned an error:`, response.status);
+				return null;
+			}
 
-        const data = await response.json();
+			const data = await response.json();
 
-        if (data.results && data.results.length > 0 && data.results[0].elevation !== null) {
-            return data.results[0].elevation;
-        } else {
-            console.warn(`API did not return elevation for this location from dataset ${dataset}.`, data);
-            return null;
-        }
-    } catch (error) {
-        console.error(`Failed to connect to self-hosted elevation API for dataset ${dataset}:`, error);
-        return null;
-    }
-}
+			// The API returns an array of elevations. We only requested one point.
+			if (data && data.elevation && data.elevation.length > 0) {
+				return data.elevation[0];
+			} else {
+				console.warn(`API did not return elevation for this location.`, data);
+				return null;
+			}
+		} catch (error) {
+			console.error(`Failed to connect to the public elevation API:`, error);
+			return null;
+		}
+	}
 
     async function getRunways() {
         if (runwaysDataCache) return runwaysDataCache;
@@ -262,28 +254,28 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
         map.on('load', () => {
             // --- MOUNTAIN PEAKS MBTILES DATA - START ---
             // This section adds your custom mountain peak data from Google Cloud Storage.
-            
+
             // 1. Add the MBTiles file as a new vector source.
             map.addSource('peaks-source', {
                 type: 'vector',
                 url: 'https://storage.googleapis.com/peaks_mountains/peaks.mbtiles',
             });
-    
+
             // 2. Add a layer to display the data from the source.
             map.addLayer({
                 'id': 'peaks-labels-layer', // A unique ID for this new layer
                 'type': 'symbol',           // We are displaying text labels
                 'source': 'peaks-source',   // Links this layer to the source we just defined
-                
+
                 // *** IMPORTANT: You must know the name of the data layer inside your MBTiles file.
                 // Based on your screenshot, it is likely 'peak'.
-                'source-layer': 'peak', 
-                
+                'source-layer': 'peak',
+
                 'layout': {
                     // *** IMPORTANT: This must match the property in your data that holds the peak's name.
                     // Based on your screenshot, this is 'name_en'.
                     'text-field': ['get', 'name'],
-                    
+
                     'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
                     'text-size': [ // Text size will increase slightly with zoom to improve readability
                         'interpolate', ['linear'], ['zoom'],
@@ -298,29 +290,10 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
                     'text-halo-width': 1.5
                 },
                 // To avoid cluttering the map, only show these labels at zoom level 8 and higher.
-                'minzoom': 8 
+                'minzoom': 8
             });
             // --- MOUNTAIN PEAKS MBTILES DATA - END ---
 
-            // --- START DEBUGGER ---
-            // This code will run once after the map moves or zooms.
-            map.once('moveend', () => {
-                // Important: Zoom in past level 8 to ensure the layer is active.
-                const features = map.queryRenderedFeatures({ layers: ['peaks-labels-layer'] });
-
-                if (features.length > 0) {
-                    console.log("✅ Peak features found:", features);
-                    console.log("➡️ Properties of the first feature:", features[0].properties);
-                } else {
-                    console.warn("❌ No peak features were found at this location/zoom.");
-                    console.log("Troubleshooting tips:");
-                    console.log("1. Make sure you are zoomed in past level 8.");
-                    console.log("2. Check that the 'source-layer' name in your app.js ('peak') is correct.");
-                    console.log("3. Check the 'Network' tab in your browser's developer tools to see if 'peaks.mbtiles' loaded successfully.");
-                }
-            });
-            // --- END DEBUGGER ---
-            
             setupEventListeners();
             updateAirports();
             updateNavaids();
@@ -368,7 +341,7 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
         map.on('touchstart', handleMouseDown);
         map.on('touchmove', handleMouseMove);
         map.on('touchend', handleMouseUp);
-        
+
         map.on('zoomend', handleMapMoveEnd);
         map.on('moveend', handleMapMoveEnd);
 
@@ -859,11 +832,11 @@ async function getSelfHostedElevation(latlng, dataset = 'srtm30m') {
     function startLiveUpdates(sessionId) {
         stopLiveUpdates(); // Clear any previous state
         isLiveModeActive = true;
-        
+
         // Start fetching data immediately and then set the interval
         fetchAndDisplayData(sessionId);
         liveUpdateInterval = setInterval(() => fetchAndDisplayData(sessionId), 10000);
-        
+
         startInactivityTimer();
 
         // Start the pulse animation
@@ -1041,7 +1014,7 @@ function updateFlightMarkers(flights, sessionId) {
 
         const flightPlanItems = (data.result && data.result.flightPlanItems) || [];
         const allWaypoints = [];
-        
+
         // --- CORRECTED LOGIC ---
         // This new logic correctly processes nested waypoints.
         flightPlanItems.forEach(item => {
@@ -1149,7 +1122,7 @@ function updateFlightMarkers(flights, sessionId) {
                 });
             }
             activeAtisStationIcaos = newActiveAtisIcaos;
-            
+
             // Only update the map if the set of active airports has changed
             if (!setsAreEqual(activeAtcAirportIcaos, newActiveAtcIcaos)) {
                 activeAtcAirportIcaos = newActiveAtcIcaos;
@@ -1554,7 +1527,7 @@ function updateFlightMarkers(flights, sessionId) {
     if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
     if (map.getLayer(pulseLayerId)) map.setLayoutProperty(pulseLayerId, 'visibility', 'visible');
 }
-    
+
     /**
      * Animates the pulsating halo for active airports.
      */
@@ -1563,17 +1536,17 @@ function updateFlightMarkers(flights, sessionId) {
             pulseAnimationId = null;
             return; // Stop animation if not in live mode or layer is gone
         }
-    
+
         const duration = 2000; // 2-second pulse cycle
         const t = (performance.now() % duration) / duration;
-    
+
         // A sine wave makes the pulse expand and contract smoothly
         const pulseAmount = Math.sin(t * Math.PI);
-    
+
         const maxRadiusIncrease = 10;
         const radius = pulseAmount * maxRadiusIncrease;
         const opacity = 1 - pulseAmount;
-    
+
         map.setPaintProperty('airport-dots-pulse-layer', 'circle-radius', [
             '+',
             ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3], // Base radius
@@ -1581,7 +1554,7 @@ function updateFlightMarkers(flights, sessionId) {
         ]);
         map.setPaintProperty('airport-dots-pulse-layer', 'circle-opacity', opacity);
         map.setPaintProperty('airport-dots-pulse-layer', 'circle-stroke-opacity', opacity);
-    
+
         pulseAnimationId = requestAnimationFrame(animatePulse);
     }
     async function displayAirportDetails(icao) {
@@ -1882,7 +1855,7 @@ function updateFlightMarkers(flights, sessionId) {
         const currentPoint = e.lngLat;
         const source = map.getSource('temp-line');
         if (!source || !source._data.coordinates[0]) return; // Guard against race condition
-        
+
         const startPointLngLat = source._data.coordinates[0];
         const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
 
@@ -1916,7 +1889,7 @@ function updateFlightMarkers(flights, sessionId) {
         const endPoint = e.lngLat;
         const source = map.getSource('temp-line');
         if (!source || !source._data.coordinates[0]) return; // Guard
-        
+
         const startPointLngLat = source._data.coordinates[0];
         const startPoint = { lat: startPointLngLat[1], lng: startPointLngLat[0] };
 
@@ -2019,7 +1992,7 @@ function updateFlightMarkers(flights, sessionId) {
         // Add more mappings here as you add more aircraft images.
         const aircraftMap = {
             'a380': '/a380.png',
-            '747': '/a380.png', 
+            '747': '/a380.png',
         };
 
         // Find the first matching keyword in the aircraft name.
@@ -2309,9 +2282,6 @@ function updateFlightMarkers(flights, sessionId) {
         toggleDataBlockVisibility();
         updateAllFlightDataBlockStyles();
     }
-     // app.js (Original function)
-
-// app.js (Updated function)
 
 async function getElevationAndMag(latlng) {
     let magVarText = "Mag Var: N/A";
@@ -2320,10 +2290,7 @@ async function getElevationAndMag(latlng) {
          magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
     }
     try {
-        // --- THIS IS THE ONLY PART THAT CHANGES ---
-        // We now call our new function instead of the old public API.
-        const elevationMeters = await getSelfHostedElevation(latlng);
-        // ------------------------------------------
+        const elevationMeters = await getPublicElevation(latlng);
 
         let msaText = "MSA: --";
 
@@ -2336,7 +2303,6 @@ async function getElevationAndMag(latlng) {
         }
         mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
     } catch (error) {
-        // This will now catch errors from our self-hosted API function as well.
         console.error("Failed to display elevation data:", error);
         mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
     }
