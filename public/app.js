@@ -898,9 +898,7 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         }
     }
 
-   // app.js
-
-function updateFlightMarkers(flights, sessionId) {
+   function updateFlightMarkers(flights, sessionId) {
     const bounds = map.getBounds();
     const visibleFlights = flights.filter(flight => {
         const lat = Number(flight.latitude);
@@ -980,13 +978,12 @@ function updateFlightMarkers(flights, sessionId) {
                    iconElement.src = newIconPath;
                 }
             }
-            if (marker.getPopup().isOpen()) {
-                // Update the content of the already open popup
-                marker.getPopup().setHTML(popupContent);
-            } else {
-                 // Set the HTML for when it opens next
-                marker.getPopup()._content = popupContent;
-            }
+
+            // --- FIX IS HERE ---
+            // Always use the public setHTML method. It correctly updates the popup's
+            // content whether it's open or closed, preventing the bug.
+            marker.getPopup().setHTML(popupContent);
+
         } else {
             const popup = new maptilersdk.Popup({
                 offset: 25,
