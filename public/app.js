@@ -1098,87 +1098,114 @@ function updateFlightMarkers(flights, sessionId) {
         return true;
     }
 
-    async function updateAtcList(sessionId) {
-        const atcListElement = document.getElementById('atc-list');
-        if (!atcListElement) return;
+    // In app.js, replace the existing updateAtcList function with this one.
+async function updateAtcList(sessionId) {
+    const atcListElement = document.getElementById('atc-list');
+    if (!atcListElement) return;
 
-        const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance', 4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS' };
+    const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance', 4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS' };
 
-        try {
-            const response = await fetch(`/.netlify/functions/atc/${sessionId}`);
-            const data = await response.json();
+    try {
+        const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
+        const atcData = await atcResponse.json();
+        
+        const airports = await getAirports(); // Ensure airport data is available
 
-            // --- Track active ATC airports ---
-            const newActiveAtisIcaos = new Set();
-            const newActiveAtcIcaos = new Set();
-            if (data.result) {
-                data.result.forEach(facility => {
-                    if (facility.type === 7 && facility.airportName) {
-                        newActiveAtisIcaos.add(facility.airportName);
-                    }
-                    if (facility.airportName && facility.airportName !== "Center") {
-                        newActiveAtcIcaos.add(facility.airportName);
-                    }
-                });
-            }
-            activeAtisStationIcaos = newActiveAtisIcaos;
-
-            // Only update the map if the set of active airports has changed
-            if (!setsAreEqual(activeAtcAirportIcaos, newActiveAtcIcaos)) {
-                activeAtcAirportIcaos = newActiveAtcIcaos;
-                updateAirports(); // Trigger a re-render of airport dots
-            }
-            // --- End tracking ---
-
-            if (!response.ok || data.errorCode !== 0 || !data.result) {
-                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-                if (data.errorCode !== 0) console.error("Received an API error for ATC data:", data);
-                return;
-            }
-
-            const atcByAirport = data.result
-                .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
-                .reduce((acc, facility) => {
-                    const icao = facility.airportName || "Center";
-                    if (!acc[icao]) {
-                        acc[icao] = { name: facility.airportName || "Center Control", frequencies: [] };
-                    }
-                    acc[icao].frequencies.push(facility);
-                    return acc;
-                }, {});
-
-            const airportIcaos = Object.keys(atcByAirport);
-            if (airportIcaos.length === 0) {
-                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-                return;
-            }
-
-            let htmlContent = airportIcaos.sort().map(icao => {
-                const airportData = atcByAirport[icao];
-                airportData.frequencies.sort((a, b) => a.type - b.type);
-                const frequencyItems = airportData.frequencies.map(facility => {
-                    const typeName = frequencyTypeMap[facility.type];
-                    const controller = facility.username || "N/A";
-                    return `<li class="atc-frequency">
-                              <span class="atc-type">${typeName}</span>
-                              <span class="atc-controller">${controller}</span>
-                            </li>`;
-                }).join('');
-                return `<div class="atc-item">
-                          <div class="atc-airport-header">
-                            <strong>${icao}</strong>
-                            <span>${(icao !== "Center" && airportData.name) ? ` - ${airportData.name}` : ''}</span>
-                          </div>
-                          <ul class="atc-frequency-list">${frequencyItems}</ul>
-                        </div>`;
-            }).join('');
-            atcListElement.innerHTML = htmlContent;
-
-        } catch (error) {
-            console.error("Failed to fetch or render ATC data:", error);
-            atcListElement.innerHTML = '<div class="atc-item" style="color: var(--danger-color);">Error loading ATC data.</div>';
+        // --- Track active ATC airports ---
+        const newActiveAtisIcaos = new Set();
+        const newActiveAtcIcaos = new Set();
+        if (atcData.result) {
+            atcData.result.forEach(facility => {
+                if (facility.type === 7 && facility.airportName) {
+                    newActiveAtisIcaos.add(facility.airportName);
+                }
+                if (facility.airportName && facility.airportName !== "Center") {
+                    newActiveAtcIcaos.add(facility.airportName);
+                }
+            });
         }
+        activeAtisStationIcaos = newActiveAtisIcaos;
+
+        if (!setsAreEqual(activeAtcAirportIcaos, newActiveAtcIcaos)) {
+            activeAtcAirportIcaos = newActiveAtcIcaos;
+            updateAirports();
+        }
+        // --- End tracking ---
+
+        if (!atcResponse.ok || atcData.errorCode !== 0 || !atcData.result) {
+            atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+            return;
+        }
+
+        const atcByAirport = atcData.result
+            .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
+            .reduce((acc, facility) => {
+                const icao = facility.airportName || "Center";
+                if (!acc[icao]) {
+                    acc[icao] = { name: facility.airportName || "Center Control", frequencies: [] };
+                }
+                acc[icao].frequencies.push(facility);
+                return acc;
+            }, {});
+
+        const airportIcaos = Object.keys(atcByAirport);
+        if (airportIcaos.length === 0) {
+            atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+            return;
+        }
+
+        let htmlContent = airportIcaos.sort().map(icao => {
+            const airportData = atcByAirport[icao];
+            airportData.frequencies.sort((a, b) => a.type - b.type);
+
+            // Find the full airport name from the cached data
+            const airportInfo = airports.find(a => a.ident === icao);
+            const airportFullName = airportInfo ? airportInfo.name.replace(/"/g, '') : (icao === "Center" ? "Center Control" : icao);
+
+            const frequencyItems = airportData.frequencies.map(facility => {
+                const typeName = frequencyTypeMap[facility.type];
+                const controller = facility.username || "N/A";
+
+                // Calculate duration on frequency
+                let durationText = '';
+                if (facility.startTime) {
+                    const startTime = new Date(facility.startTime);
+                    const now = new Date();
+                    const durationMs = now - startTime;
+                    const hours = Math.floor(durationMs / 3600000);
+                    const minutes = Math.floor((durationMs % 3600000) / 60000);
+                    
+                    if (hours > 0) {
+                        durationText = `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+                    } else {
+                        durationText = `${minutes}m`;
+                    }
+                }
+
+                return `<li class="atc-frequency">
+                          <span class="atc-type atc-type-${typeName.toLowerCase()}">${typeName}</span>
+                          <div class="atc-controller-info">
+                              <span class="atc-controller">${controller}</span>
+                              <span class="atc-duration">${durationText}</span>
+                          </div>
+                        </li>`;
+            }).join('');
+
+            return `<div class="atc-item">
+                      <div class="atc-airport-header">
+                        <strong>${airportFullName}</strong>
+                        <span>${icao}</span>
+                      </div>
+                      <ul class="atc-frequency-list">${frequencyItems}</ul>
+                    </div>`;
+        }).join('');
+        atcListElement.innerHTML = htmlContent;
+
+    } catch (error) {
+        console.error("Failed to fetch or render ATC data:", error);
+        atcListElement.innerHTML = '<div class="atc-item" style="color: var(--danger-color);">Error loading ATC data.</div>';
     }
+}
 
 
     function createSettingsPanel() {

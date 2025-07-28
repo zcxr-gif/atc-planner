@@ -290,79 +290,102 @@
         #line-type-selector > div { display: flex; justify-content: space-around; align-items: center; }
         #line-type-selector label { font-size: 14px; }
 		
-        /* --- NEW ATC LIST STYLES --- */
-        #atc-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px; /* Adds space between airport cards */
-        }
+        /* --- Redesigned ATC List Styles --- */
+#atc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
 
-        .atc-item {
-            background-color: var(--background-light); 
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px;
-        }
+.atc-item {
+    background-color: var(--background-light);
+    border: 1px solid var(--border-color);
+    border-radius: 12px; /* More rounded corners */
+    padding: 16px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.atc-item:hover {
+    border-color: var(--accent);
+}
 
-        .atc-airport-header {
-            margin-bottom: 8px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--border-color);
-        }
+.atc-airport-header {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
 
-        .atc-airport-header strong {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: var(--accent); /* Use accent color for the ICAO */
-        }
+/* For the full airport name */
+.atc-airport-header strong {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: block;
+    line-height: 1.2;
+}
 
-        .atc-airport-header span {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            display: block; /* Puts the airport name on a new line */
-        }
+/* For the ICAO code below the name */
+.atc-airport-header span {
+    font-size: 0.9rem;
+    font-family: 'Roboto Mono', monospace;
+    color: var(--text-secondary);
+}
 
-        .atc-frequency-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 8px; /* Adds space between frequency rows */
-        }
+.atc-frequency-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* More space between frequencies */
+}
 
-        .atc-frequency {
-            display: flex;
-            justify-content: space-between; /* Aligns items to left and right */
-            align-items: center;
-            font-size: 14px;
-        }
+.atc-frequency {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-        .atc-type {
-            font-weight: 500;
-            color: var(--text-primary);
-        }
+.atc-type {
+    font-weight: 700;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 16px; /* Pill shape */
+    color: #fff;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
 
-        .atc-controller {
-            font-family: 'Roboto Mono', monospace; 
-            color: var(--text-secondary);
-            font-size: 13px;
-        }
+/* --- Frequency Type Colors --- */
+.atc-type-ground { background-color: #E67E22; }      /* Orange */
+.atc-type-tower { background-color: #3498DB; }       /* Blue */
+.atc-type-atis { background-color: #9B59B6; }        /* Purple */
+.atc-type-clearance { background-color: #1ABC9C; }  /* Turquoise */
+.atc-type-approach { background-color: #2ECC71; }    /* Green */
+.atc-type-departure { background-color: #27AE60; }   /* Darker Green */
+.atc-type-center { background-color: #C0392B; }      /* Red */
+.atc-type-unicom { background-color: #7F8C8D; }       /* Gray */
 
-        /* Prettier scrollbar for the ATC list */
-        #atc-list::-webkit-scrollbar {
-            width: 6px;
-        }
-        #atc-list::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        #atc-list::-webkit-scrollbar-thumb {
-            background-color: var(--border-color);
-            border-radius: 6px;
-        }
-        #atc-list::-webkit-scrollbar-thumb:hover {
-            background-color: var(--accent);
-        }
+
+.atc-controller-info {
+    text-align: right;
+}
+
+/* For the controller's username */
+.atc-controller {
+    font-family: 'Roboto Mono', monospace;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    display: block;
+}
+
+/* For the time on frequency */
+.atc-duration {
+    font-family: 'Roboto Mono', monospace;
+    color: var(--text-secondary);
+    font-size: 11px;
+    display: block;
+}
 
         /* --- END NEW ATC LIST STYLES --- */
         
