@@ -154,9 +154,6 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         }
     }
 
-    * @param {Array<number>} bbox - The bounding box array [west, south, east, north].
-	 * @returns {Promise<Array>} A promise that resolves to an array of navaid items, or an empty array on error.
-	 */
 	async function getVORsFromOpenAIP(bbox) {
 		// Construct the URL for the secure Netlify serverless function.
 		const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
