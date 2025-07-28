@@ -1,61 +1,74 @@
 // /netlify/functions/navaids.js
 
-// Use require for node-fetch in Node.js environments
-const fetch = require('node-fetch');
-
+/**
+ * Netlify serverless function to fetch navaid data from the OpenAIP API.
+ * This function acts as a secure proxy to protect the API key.
+ */
 exports.handler = async function(event) {
-    // 1. Get the API Key from Netlify's environment variables
-    const apiKey = process.env.OPENAIP_API_KEY;
+  // --- CONFIGURATION ---
+  // IMPORTANT: Your OpenAIP API key must be set as an environment variable
+  // in your Netlify project settings.
+  const apiKey = process.env.OPENAIP_API_KEY;
 
-    // 2. Check if the API key exists
-    if (!apiKey) {
+  // 1. Validate API Key
+  if (!apiKey) {
+    console.error("OpenAIP API key is not configured in environment variables.");
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "Server configuration error: API key is missing." })
+    };
+  }
+
+  // 2. Validate Bounding Box Parameter
+  const { bbox } = event.queryStringParameters;
+  if (!bbox) {
+    return {
+      statusCode: 400, // Bad Request
+      body: JSON.stringify({ error: "The 'bbox' (bounding box) query parameter is required." })
+    };
+  }
+
+  // 3. Construct the OpenAIP API URL
+  const apiURL = `https://api.openaip.net/api/navaids?bbox=${bbox}`;
+
+  // 4. Fetch Data from OpenAIP
+  try {
+    const response = await fetch(apiURL, {
+      method: 'GET',
+      headers: {
+        // The API key is sent as a header for security
+        'x-openaip-client-id': apiKey
+      }
+    });
+
+    // Handle non-successful responses from OpenAIP
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`OpenAIP API Error (Status: ${response.status}): ${errorText}`);
         return {
-            statusCode: 500,
-            body: JSON.stringify({ error: "API key is missing. Please set OPENAIP_API_KEY in your Netlify environment." })
+            statusCode: response.status,
+            body: JSON.stringify({ error: `Failed to fetch data from OpenAIP. Status: ${response.status}` })
         };
     }
 
-    // 3. Get the bounding box from the query parameters
-    const bbox = event.queryStringParameters.bbox;
-    if (!bbox) {
-        return {
-            statusCode: 400, // Bad Request
-            body: JSON.stringify({ error: "Bounding box (bbox) query parameter is required." })
-        };
-    }
+    const data = await response.json();
 
-    // 4. Construct the secure URL to the openAIP API
-    const apiUrl = `https://api.openaip.net/api/navdata?type=VOR&bbox=${bbox}&apiKey=${apiKey}`;
+    // 5. Return a successful response to the client
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*' // Allows the function to be called from any domain
+      },
+      // The frontend expects the data to be in the body of the response
+      body: JSON.stringify(data)
+    };
 
-    try {
-        // 5. Fetch data from the openAIP API
-        const response = await fetch(apiUrl);
-        
-        // Handle non-successful responses from openAIP
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("openAIP API Error:", errorText);
-            return {
-                statusCode: response.status,
-                body: JSON.stringify({ error: `Failed to fetch from openAIP: ${errorText}` })
-            };
-        }
-        
-        const data = await response.json();
-
-        // 6. Return the successful response to the browser
-        return {
-            statusCode: 200,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        };
-
-    } catch (error) {
-        // 7. Catch any other network or runtime errors
-        console.error("Serverless function error:", error);
-        return {
-            statusCode: 500,
-            body: JSON.stringify({ error: "An internal error occurred while fetching VOR data." })
-        };
-    }
+  } catch (error) {
+    console.error("An unexpected error occurred in the navaids function:", error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: "An internal server error occurred while fetching navaid data." })
+    };
+  }
 };
