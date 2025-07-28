@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Style configs (remain mostly the same, but used differently) ---
     const RUNWAY_STYLE_REGULAR = { 'line-color': '#AAAAAA', 'line-width': 1, 'fill-color': '#5A5A5A', 'fill-opacity': 1 };
     const RUNWAY_STYLE_HIGHLIGHT = { 'line-color': '#FFD700', 'line-width': 2, 'fill-color': '#FFD700', 'fill-opacity': 0.7 };
-    const const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1 }; // 
+    const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1 }; // 
     const FLIGHT_LINE_STYLES_REGULAR = {
         standard: { 'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.85 },
         arrival: { 'line-color': '#2979FF', 'line-width': 3, 'line-opacity': 1 },
