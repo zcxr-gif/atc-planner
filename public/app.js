@@ -48,16 +48,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let pulseAnimationId = null; // For the pulsating animation
 
     // --- Style configs (remain mostly the same, but used differently) ---
-    const RUNWAY_STYLE_REGULAR = { 'line-color': '#AAAAAA', 'line-width': 1, 'fill-color': '#5A5A5A', 'fill-opacity': 1 };
+    const RUNWAY_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'fill-color': '#4E4E4E', 'fill-opacity': 1 };
     const RUNWAY_STYLE_HIGHLIGHT = { 'line-color': '#FFD700', 'line-width': 2, 'fill-color': '#FFD700', 'fill-opacity': 0.7 };
-    const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1 }; // 
+    const const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; // 
     const FLIGHT_LINE_STYLES_REGULAR = {
         standard: { 'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.85 },
         arrival: { 'line-color': '#2979FF', 'line-width': 3, 'line-opacity': 1 },
         departure: { 'line-color': '#FF3D00', 'line-width': 3, 'line-opacity': 1 }
     };
-    const RUNWAY_STYLE_TERRAIN = { 'line-color': '#222', 'line-width': 2, 'fill-color': '#444', 'fill-opacity': 0.95, 'line-opacity': 1 };
-    const RUNWAY_CENTERLINE_STYLE_TERRAIN = { 'line-color': '#F5F5F5', 'line-width': 2, 'line-dasharray': [2, 3], 'line-opacity': 1 };
+    const RUNWAY_STYLE_TERRAIN = { 'line-color': '#CCCCCC', 'line-width': 2, 'fill-color': '#444', 'fill-opacity': 0.95, 'line-opacity': 1 };
+    const RUNWAY_CENTERLINE_STYLE_TERRAIN = { 'line-color': '#F5F5F5', 'line-width': 2, 'line-dasharray': [10, 8], 'line-opacity': 1 };
     const FLIGHT_LINE_STYLES_TERRAIN = {
         standard: { 'line-color': '#000', 'line-width': 4, 'line-opacity': 1 },
         arrival:  { 'line-color': '#2979FF', 'line-width': 4, 'line-opacity': 1 },
@@ -1800,127 +1800,64 @@ function createHelpPanel() {
     }
 
 
-    // In app.js, replace the entire old function with this new one.
+    async function drawRunwaysForAirport(icao) {
+        try {
+            const runways = await getRunwaysForAirport(icao);
+            const runwayPolygons = [];
+            const centerlines = [];
+            const labels = [];
+            const finalCones = [];
+            const finalCenterlines = [];
 
-async function drawRunwaysForAirport(icao) {
-    try {
-        const runways = await getRunwaysForAirport(icao);
-        const runwayPolygons = [];
-        const centerlines = [];
-        const labels = [];
-        const finalCones = [];
-        const finalCenterlines = [];
-        const runwayMarkings = []; // New array for all white markings
+            runways.forEach(runwayData => {
+                const le_lat = parseFloat(runwayData.le_latitude_deg);
+                const le_lon = parseFloat(runwayData.le_longitude_deg);
+                const he_lat = parseFloat(runwayData.he_latitude_deg);
+                const he_lon = parseFloat(runwayData.he_longitude_deg);
+                const width_ft = parseFloat(runwayData.width_ft);
+                if ([le_lat, le_lon, he_lat, he_lon, width_ft].some(isNaN) || width_ft <= 0) return;
 
-        // Style for the new markings
-        const RUNWAY_MARKING_STYLE = { 'fill-color': '#FFFFFF', 'fill-opacity': 0.95 };
-
-        runways.forEach(runwayData => {
-            const le_lat = parseFloat(runwayData.le_latitude_deg);
-            const le_lon = parseFloat(runwayData.le_longitude_deg);
-            const he_lat = parseFloat(runwayData.he_latitude_deg);
-            const he_lon = parseFloat(runwayData.he_longitude_deg);
-            const width_ft = parseFloat(runwayData.width_ft);
-
-            if ([le_lat, le_lon, he_lat, he_lon, width_ft].some(isNaN) || width_ft <= 0) return;
-
-            const widthMeters = width_ft * 0.3048;
-            const le_point = turf.point([le_lon, le_lat]);
-            const he_point = turf.point([he_lon, he_lat]);
-
-            // --- 1. Create the base runway polygon and centerline (same as before) ---
-            const runwayLineString = turf.lineString([le_point.geometry.coordinates, he_point.geometry.coordinates]);
-            const buffer = turf.buffer(runwayLineString, (widthMeters / 2), { units: 'meters' });
-            
-            runwayPolygons.push({
-                type: 'Feature',
-                geometry: buffer.geometry,
-                properties: { id: runwayData.id }
-            });
-
-            centerlines.push({
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: [le_point.geometry.coordinates, he_point.geometry.coordinates] }
-            });
-
-            // --- 2. Create Markings for each end of the runway ---
-            // Helper function to generate markings for one runway threshold
-            const addMarkingsForThreshold = (thresholdPoint, bearing) => {
-                // Aiming Point Markers (1000ft / 305m from threshold)
-                const aimingPointCenter = turf.destination(thresholdPoint, 305, bearing, { units: 'meters' });
-                const aimingPointWidth = widthMeters * 0.15; // Width of the rectangle
-                const aimingPointLength = 45; // Length in meters
-                [-1, 1].forEach(side => {
-                    const rectCenter = turf.destination(aimingPointCenter, (widthMeters * 0.1) * side, bearing - 90 * side, { units: 'meters' });
-                    const rect = turf.polygon([[
-                        turf.destination(rectCenter, aimingPointLength / 2, bearing).geometry.coordinates,
-                        turf.destination(rectCenter, aimingPointWidth / 2, bearing + 90).geometry.coordinates,
-                        turf.destination(rectCenter, aimingPointLength / 2, bearing + 180).geometry.coordinates,
-                        turf.destination(rectCenter, aimingPointWidth / 2, bearing - 90).geometry.coordinates,
-                        turf.destination(rectCenter, aimingPointLength / 2, bearing).geometry.coordinates
-                    ]]);
-                    runwayMarkings.push(rect);
+                const widthMeters = width_ft * 0.3048;
+                const runwayLineString = turf.lineString([[le_lon, le_lat], [he_lon, he_lat]]);
+                const buffer = turf.buffer(runwayLineString, (widthMeters / 2), { units: 'meters' });
+                runwayPolygons.push({
+                    type: 'Feature',
+                    geometry: buffer.geometry,
+                    properties: { id: runwayData.id }
+                });
+                centerlines.push({
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: [[le_lon, le_lat], [he_lon, he_lat]] }
                 });
 
-                // Threshold Markings ("Piano Keys")
-                const thresholdStripeCount = Math.max(4, Math.round(widthMeters / 9)); // Number of stripes based on runway width
-                const stripeLength = 30; // meters
-                const stripeWidth = 1.8; // meters
-                const gap = (widthMeters - (thresholdStripeCount * stripeWidth)) / (thresholdStripeCount + 1);
-                
-                let startOffset = -widthMeters / 2 + gap;
-                for(let i = 0; i < thresholdStripeCount; i++) {
-                    const stripeCenter = turf.destination(thresholdPoint, startOffset + stripeWidth / 2, bearing - 90, { units: 'meters' });
-                     const stripe = turf.polygon([[
-                        turf.destination(stripeCenter, stripeLength / 2, bearing).geometry.coordinates,
-                        turf.destination(stripeCenter, stripeWidth / 2, bearing + 90).geometry.coordinates,
-                        turf.destination(stripeCenter, stripeLength / 2, bearing + 180).geometry.coordinates,
-                        turf.destination(stripeCenter, stripeWidth / 2, bearing - 90).geometry.coordinates,
-                        turf.destination(stripeCenter, stripeLength / 2, bearing).geometry.coordinates
-                    ]]);
-                    runwayMarkings.push(stripe);
-                    startOffset += stripeWidth + gap;
+                // Add labels and final approach cones
+                const le_point = turf.point([le_lon, le_lat]);
+                const he_point = turf.point([he_lon, he_lat]);
+                if (runwayData.le_ident) {
+                    const bearing = turf.bearing(he_point, le_point);
+                    labels.push(createRunwayLabelFeature(runwayData.le_ident, le_point, bearing));
+                    finalCones.push(createFinalApproachConeFeature(le_point, bearing));
+                    finalCenterlines.push(createFinalApproachCenterlineFeature(le_point, bearing));
                 }
-            };
-            
-            // Generate markings for both ends
-            if (runwayData.le_ident) {
-                const bearing = turf.bearing(he_point, le_point);
-                addMarkingsForThreshold(le_point, bearing);
-                labels.push(createRunwayLabelFeature(runwayData.le_ident, le_point, bearing));
-                finalCones.push(createFinalApproachConeFeature(le_point, bearing));
-                finalCenterlines.push(createFinalApproachCenterlineFeature(le_point, bearing));
-            }
-            if (runwayData.he_ident) {
-                const bearing = turf.bearing(le_point, he_point);
-                addMarkingsForThreshold(he_point, bearing);
-                labels.push(createRunwayLabelFeature(runwayData.he_ident, he_point, bearing));
-                finalCones.push(createFinalApproachConeFeature(he_point, bearing));
-                finalCenterlines.push(createFinalApproachCenterlineFeature(he_point, bearing));
-            }
-        });
+                if (runwayData.he_ident) {
+                    const bearing = turf.bearing(le_point, he_point);
+                    labels.push(createRunwayLabelFeature(runwayData.he_ident, he_point, bearing));
+                    finalCones.push(createFinalApproachConeFeature(he_point, bearing));
+                    finalCenterlines.push(createFinalApproachCenterlineFeature(he_point, bearing));
+                }
+            });
 
-        // --- 3. Add all sources and layers to the map in the correct order ---
-        // Base Pavement
-        addSourceAndLayer('runways', { type: 'geojson', data: { type: 'FeatureCollection', features: runwayPolygons }}, { type: 'fill', paint: RUNWAY_STYLE_REGULAR });
-        
-        // White Markings (Threshold, Aiming Point)
-        addSourceAndLayer('runway-markings', { type: 'geojson', data: { type: 'FeatureCollection', features: runwayMarkings }}, { type: 'fill', paint: RUNWAY_MARKING_STYLE });
+            // Add sources and layers to the map
+            addSourceAndLayer('runways', { type: 'geojson', data: { type: 'FeatureCollection', features: runwayPolygons }}, { type: 'fill', paint: RUNWAY_STYLE_REGULAR });
+            addSourceAndLayer('runway-centerlines', { type: 'geojson', data: { type: 'FeatureCollection', features: centerlines }}, { type: 'line', paint: RUNWAY_CENTERLINE_STYLE_REGULAR });
+            addSourceAndLayer('runway-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: labels.filter(Boolean) }}, { type: 'symbol', layout: { 'text-field': ['get', 'ident'], 'text-font': ['Open Sans Bold'], 'text-size': 14, 'text-anchor': 'bottom', 'text-offset': [0, -0.5] }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 2 } });
+            addSourceAndLayer('final-approach-cones', { type: 'geojson', data: { type: 'FeatureCollection', features: finalCones }}, { type: 'fill', paint: FINAL_APPROACH_STYLE });
+            addSourceAndLayer('final-approach-centerlines', { type: 'geojson', data: { type: 'FeatureCollection', features: finalCenterlines }}, { type: 'line', paint: FINAL_APPROACH_CENTERLINE_STYLE });
 
-        // Centerline (on top of markings)
-        addSourceAndLayer('runway-centerlines', { type: 'geojson', data: { type: 'FeatureCollection', features: centerlines }}, { type: 'line', paint: RUNWAY_CENTERLINE_STYLE_REGULAR });
-
-        // Labels (on top of everything)
-        addSourceAndLayer('runway-labels', { type: 'geojson', data: { type: 'FeatureCollection', features: labels.filter(Boolean) }}, { type: 'symbol', layout: { 'text-field': ['get', 'ident'], 'text-font': ['Open Sans Bold'], 'text-size': 14, 'text-anchor': 'bottom', 'text-offset': [0, -0.5] }, paint: { 'text-color': '#fff', 'text-halo-color': '#000', 'text-halo-width': 2 } });
-        
-        // Final approach guides (unchanged)
-        addSourceAndLayer('final-approach-cones', { type: 'geojson', data: { type: 'FeatureCollection', features: finalCones }}, { type: 'fill', paint: FINAL_APPROACH_STYLE });
-        addSourceAndLayer('final-approach-centerlines', { type: 'geojson', data: { type: 'FeatureCollection', features: finalCenterlines }}, { type: 'line', paint: FINAL_APPROACH_CENTERLINE_STYLE });
-
-    } catch (err) {
-        console.error(`Could not draw runways for ${icao}:`, err);
+        } catch (err) {
+            console.error(`Could not draw runways for ${icao}:`, err);
+        }
     }
-}
 
 
     function highlightRunway(runwayId) {
