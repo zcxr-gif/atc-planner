@@ -154,22 +154,34 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         }
     }
 
-    async function getVORsFromOpenAIP(bbox) {
-        const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                const errData = await response.json();
-                console.error("Error from proxy server:", errData.error);
-                throw new Error(`Proxy Error: ${errData.error || response.statusText}`);
-            }
-            const data = await response.json();
-            return data.items || [];
-        } catch (error) {
-            console.error("Failed to fetch VORs via proxy:", error);
-            return [];
-        }
-    }
+    * @param {Array<number>} bbox - The bounding box array [west, south, east, north].
+	 * @returns {Promise<Array>} A promise that resolves to an array of navaid items, or an empty array on error.
+	 */
+	async function getVORsFromOpenAIP(bbox) {
+		// Construct the URL for the secure Netlify serverless function.
+		const url = `/.netlify/functions/navaids?bbox=${bbox.join(',')}`;
+
+		try {
+			const response = await fetch(url);
+
+			// If the server returned an error (e.g., 4xx or 5xx), handle it gracefully.
+			if (!response.ok) {
+				const errorData = await response.json();
+				console.error("Error response from navaids proxy function:", errorData.error || response.statusText);
+				// Return an empty array to prevent downstream errors.
+				return [];
+			}
+
+			const data = await response.json();
+			// The API nests the results in an 'items' property. Return it, or an empty array if it doesn't exist.
+			return data.items || [];
+
+		} catch (error) {
+			// Handle network errors or other unexpected issues during the fetch.
+			console.error("Failed to fetch VOR data via the proxy function:", error);
+			return [];
+		}
+	}
 
    async function initializeWMM() {
         try {
@@ -1351,67 +1363,95 @@ function createHelpPanel() {
 	// --- ADDED/FIXED FUNCTIONS ---
 	async function updateNavaids() {
 		const navaidsCheckbox = document.getElementById('filter-navaids');
+		const sourceId = 'openaip-navaids-source';
+		const layerId = 'openaip-navaids-layer';
+
+		// 1. Check if the user wants to see navaids. If not, hide the layer and stop.
 		if (!navaidsCheckbox || !navaidsCheckbox.checked) {
-			if (map.getLayer('navaids-layer')) map.setLayoutProperty('navaids-layer', 'visibility', 'none');
+			if (map.getLayer(layerId)) {
+				map.setLayoutProperty(layerId, 'visibility', 'none');
+			}
 			return;
 		}
 
-		const zoom = map.getZoom();
-		if (zoom < 7) {
-			if (map.getLayer('navaids-layer')) map.setLayoutProperty('navaids-layer', 'visibility', 'none');
+		// 2. To prevent clutter, only show navaids at a reasonable zoom level.
+		const currentZoom = map.getZoom();
+		if (currentZoom < 7) {
+			if (map.getLayer(layerId)) {
+				map.setLayoutProperty(layerId, 'visibility', 'none');
+			}
 			return;
 		}
 
+		// 3. Get the current map coordinates (bounding box).
 		const bounds = map.getBounds();
 		const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
 
-		try {
-			const navaids = await getVORsFromOpenAIP(bbox);
-			const navaidFeatures = navaids.map(navaid => ({
-				type: 'Feature',
-				geometry: {
-					type: 'Point',
-					coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
-				},
-				properties: {
-					name: navaid.properties.name,
-					type: navaid.type // e.g., 'VOR-DME'
-				}
-			}));
+		// 4. Fetch the navaid data for the visible area.
+		const navaids = await getVORsFromOpenAIP(bbox);
 
-			const sourceId = 'navaids-source';
-			const layerId = 'navaids-layer';
-
-			if (map.getSource(sourceId)) {
-				map.getSource(sourceId).setData({ type: 'FeatureCollection', features: navaidFeatures });
-			} else {
-				map.addSource(sourceId, {
-					type: 'geojson',
-					data: { type: 'FeatureCollection', features: navaidFeatures }
-				});
-				map.addLayer({
-					id: layerId,
-					type: 'symbol',
-					source: sourceId,
-					layout: {
-						// 'icon-image': 'airport-15', // Using text instead of icon for simplicity
-						'text-field': ['get', 'name'],
-						'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-						'text-size': 10,
-						'text-anchor': 'top',
-						'text-offset': [0, 0.8]
-					},
-					paint: {
-						'text-color': '#cce5ff',
-						'text-halo-color': '#000',
-						'text-halo-width': 1
-					}
-				});
+		// 5. Convert the fetched data into a GeoJSON FeatureCollection for MapTiler.
+		const navaidFeatures = navaids.map(navaid => ({
+			type: 'Feature',
+			geometry: {
+				// The API provides coordinates in [longitude, latitude] format.
+				type: 'Point',
+				coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
+			},
+			properties: {
+				// We'll use the 'name' property for the label (e.g., "JFK").
+				name: navaid.properties.name,
+				// We can also store the type for potential future styling (e.g., 'VOR-DME').
+				type: navaid.type
 			}
-			 if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
+		}));
 
-		} catch (error) {
-			console.error("Failed to update navaids:", error);
+		const geojsonData = {
+			type: 'FeatureCollection',
+			features: navaidFeatures
+		};
+
+		// 6. Add or update the data source on the map.
+		const source = map.getSource(sourceId);
+		if (source) {
+			// If the source already exists, just update its data. This is more efficient.
+			source.setData(geojsonData);
+		} else {
+			// If it's the first time, create the source and the layer to display it.
+			map.addSource(sourceId, {
+				type: 'geojson',
+				data: geojsonData
+			});
+
+			map.addLayer({
+				id: layerId,
+				type: 'symbol', // A symbol layer can display both icons and text.
+				source: sourceId,
+				layout: {
+					// Define the icon to use for the navaid. 'vor_dme_small' is a placeholder for a real icon name.
+					// For this example, we will use a simple circle with text.
+					// 'icon-image': 'vor-icon', // Uncomment if you have a custom icon sprite
+					
+					// Display the 'name' property from our GeoJSON as a text label.
+					'text-field': ['get', 'name'],
+					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+					'text-size': 11,
+					'text-anchor': 'top',
+					'text-offset': [0, 0.8], // Position the text slightly above the point center.
+					'text-allow-overlap': false // Hide labels that would collide.
+				},
+				paint: {
+					// Style the text to be easily readable against the map.
+					'text-color': '#A9D4FF', // A light blue color for the text.
+					'text-halo-color': '#000000', // A black outline (halo).
+					'text-halo-width': 1.5 // The width of the outline.
+				}
+			});
+		}
+
+		// 7. Finally, ensure the layer is visible.
+		if (map.getLayer(layerId)) {
+			map.setLayoutProperty(layerId, 'visibility', 'visible');
 		}
 	}
 
