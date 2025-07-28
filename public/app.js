@@ -1236,33 +1236,71 @@ function updateFlightMarkers(flights, sessionId) {
         scaleSlider.addEventListener('change', saveSettings);
     }
 
-    function createHelpPanel() {
-        const helpContent = `
-            <div class="info-card">
-                <h3>Getting Started</h3>
-                <ul>
-                    <li><strong>Load Airport:</strong> Type an airport ICAO code (e.g., KJFK) into the search box and click 'Load'.</li>
-                    <li><strong>Filter Airports:</strong> Use the checkboxes under 'Filters' to show or hide large, medium, or small airports on the map as you zoom.</li>
-                </ul>
-            </div>
-            <div class="info-card">
-                <h3>Drawing Tool</h3>
-                <p style="font-size: 14px; color: #ddd; margin: 0;">To plan a flight path:</p>
-                <ol style="font-size: 14px; color: #ddd; padding-left: 20px;">
-                    <li style="margin-bottom: 5px;">Check <strong>'Enable Drawing Mode'</strong> to start.</li>
-                    <li style="margin-bottom: 5px;">The tool will stay active to draw multiple lines. <strong>Uncheck the box</strong> when you are finished drawing to move the map again.</li>
-                    <li style="margin-bottom: 5px;">In the Flight Plan panel, <strong>click the heading value</strong> to edit it manually for precise intercepts.</li>
-                </ol>
-            </div>
-            <div class="info-card">
-                <h3>Settings Panel</h3>
-                <p style="font-size: 14px; color: #ddd; margin: 0;">
-                    Use the 'Settings' button to change the size of the flight data blocks or hide them completely.
-                </p>
-            </div>
+    // Inside app.js
+
+function createHelpPanel() {
+    const helpContent = `
+        <div class="info-card">
+            <h3>Getting Started</h3>
+            <ul>
+                <li><strong>Load Airport:</strong> Type an airport ICAO code (e.g., KJFK) into the search box and click 'Load'.</li>
+                <li><strong>Filter Airports:</strong> Use the checkboxes under 'Filters' to show or hide large, medium, or small airports on the map as you zoom.</li>
+            </ul>
+        </div>
+        <div class="info-card">
+            <h3>Drawing Tool</h3>
+            <p style="font-size: 14px; color: #ddd; margin: 0;">To plan a flight path:</p>
+            <ol style="font-size: 14px; color: #ddd; padding-left: 20px;">
+                <li style="margin-bottom: 5px;">Check <strong>'Enable Drawing Mode'</strong> to start.</li>
+                <li style="margin-bottom: 5px;">The tool will stay active to draw multiple lines. <strong>Uncheck the box</strong> when you are finished drawing to move the map again.</li>
+                <li style="margin-bottom: 5px;">In the Flight Plan panel, <strong>click the heading value</strong> to edit it manually for precise intercepts.</li>
+            </ol>
+        </div>
+
+        <div class="info-card">
+            <h3>Aircraft Speed Guidelines</h3>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
+                Use these minimum speeds as a reference for sequencing traffic. All speeds are for a "clean" configuration (no flaps).
+            </p>
+
+            <h4 class="guide-header">Narrow-Body Aircraft (e.g., A320, B737)</h4>
+            <table class="speed-guide-table">
+                <thead>
+                    <tr>
+                        <th>Altitude Range</th>
+                        <th>Suggested Minimum Speed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Above FL280</td><td>Mach 0.76 - 0.78</td></tr>
+                    <tr><td>FL180 to FL280</td><td>260 - 280 KIAS</td></tr>
+                    <tr><td>12,000 ft to FL180</td><td>250 - 260 KIAS</td></tr>
+                    <tr><td>Below 12,000 ft</td><td>210 - 240 KIAS</td></tr>
+                </tbody>
+            </table>
+
+            <h4 class="guide-header">Wide-Body Aircraft (e.g., A350, B777, B747)</h4>
+            <table class="speed-guide-table">
+                <thead>
+                    <tr>
+                        <th>Altitude Range</th>
+                        <th>Suggested Minimum Speed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Above FL280</td><td>Mach 0.80 - 0.82</td></tr>
+                    <tr><td>FL180 to FL280</td><td>280 - 300 KIAS</td></tr>
+                    <tr><td>12,000 ft to FL180</td><td>260 - 280 KIAS</td></tr>
+                    <tr><td>Below 12,000 ft</td><td>220 - 250 KIAS</td></tr>
+                </tbody>
+            </table>
+            <p class="guide-notes">
+                <strong>Remember:</strong> This are rough estimates, speeds may differ based on the situation.
+            </p>
+        </div>
         `;
-        createFloatingPanel('help-panel', '<h2>Help</h2>', '150px', '150px', helpContent);
-    }
+    createFloatingPanel('help-panel', '<h2>Help</h2>', '150px', '150px', helpContent);
+}
 
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
 
