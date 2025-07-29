@@ -758,38 +758,11 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
     
 	// ... all other UI panel creation functions (createLiveControlPanel, etc.)...
 
-function createTrafficScanPanel() {
-    const existingPanel = document.getElementById('traffic-scan-panel');
-    if (existingPanel) {
-        existingPanel.style.display = 'block';
-        if (window.innerWidth <= 768) existingPanel.classList.add('visible');
-        return;
-    }
-
-    const content = `
-        <div class="info-card">
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
-                This tool scans the selected server to find airports with the most inbound traffic.
-                The scan may take a few moments.
-            </p>
-            <button id="begin-traffic-scan-btn" style="width: 100%;">Begin Scan</button>
-        </div>
-        <div id="traffic-scan-results" class="info-card" style="display: none;">
-            </div>
-    `;
-
-    const panel = createFloatingPanel('traffic-scan-panel', '<h2>Server Traffic Scan</h2>', '100px', '400px', content);
-
-    panel.querySelector('#begin-traffic-scan-btn').addEventListener('click', generateTrafficHotspotReport);
-}
-
-
 async function generateTrafficHotspotReport() {
     const resultsContainer = document.getElementById('traffic-scan-results');
     const scanButton = document.getElementById('begin-traffic-scan-btn');
     if (!resultsContainer || !scanButton) return;
 
-    // Use the existing loader style from the HTML file
     resultsContainer.style.display = 'block';
     resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
     scanButton.disabled = true;
@@ -820,21 +793,6 @@ async function generateTrafficHotspotReport() {
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
         const activeAirports = worldData.result || [];
 
-        // --- NEW LOGIC START ---
-        // Pre-calculate the number of aircraft on the ground for each airport.
-        const onGroundByAirport = {};
-        (flightsData.result || []).forEach(flight => {
-            // An aircraft is on the ground if its departure airport is set and its speed is below 50 kts.
-            if (flight.departure && flight.speed < 50) {
-                const departureIcao = flight.departure;
-                if (!onGroundByAirport[departureIcao]) {
-                    onGroundByAirport[departureIcao] = 0;
-                }
-                onGroundByAirport[departureIcao]++;
-            }
-        });
-        // --- NEW LOGIC END ---
-
         if (activeAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
             scanButton.disabled = false;
@@ -845,10 +803,20 @@ async function generateTrafficHotspotReport() {
         const airportTrafficData = {};
 
         activeAirports.forEach(airportStatus => {
-            const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
+            // --- NEW LOGIC START ---
+            // For each airport, get its list of departing flights and check their speed.
+            let onGroundCount = 0;
+            const outboundFlightIds = airportStatus.outboundFlights || []; // Get the list of departing flight IDs
+            outboundFlightIds.forEach(flightId => {
+                const flight = flightsMap.get(flightId); // Look up the flight's details
+                if (flight && flight.speed < 50) {
+                    onGroundCount++; // If speed is < 50, it's on the ground
+                }
+            });
+            // --- NEW LOGIC END ---
 
             // Skip airports with no relevant traffic
-            if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
+            if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && onGroundCount === 0) {
                 return;
             }
 
@@ -868,7 +836,7 @@ async function generateTrafficHotspotReport() {
                 icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
                 inboundTotal: airportStatus.inboundFlightsCount || 0,
-                outboundOnGround: calculatedOnGroundCount, // Use our calculated value
+                outboundOnGround: onGroundCount, // Use our newly calculated value
                 outboundTotal: airportStatus.outboundFlightsCount || 0,
                 inboundBuckets: { in20: 0, in60: 0, over60: 0 }
             };
