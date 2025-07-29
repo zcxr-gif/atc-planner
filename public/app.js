@@ -784,13 +784,12 @@ function createTrafficScanPanel() {
 }
 
 
-// In app.js, replace the existing function with this one.
-
 async function generateTrafficHotspotReport() {
     const resultsContainer = document.getElementById('traffic-scan-results');
     const scanButton = document.getElementById('begin-traffic-scan-btn');
     if (!resultsContainer || !scanButton) return;
 
+    // Use the existing loader style from the HTML file
     resultsContainer.style.display = 'block';
     resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
     scanButton.disabled = true;
@@ -821,44 +820,61 @@ async function generateTrafficHotspotReport() {
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
         const activeAirports = worldData.result || [];
 
-        // --- FIX: This entire block is new, more accurate logic ---
-        const onGroundByAirport = {};
+        // --- NEW LOGIC START (with Proximity and Altitude Checks) ---
         
-        // 1. Create a map of all airports by ICAO for quick lookups.
-        const allAirportsMap = new Map(allAirports.map(a => [a.ident, a]));
+        // 1. Pre-filter for flights that are potentially on the ground or on final approach.
+        const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
 
-        // 2. Filter for flights that are on the ground (speed < 50 kts).
-        const groundedFlights = (flightsData.result || []).filter(f => f.speed < 50);
-
-        // 3. For each grounded flight, find which airport it's at.
-        groundedFlights.forEach(flight => {
-            const flightPosition = turf.point([flight.longitude, flight.latitude]);
-
-            // Iterate through the list of *active* airports from the world status.
-            for (const airportStatus of activeAirports) {
-                const airportInfo = allAirportsMap.get(airportStatus.airportIcao);
-
-                if (airportInfo && airportInfo.latitude_deg && airportInfo.longitude_deg) {
-                    const airportPosition = turf.point([
-                        parseFloat(airportInfo.longitude_deg),
-                        parseFloat(airportInfo.latitude_deg)
-                    ]);
-
-                    // Calculate distance. If less than 2 NM, we have a match.
-                    const distanceNM = turf.distance(flightPosition, airportPosition, { units: 'nauticalmiles' });
-                    
-                    if (distanceNM < 2) {
-                        const icao = airportStatus.airportIcao;
-                        if (!onGroundByAirport[icao]) {
-                            onGroundByAirport[icao] = 0;
-                        }
-                        onGroundByAirport[icao]++;
-                        return; // Exit loop for this flight, it's been assigned.
-                    }
+        // 2. Create a Map of active airport locations for quick lookups.
+        const activeAirportLocations = new Map();
+        activeAirports.forEach(activeAirport => {
+            const airportInfo = allAirports.find(a => a.ident === activeAirport.airportIcao);
+            if (airportInfo) {
+                const lat = parseFloat(airportInfo.latitude_deg);
+                const lon = parseFloat(airportInfo.longitude_deg);
+                const elev = parseFloat(airportInfo.elevation_ft);
+                if (!isNaN(lat) && !isNaN(lon) && !isNaN(elev)) {
+                    activeAirportLocations.set(activeAirport.airportIcao, { lat, lon, elev });
                 }
             }
         });
-        // --- END OF FIX ---
+        
+        // 3. Initialize the counter for each active airport.
+        const onGroundByAirport = {};
+        for (const icao of activeAirportLocations.keys()) {
+            onGroundByAirport[icao] = 0;
+        }
+
+        // 4. For each low & slow flight, find its nearest active airport.
+        lowAndSlowFlights.forEach(flight => {
+            const aircraftPoint = turf.point([flight.longitude, flight.latitude]);
+            let closestIcao = null;
+            let minDistance = Infinity;
+
+            for (const [icao, coords] of activeAirportLocations.entries()) {
+                const airportPoint = turf.point([coords.lon, coords.lat]);
+                const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
+                
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestIcao = icao;
+                }
+            }
+
+            // 5. If the aircraft is close enough to an airport...
+            if (closestIcao && minDistance < 3) {
+                // ...now perform the crucial altitude check.
+                const airportCoords = activeAirportLocations.get(closestIcao);
+                const airportElevation = airportCoords.elev;
+                const aircraftAltitude = flight.altitude; // Altitude is in feet MSL
+
+                // Only count if the aircraft's altitude is within 500 feet of the airport's elevation.
+                if (Math.abs(aircraftAltitude - airportElevation) < 500) {
+                    onGroundByAirport[closestIcao]++;
+                }
+            }
+        });
+        // --- NEW LOGIC END ---
 
         if (activeAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
@@ -866,13 +882,13 @@ async function generateTrafficHotspotReport() {
             scanButton.textContent = 'Re-Scan';
             return;
         }
-        
-        // --- The rest of the function remains the same, but now uses the accurate data ---
+
         const airportTrafficData = {};
 
         activeAirports.forEach(airportStatus => {
             const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
 
+            // Skip airports with no relevant traffic
             if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
                 return;
             }
@@ -893,7 +909,7 @@ async function generateTrafficHotspotReport() {
                 icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
                 inboundTotal: airportStatus.inboundFlightsCount || 0,
-                outboundOnGround: calculatedOnGroundCount, // This will now be correct
+                outboundOnGround: calculatedOnGroundCount, // Use our calculated value
                 outboundTotal: airportStatus.outboundFlightsCount || 0,
                 inboundBuckets: { in20: 0, in60: 0, over60: 0 }
             };
