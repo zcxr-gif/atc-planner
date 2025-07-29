@@ -51,6 +51,7 @@ exports.handler = async function(event, context) {
 
       return {
         flightId: f.flightId || f.id || f.callsign || `flight-${idx}`,
+		flightPlanId: f.flightPlanId, 
         latitude: f.latitude,
         longitude: f.longitude,
         heading: f.heading,

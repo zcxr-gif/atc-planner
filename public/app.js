@@ -789,6 +789,10 @@ function createTrafficScanPanel() {
 /**
  * Fetches all flight and flight plan data to generate a report of the busiest airports.
  */
+/**
+ * Fetches all flight and flight plan data to generate a report of the busiest airports.
+ * This function has been corrected to use the efficient 'world' API endpoint.
+ */
 async function generateTrafficHotspotReport() {
     const resultsContainer = document.getElementById('traffic-scan-results');
     const scanButton = document.getElementById('begin-traffic-scan-btn');
@@ -809,62 +813,70 @@ async function generateTrafficHotspotReport() {
             throw new Error("No server selected in Live Mode.");
         }
 
-        const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
-        const flightsData = await flightsResponse.json();
-        const allFlights = (flightsData.result || []).filter(flight => flight.flightPlanId); // Only consider flights with a flight plan
-        const airports = await getAirports();
+        // --- NEW EFFICIENT LOGIC ---
+        // 1. Fetch the world status and all flights in parallel.
+        const [worldResponse, flightsResponse] = await Promise.all([
+            fetch(`/.netlify/functions/world/${sessionId}`), // Assumes a proxy function for the World API
+            fetch(`/.netlify/functions/flights/${sessionId}`)
+        ]);
 
-        if (allFlights.length === 0) {
-            resultsContainer.innerHTML = '<p>No flights with active flight plans found on the server.</p>';
+        if (!worldResponse.ok || !flightsResponse.ok) {
+            throw new Error("Failed to fetch server data.");
+        }
+
+        const worldData = await worldResponse.json();
+        const flightsData = await flightsResponse.json();
+        const allAirports = await getAirports();
+
+        // Create a Map for quick flight lookups by ID
+        const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
+        
+        const activeAirports = worldData.result || [];
+
+        if (activeAirports.length === 0) {
+            resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
             scanButton.disabled = false;
             scanButton.textContent = 'Re-Scan';
             return;
         }
 
-        // Fetch all flight plans in parallel for efficiency
-        const flightPlanPromises = allFlights.map(flight =>
-            fetch(`/.netlify/functions/flightplan/${sessionId}/${flight.flightPlanId}`).then(res => res.json())
-        );
-        const flightPlanResults = await Promise.all(flightPlanPromises);
-
         const airportTrafficData = {};
 
-        allFlights.forEach((flight, index) => {
-            const fpl = flightPlanResults[index];
-            const flightPlanItems = fpl.result?.flightPlanItems;
+        // 2. Process the pre-aggregated data from the world status endpoint.
+        activeAirports.forEach(airportStatus => {
+            const inboundFlightIds = new Set(airportStatus.inboundFlights || []); // A list of inbound flight IDs. [cite: 9]
+            if (inboundFlightIds.size === 0) return;
 
-            // Find the last waypoint, which is the destination
-            if (flightPlanItems && flightPlanItems.length > 0 && flight.speed > 50) {
-                const destinationItem = flightPlanItems[flightPlanItems.length - 1];
-                const destIcao = destinationItem.ident;
-                const destinationAirport = airports.find(a => a.ident === destIcao);
+            const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
+            if (!airportInfo) return;
 
-                if (destinationAirport) {
-                    if (!airportTrafficData[destIcao]) {
-                        airportTrafficData[destIcao] = {
-                            name: destinationAirport.name.replace(/"/g, ''),
-                            total: 0,
-                            buckets: { in20: 0, in60: 0, over60: 0 }
-                        };
-                    }
+            const airportPosition = turf.point([parseFloat(airportInfo.longitude_deg), parseFloat(airportInfo.latitude_deg)]);
+            
+            airportTrafficData[airportStatus.airportIcao] = {
+                name: airportStatus.airportName.replace(/"/g, ''),
+                total: airportStatus.inboundFlightsCount, // Use the direct count from the API. [cite: 8]
+                buckets: { in20: 0, in60: 0, over60: 0 }
+            };
 
+            // 3. Calculate ETE for each inbound flight.
+            inboundFlightIds.forEach(flightId => {
+                const flight = flightsMap.get(flightId);
+                if (flight && flight.speed > 50) {
                     const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
-                    const airportPosition = turf.point([parseFloat(destinationAirport.longitude_deg), parseFloat(destinationAirport.latitude_deg)]);
                     const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
                     const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
 
-                    airportTrafficData[destIcao].total++;
                     if (eteMinutes <= 20) {
-                        airportTrafficData[destIcao].buckets.in20++;
+                        airportTrafficData[airportStatus.airportIcao].buckets.in20++;
                     } else if (eteMinutes <= 60) {
-                        airportTrafficData[destIcao].buckets.in60++;
+                        airportTrafficData[airportStatus.airportIcao].buckets.in60++;
                     } else {
-                        airportTrafficData[destIcao].buckets.over60++;
+                        airportTrafficData[airportStatus.airportIcao].buckets.over60++;
                     }
                 }
-            }
+            });
         });
-
+        
         const sortedAirports = Object.entries(airportTrafficData)
             .sort(([, a], [, b]) => b.total - a.total)
             .slice(0, 15);
