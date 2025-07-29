@@ -755,11 +755,9 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
 		mainPanel.querySelector('#traffic-scan-btn').addEventListener('click', createTrafficScanPanel);
     }
-    // ... all other UI panel creation functions (createLiveControlPanel, etc.)...
+    
+	// ... all other UI panel creation functions (createLiveControlPanel, etc.)...
 
-/**
- * Creates and displays the main "Traffic Scan" panel.
- */
 function createTrafficScanPanel() {
     const existingPanel = document.getElementById('traffic-scan-panel');
     if (existingPanel) {
@@ -786,17 +784,6 @@ function createTrafficScanPanel() {
 }
 
 
-/**
- * Fetches all flight and flight plan data to generate a report of the busiest airports.
- */
-/**
- * Fetches all flight and flight plan data to generate a report of the busiest airports.
- * This function has been corrected to use the efficient 'world' API endpoint.
- */
-/**
- * Fetches all flight and flight plan data to generate a report of the busiest airports,
- * now showing both inbound and outbound traffic with a new card-based UI.
- */
 async function generateTrafficHotspotReport() {
     const resultsContainer = document.getElementById('traffic-scan-results');
     const scanButton = document.getElementById('begin-traffic-scan-btn');
@@ -861,7 +848,6 @@ async function generateTrafficHotspotReport() {
                 return;
             }
             const airportPosition = turf.point([airportLon, airportLat]);
-            // --- FIX END ---
             
             // Store a more complete data set for each airport
             const data = {
@@ -869,9 +855,9 @@ async function generateTrafficHotspotReport() {
                 name: airportStatus.airportName.replace(/"/g, ''),
                 inboundTotal: airportStatus.inboundFlightsCount || 0,
                 // Assumes the API provides these properties
-                outboundTotal: airportStatus.departingFlightsCount || 0,
-                onGroundTotal: airportStatus.onGroundCount || 0,
-                inboundBuckets: { in20: 0, in60: 0, over60: 0 }
+                outboundTotal: airportStatus.outboundFlightsCount || 0,
+    onGroundTotal: airportStatus.aircraftOnGroundCount || 0,
+    inboundBuckets: { in20: 0, in60: 0, over60: 0 }
             };
 
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
@@ -897,7 +883,6 @@ async function generateTrafficHotspotReport() {
                             data.inboundBuckets.over60++;
                         }
                     }
-                    // --- FIX END ---
                 }
             });
             airportTrafficData[data.icao] = data;
