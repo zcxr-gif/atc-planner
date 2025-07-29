@@ -784,12 +784,13 @@ function createTrafficScanPanel() {
 }
 
 
+// In app.js, replace the existing function with this one.
+
 async function generateTrafficHotspotReport() {
     const resultsContainer = document.getElementById('traffic-scan-results');
     const scanButton = document.getElementById('begin-traffic-scan-btn');
     if (!resultsContainer || !scanButton) return;
 
-    // Use the existing loader style from the HTML file
     resultsContainer.style.display = 'block';
     resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
     scanButton.disabled = true;
@@ -820,22 +821,44 @@ async function generateTrafficHotspotReport() {
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
         const activeAirports = worldData.result || [];
 
-        // --- NEW LOGIC START ---
-        // Pre-calculate the number of aircraft on the ground for each airport.
-        // In app.js, inside the generateTrafficHotspotReport function
+        // --- FIX: This entire block is new, more accurate logic ---
+        const onGroundByAirport = {};
+        
+        // 1. Create a map of all airports by ICAO for quick lookups.
+        const allAirportsMap = new Map(allAirports.map(a => [a.ident, a]));
 
-const onGroundByAirport = {};
-(flightsData.result || []).forEach(flight => {
-    // An aircraft is on the ground if its origin airport is set and its speed is below 50 kts.
-    // FIX: The check now correctly uses `flight.originAirport`.
-    if (flight.originAirport && flight.speed < 50) {
-        const departureIcao = flight.originAirport;
-        if (!onGroundByAirport[departureIcao]) {
-            onGroundByAirport[departureIcao] = 0;
-        }
-        onGroundByAirport[departureIcao]++;
-    }
-});
+        // 2. Filter for flights that are on the ground (speed < 50 kts).
+        const groundedFlights = (flightsData.result || []).filter(f => f.speed < 50);
+
+        // 3. For each grounded flight, find which airport it's at.
+        groundedFlights.forEach(flight => {
+            const flightPosition = turf.point([flight.longitude, flight.latitude]);
+
+            // Iterate through the list of *active* airports from the world status.
+            for (const airportStatus of activeAirports) {
+                const airportInfo = allAirportsMap.get(airportStatus.airportIcao);
+
+                if (airportInfo && airportInfo.latitude_deg && airportInfo.longitude_deg) {
+                    const airportPosition = turf.point([
+                        parseFloat(airportInfo.longitude_deg),
+                        parseFloat(airportInfo.latitude_deg)
+                    ]);
+
+                    // Calculate distance. If less than 2 NM, we have a match.
+                    const distanceNM = turf.distance(flightPosition, airportPosition, { units: 'nauticalmiles' });
+                    
+                    if (distanceNM < 2) {
+                        const icao = airportStatus.airportIcao;
+                        if (!onGroundByAirport[icao]) {
+                            onGroundByAirport[icao] = 0;
+                        }
+                        onGroundByAirport[icao]++;
+                        return; // Exit loop for this flight, it's been assigned.
+                    }
+                }
+            }
+        });
+        // --- END OF FIX ---
 
         if (activeAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
@@ -843,13 +866,13 @@ const onGroundByAirport = {};
             scanButton.textContent = 'Re-Scan';
             return;
         }
-
+        
+        // --- The rest of the function remains the same, but now uses the accurate data ---
         const airportTrafficData = {};
 
         activeAirports.forEach(airportStatus => {
             const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
 
-            // Skip airports with no relevant traffic
             if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
                 return;
             }
@@ -870,7 +893,7 @@ const onGroundByAirport = {};
                 icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
                 inboundTotal: airportStatus.inboundFlightsCount || 0,
-                outboundOnGround: calculatedOnGroundCount, // Use our calculated value
+                outboundOnGround: calculatedOnGroundCount, // This will now be correct
                 outboundTotal: airportStatus.outboundFlightsCount || 0,
                 inboundBuckets: { in20: 0, in60: 0, over60: 0 }
             };
