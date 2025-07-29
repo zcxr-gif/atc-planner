@@ -793,13 +793,18 @@ function createTrafficScanPanel() {
  * Fetches all flight and flight plan data to generate a report of the busiest airports.
  * This function has been corrected to use the efficient 'world' API endpoint.
  */
+/**
+ * Fetches all flight and flight plan data to generate a report of the busiest airports,
+ * now showing both inbound and outbound traffic with a new card-based UI.
+ */
 async function generateTrafficHotspotReport() {
     const resultsContainer = document.getElementById('traffic-scan-results');
     const scanButton = document.getElementById('begin-traffic-scan-btn');
     if (!resultsContainer || !scanButton) return;
 
+    // Use the existing loader style from the HTML file
     resultsContainer.style.display = 'block';
-    resultsContainer.innerHTML = `<p>Scanning server... This may take a moment.</p>`;
+    resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
     scanButton.disabled = true;
     scanButton.textContent = 'Scanning...';
 
@@ -813,10 +818,8 @@ async function generateTrafficHotspotReport() {
             throw new Error("No server selected in Live Mode.");
         }
 
-        // --- NEW EFFICIENT LOGIC ---
-        // 1. Fetch the world status and all flights in parallel.
         const [worldResponse, flightsResponse] = await Promise.all([
-            fetch(`/.netlify/functions/world/${sessionId}`), // Assumes a proxy function for the World API
+            fetch(`/.netlify/functions/world/${sessionId}`),
             fetch(`/.netlify/functions/flights/${sessionId}`)
         ]);
 
@@ -827,10 +830,7 @@ async function generateTrafficHotspotReport() {
         const worldData = await worldResponse.json();
         const flightsData = await flightsResponse.json();
         const allAirports = await getAirports();
-
-        // Create a Map for quick flight lookups by ID
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
-        
         const activeAirports = worldData.result || [];
 
         if (activeAirports.length === 0) {
@@ -842,80 +842,110 @@ async function generateTrafficHotspotReport() {
 
         const airportTrafficData = {};
 
-        // 2. Process the pre-aggregated data from the world status endpoint.
         activeAirports.forEach(airportStatus => {
-            const inboundFlightIds = new Set(airportStatus.inboundFlights || []); // A list of inbound flight IDs. [cite: 9]
-            if (inboundFlightIds.size === 0) return;
+            // Skip airports with no relevant traffic
+            if (!airportStatus.inboundFlightsCount && !airportStatus.departingFlightsCount && !airportStatus.onGroundCount) {
+                return;
+            }
 
             const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
             if (!airportInfo) return;
 
             const airportPosition = turf.point([parseFloat(airportInfo.longitude_deg), parseFloat(airportInfo.latitude_deg)]);
             
-            airportTrafficData[airportStatus.airportIcao] = {
+            // Store a more complete data set for each airport
+            const data = {
+                icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
-                total: airportStatus.inboundFlightsCount, // Use the direct count from the API. [cite: 8]
-                buckets: { in20: 0, in60: 0, over60: 0 }
+                inboundTotal: airportStatus.inboundFlightsCount || 0,
+                // Assumes the API provides these properties
+                outboundTotal: airportStatus.departingFlightsCount || 0,
+                onGroundTotal: airportStatus.onGroundCount || 0,
+                inboundBuckets: { in20: 0, in60: 0, over60: 0 }
             };
 
-            // 3. Calculate ETE for each inbound flight.
+            const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
             inboundFlightIds.forEach(flightId => {
                 const flight = flightsMap.get(flightId);
-                if (flight && flight.speed > 50) {
+                if (flight && flight.speed > 50) { // Only count aircraft that are moving
                     const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
                     const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
                     const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
 
                     if (eteMinutes <= 20) {
-                        airportTrafficData[airportStatus.airportIcao].buckets.in20++;
+                        data.inboundBuckets.in20++;
                     } else if (eteMinutes <= 60) {
-                        airportTrafficData[airportStatus.airportIcao].buckets.in60++;
+                        data.inboundBuckets.in60++;
                     } else {
-                        airportTrafficData[airportStatus.airportIcao].buckets.over60++;
+                        data.inboundBuckets.over60++;
                     }
                 }
             });
+            airportTrafficData[data.icao] = data;
         });
         
-        const sortedAirports = Object.entries(airportTrafficData)
-            .sort(([, a], [, b]) => b.total - a.total)
-            .slice(0, 15);
+        // Sort airports by total inbound traffic, descending
+        const sortedAirports = Object.values(airportTrafficData)
+            .sort((a, b) => b.inboundTotal - a.inboundTotal)
+            .slice(0, 20); // Show the top 20 busiest airports
 
         if (sortedAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
         } else {
-            let htmlContent = sortedAirports.map(([icao, data]) => `
-                <div class="atc-item" data-icao="${icao}" style="cursor: pointer; margin-bottom: 10px;">
-                    <div class="atc-airport-header" style="padding-bottom: 8px; margin-bottom: 8px;">
-                        <strong>${data.name}</strong>
-                        <span>${icao}</span>
+            // Generate the new HTML using the .traffic-card structure
+            let htmlContent = sortedAirports.map(data => `
+                <div class="traffic-card" data-icao="${data.icao}">
+                    <div class="traffic-card-header">
+                        <div class="airport-name">${data.name}</div>
+                        <div class="airport-icao">${data.icao}</div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="text-align: left;">
-                            <span style="font-size: 1.5em; font-weight: bold; color: var(--accent);">${data.total}</span>
-                            <span style="font-size: 0.9em;">Total Inbound</span>
+                    <div class="traffic-card-body">
+                        <div class="traffic-col">
+                            <div class="col-header">
+                                <span class="icon-inbound"></span>
+                                Inbound
+                            </div>
+                            <div class="total-count">${data.inboundTotal}</div>
+                            <div class="detail-breakdown">
+                                <span class="detail-value">${data.inboundBuckets.in20}</span> in &lt; 20 min<br>
+                                <span class="detail-value">${data.inboundBuckets.in60}</span> in &lt; 1 hr<br>
+                                <span class="detail-value">${data.inboundBuckets.over60}</span> in &gt; 1 hr
+                            </div>
                         </div>
-                        <div style="text-align: right; font-size: 12px; font-family: 'Roboto Mono', monospace;">
-                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in20}</span> in < 20 min</div>
-                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in60}</span> in < 1 hr</div>
-                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.over60}</span> in > 1 hr</div>
+                        <div class="traffic-col">
+                             <div class="col-header">
+                                <span class="icon-outbound"></span>
+                                Outbound
+                            </div>
+                            <div class="total-count">${data.outboundTotal}</div>
+                            <div class="detail-breakdown">
+                                <span class="on-ground-text">${data.onGroundTotal}</span> on ground
+                            </div>
                         </div>
                     </div>
                 </div>
             `).join('');
 
             resultsContainer.innerHTML = htmlContent;
-            resultsContainer.querySelectorAll('.atc-item').forEach(item => {
+            
+            // Re-attach event listeners to the new cards
+            resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
                 item.addEventListener('click', (e) => {
                     const selectedIcao = e.currentTarget.dataset.icao;
                     displayAirportDetails(selectedIcao);
                     const scanPanel = document.getElementById('traffic-scan-panel');
-                    if (scanPanel) scanPanel.remove();
+                    if (scanPanel) {
+                        if (window.innerWidth <= 768) {
+                           scanPanel.classList.remove('visible');
+                        } else {
+                           scanPanel.remove();
+                        }
+                    }
                 });
             });
         }
     } catch (error) {
-        resultsContainer.innerHTML = `<p style="color: var(--danger-color);">Error: ${error.message}</p>`;
+        resultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">Error: ${error.message}</p>`;
     } finally {
         scanButton.disabled = false;
         scanButton.textContent = 'Re-Scan';
