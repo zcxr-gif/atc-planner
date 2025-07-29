@@ -935,7 +935,6 @@ async function generateTrafficHotspotReport() {
         scanButton.textContent = 'Re-Scan';
     }
 }
-}
      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
         if (existingPanel) {
