@@ -799,6 +799,9 @@ async function generateTrafficHotspotReport() {
     scanButton.disabled = true;
     scanButton.textContent = 'Scanning...';
 
+    // Helper function to add a delay
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
     try {
         if (!isLiveModeActive) {
             throw new Error("Live Mode is not active. Please connect to a server first.");
@@ -809,7 +812,6 @@ async function generateTrafficHotspotReport() {
             throw new Error("No server selected in Live Mode.");
         }
 
-        // 1. Fetch all necessary data
         const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
         const flightsData = await flightsResponse.json();
         const allFlights = flightsData.result || [];
@@ -817,98 +819,93 @@ async function generateTrafficHotspotReport() {
 
         if (allFlights.length === 0) {
              resultsContainer.innerHTML = '<p>The server is currently empty.</p>';
+             scanButton.disabled = false;
+             scanButton.textContent = 'Re-Scan';
              return;
         }
 
-        // 2. Fetch all flight plans concurrently
-        const flightPlanPromises = allFlights.map(flight =>
-            fetch(`/.netlify/functions/flightplan/${sessionId}/${flight.flightId}`)
-                .then(res => res.ok ? res.json() : Promise.resolve(null)) // Handle failed fetches
-                .then(fpl => ({ flight, fpl }))
-        );
-        const flightsWithFpl = await Promise.all(flightPlanPromises);
-
-        // 3. Process the data
         const airportTrafficData = {};
+        let processedCount = 0;
 
-        for (const { flight, fpl } of flightsWithFpl) {
-            if (!fpl || !fpl.result || !fpl.result.destinationId || !flight.speed || flight.speed <= 50) {
-                continue; // Skip if no valid destination or not moving
+        // *** MODIFICATION START ***
+        // We now loop through flights sequentially with a delay, instead of all at once.
+        for (const flight of allFlights) {
+            const fplResponse = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flight.flightId}`);
+            if (fplResponse.ok) {
+                const fpl = await fplResponse.json();
+                 if (fpl && fpl.result && fpl.result.destinationId && flight.speed > 50) {
+                    const destIcao = fpl.result.destinationId;
+                    const destinationAirport = airports.find(a => a.ident === destIcao);
+
+                    if (destinationAirport) {
+                        if (!airportTrafficData[destIcao]) {
+                            airportTrafficData[destIcao] = {
+                                name: destinationAirport.name.replace(/"/g, ''),
+                                total: 0,
+                                buckets: { in20: 0, in60: 0, over60: 0 }
+                            };
+                        }
+
+                        const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
+                        const airportPosition = turf.point([parseFloat(destinationAirport.longitude_deg), parseFloat(destinationAirport.latitude_deg)]);
+                        const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
+                        const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
+
+                        airportTrafficData[destIcao].total++;
+                        if (eteMinutes <= 20) {
+                            airportTrafficData[destIcao].buckets.in20++;
+                        } else if (eteMinutes <= 60) {
+                            airportTrafficData[destIcao].buckets.in60++;
+                        } else {
+                            airportTrafficData[destIcao].buckets.over60++;
+                        }
+                    }
+                }
             }
-
-            const destIcao = fpl.result.destinationId;
-            const destinationAirport = airports.find(a => a.ident === destIcao);
-            if (!destinationAirport) continue;
-
-            // Initialize if first time seeing this airport
-            if (!airportTrafficData[destIcao]) {
-                airportTrafficData[destIcao] = {
-                    name: destinationAirport.name.replace(/"/g, ''),
-                    total: 0,
-                    buckets: { in20: 0, in60: 0, over60: 0 }
-                };
-            }
-
-            // Calculate ETE
-            const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
-            const airportPosition = turf.point([parseFloat(destinationAirport.longitude_deg), parseFloat(destinationAirport.latitude_deg)]);
-            const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
-            const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
-
-            // Increment totals and buckets
-            airportTrafficData[destIcao].total++;
-            if (eteMinutes <= 20) {
-                airportTrafficData[destIcao].buckets.in20++;
-            } else if (eteMinutes <= 60) {
-                airportTrafficData[destIcao].buckets.in60++;
-            } else {
-                airportTrafficData[destIcao].buckets.over60++;
-            }
+            // Update progress and add a delay to be kind to the API
+            processedCount++;
+            scanButton.textContent = `Scanning... (${processedCount}/${allFlights.length})`;
+            await sleep(150); // Wait 150ms before the next request
         }
+        // *** MODIFICATION END ***
 
-        // 4. Sort and render the results
         const sortedAirports = Object.entries(airportTrafficData)
             .sort(([, a], [, b]) => b.total - a.total)
-            .slice(0, 15); // Show top 15
+            .slice(0, 15);
 
         if (sortedAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
-            return;
-        }
-
-        let htmlContent = sortedAirports.map(([icao, data]) => `
-            <div class="atc-item" data-icao="${icao}" style="cursor: pointer; margin-bottom: 10px;">
-                <div class="atc-airport-header" style="padding-bottom: 8px; margin-bottom: 8px;">
-                    <strong>${data.name}</strong>
-                    <span>${icao}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div style="text-align: left;">
-                        <span style="font-size: 1.5em; font-weight: bold; color: var(--accent);">${data.total}</span>
-                        <span style="font-size: 0.9em;">Total Inbound</span>
+        } else {
+            let htmlContent = sortedAirports.map(([icao, data]) => `
+                <div class="atc-item" data-icao="${icao}" style="cursor: pointer; margin-bottom: 10px;">
+                    <div class="atc-airport-header" style="padding-bottom: 8px; margin-bottom: 8px;">
+                        <strong>${data.name}</strong>
+                        <span>${icao}</span>
                     </div>
-                    <div style="text-align: right; font-size: 12px; font-family: 'Roboto Mono', monospace;">
-                        <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in20}</span> in < 20 min</div>
-                        <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in60}</span> in < 1 hr</div>
-                        <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.over60}</span> in > 1 hr</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="text-align: left;">
+                            <span style="font-size: 1.5em; font-weight: bold; color: var(--accent);">${data.total}</span>
+                            <span style="font-size: 0.9em;">Total Inbound</span>
+                        </div>
+                        <div style="text-align: right; font-size: 12px; font-family: 'Roboto Mono', monospace;">
+                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in20}</span> in < 20 min</div>
+                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in60}</span> in < 1 hr</div>
+                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.over60}</span> in > 1 hr</div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
 
-        resultsContainer.innerHTML = htmlContent;
-
-        // Add click handlers to load airport details
-        resultsContainer.querySelectorAll('.atc-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                const selectedIcao = e.currentTarget.dataset.icao;
-                displayAirportDetails(selectedIcao);
-                // Optionally close the scan panel
-                const scanPanel = document.getElementById('traffic-scan-panel');
-                if (scanPanel) scanPanel.remove();
+            resultsContainer.innerHTML = htmlContent;
+            resultsContainer.querySelectorAll('.atc-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const selectedIcao = e.currentTarget.dataset.icao;
+                    displayAirportDetails(selectedIcao);
+                    const scanPanel = document.getElementById('traffic-scan-panel');
+                    if (scanPanel) scanPanel.remove();
+                });
             });
-        });
-
+        }
     } catch (error) {
         resultsContainer.innerHTML = `<p style="color: var(--danger-color);">Error: ${error.message}</p>`;
     } finally {
