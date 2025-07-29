@@ -799,7 +799,7 @@ async function generateTrafficHotspotReport() {
     if (!resultsContainer || !scanButton) return;
 
     resultsContainer.style.display = 'block';
-    resultsContainer.innerHTML = `<p>Scanning server... This may take a moment.</p>`;
+    resultsContainer.innerHTML = `<div class="loader-dual-ring"></div><p style="text-align: center;">Scanning Server...</p>`;
     scanButton.disabled = true;
     scanButton.textContent = 'Scanning...';
 
@@ -813,10 +813,8 @@ async function generateTrafficHotspotReport() {
             throw new Error("No server selected in Live Mode.");
         }
 
-        // --- NEW EFFICIENT LOGIC ---
-        // 1. Fetch the world status and all flights in parallel.
         const [worldResponse, flightsResponse] = await Promise.all([
-            fetch(`/.netlify/functions/world/${sessionId}`), // Assumes a proxy function for the World API
+            fetch(`/.netlify/functions/world/${sessionId}`),
             fetch(`/.netlify/functions/flights/${sessionId}`)
         ]);
 
@@ -827,10 +825,7 @@ async function generateTrafficHotspotReport() {
         const worldData = await worldResponse.json();
         const flightsData = await flightsResponse.json();
         const allAirports = await getAirports();
-
-        // Create a Map for quick flight lookups by ID
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
-        
         const activeAirports = worldData.result || [];
 
         if (activeAirports.length === 0) {
@@ -842,11 +837,7 @@ async function generateTrafficHotspotReport() {
 
         const airportTrafficData = {};
 
-        // 2. Process the pre-aggregated data from the world status endpoint.
         activeAirports.forEach(airportStatus => {
-            const inboundFlightIds = new Set(airportStatus.inboundFlights || []); // A list of inbound flight IDs. [cite: 9]
-            if (inboundFlightIds.size === 0) return;
-
             const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
             if (!airportInfo) return;
 
@@ -854,63 +845,86 @@ async function generateTrafficHotspotReport() {
             
             airportTrafficData[airportStatus.airportIcao] = {
                 name: airportStatus.airportName.replace(/"/g, ''),
-                total: airportStatus.inboundFlightsCount, // Use the direct count from the API. [cite: 8]
-                buckets: { in20: 0, in60: 0, over60: 0 }
+                totalInbound: airportStatus.inboundFlightsCount,
+                buckets: { in20: 0, in60: 0, over60: 0 },
+                onGroundOutbound: 0 // Initialize new property
             };
-
-            // 3. Calculate ETE for each inbound flight.
-            inboundFlightIds.forEach(flightId => {
+            
+            // --- Calculate Inbound Buckets ---
+            (airportStatus.inboundFlights || []).forEach(flightId => {
                 const flight = flightsMap.get(flightId);
                 if (flight && flight.speed > 50) {
                     const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
                     const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
                     const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
 
-                    if (eteMinutes <= 20) {
-                        airportTrafficData[airportStatus.airportIcao].buckets.in20++;
-                    } else if (eteMinutes <= 60) {
-                        airportTrafficData[airportStatus.airportIcao].buckets.in60++;
-                    } else {
-                        airportTrafficData[airportStatus.airportIcao].buckets.over60++;
-                    }
+                    if (eteMinutes <= 20) airportTrafficData[airportStatus.airportIcao].buckets.in20++;
+                    else if (eteMinutes <= 60) airportTrafficData[airportStatus.airportIcao].buckets.in60++;
+                    else airportTrafficData[airportStatus.airportIcao].buckets.over60++;
+                }
+            });
+
+            // --- NEW: Calculate "On Ground" Outbound Flights ---
+            (airportStatus.outboundFlights || []).forEach(flightId => {
+                const flight = flightsMap.get(flightId);
+                // Count if flight exists and speed is less than 50 kts (on ground/taxiing)
+                if (flight && flight.speed < 50) {
+                    airportTrafficData[airportStatus.airportIcao].onGroundOutbound++;
                 }
             });
         });
         
         const sortedAirports = Object.entries(airportTrafficData)
-            .sort(([, a], [, b]) => b.total - a.total)
+            .sort(([, a], [, b]) => b.totalInbound - a.totalInbound)
             .slice(0, 15);
 
         if (sortedAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
         } else {
+            // --- NEW: Redesigned HTML Structure ---
             let htmlContent = sortedAirports.map(([icao, data]) => `
-                <div class="atc-item" data-icao="${icao}" style="cursor: pointer; margin-bottom: 10px;">
-                    <div class="atc-airport-header" style="padding-bottom: 8px; margin-bottom: 8px;">
-                        <strong>${data.name}</strong>
-                        <span>${icao}</span>
+                <div class="traffic-card" data-icao="${icao}" title="Click to view ${icao} on map">
+                    <div class="traffic-card-header">
+                        <div class="airport-name">${data.name}</div>
+                        <div class="airport-icao">${icao}</div>
                     </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="text-align: left;">
-                            <span style="font-size: 1.5em; font-weight: bold; color: var(--accent);">${data.total}</span>
-                            <span style="font-size: 0.9em;">Total Inbound</span>
+                    <div class="traffic-card-body">
+                        <div class="traffic-col inbound">
+                            <div class="col-header">
+                                <span class="icon-inbound"></span>
+                                <span>Inbound</span>
+                            </div>
+                            <div class="total-count">${data.totalInbound}</div>
+                            <div class="detail-breakdown">
+                                <div><span class="detail-value">${data.buckets.in20}</span> in &lt; 20 min</div>
+                                <div><span class="detail-value">${data.buckets.in60}</span> in &lt; 1 hr</div>
+                                <div><span class="detail-value">${data.buckets.over60}</span> in &gt; 1 hr</div>
+                            </div>
                         </div>
-                        <div style="text-align: right; font-size: 12px; font-family: 'Roboto Mono', monospace;">
-                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in20}</span> in < 20 min</div>
-                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.in60}</span> in < 1 hr</div>
-                            <div><span style="color: var(--accent); font-weight: bold;">${data.buckets.over60}</span> in > 1 hr</div>
+                        <div class="traffic-col outbound">
+                             <div class="col-header">
+                                <span class="icon-outbound"></span>
+                                <span>Outbound</span>
+                            </div>
+                            <div class="total-count">${data.onGroundOutbound}</div>
+                            <div class="detail-breakdown">
+                                <div class="on-ground-text">On Ground</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             `).join('');
 
             resultsContainer.innerHTML = htmlContent;
-            resultsContainer.querySelectorAll('.atc-item').forEach(item => {
+            
+            // --- Attach click listener to the new card class ---
+            resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
                 item.addEventListener('click', (e) => {
                     const selectedIcao = e.currentTarget.dataset.icao;
                     displayAirportDetails(selectedIcao);
                     const scanPanel = document.getElementById('traffic-scan-panel');
-                    if (scanPanel) scanPanel.remove();
+                    // Hide the panel instead of removing it for a smoother experience
+                    if (scanPanel) scanPanel.style.display = 'none';
                 });
             });
         }
@@ -920,6 +934,7 @@ async function generateTrafficHotspotReport() {
         scanButton.disabled = false;
         scanButton.textContent = 'Re-Scan';
     }
+}
 }
      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
