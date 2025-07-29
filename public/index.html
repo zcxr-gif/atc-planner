@@ -398,8 +398,52 @@
             color: #fff;
             transition: background-color 0.3s ease;
         }
+/* --- Styles for Filter Dropdown Buttons --- */
+.filter-dropdown-container {
+    margin-bottom: 10px;
+}
 
-        /* --- New Styles for Traffic Scan Results --- */
+.filter-dropdown-btn {
+    width: 100%;
+    background-color: var(--background-light);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 10px 12px;
+    text-align: left;
+    font-size: 14px;
+    font-weight: 500;
+    /* Reset properties inherited from the main 'button' style */
+    box-shadow: none;
+}
+
+.filter-dropdown-btn:hover {
+    border-color: var(--accent);
+    background-color: #544880; /* Slightly lighter hover */
+    transform: none; /* Disable the lift effect from the main button style */
+}
+
+.filter-dropdown-content {
+    padding: 10px;
+    background-color: rgba(0,0,0,0.2);
+    border: 1px solid var(--border-color);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+}
+
+.filter-dropdown-content .dropdown-description {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin: 0 0 10px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+#airport-filters label, #navigation-filters label {
+    display: block;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+      /* --- New Styles for Traffic Scan Results --- */
 .traffic-card {
     background-color: #2c2f33; /* Dark background */
     border-radius: 8px;
