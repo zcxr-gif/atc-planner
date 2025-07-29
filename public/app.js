@@ -851,14 +851,13 @@ async function generateTrafficHotspotReport() {
             
             // Store a more complete data set for each airport
             const data = {
-                icao: airportStatus.airportIcao,
-                name: airportStatus.airportName.replace(/"/g, ''),
-                inboundTotal: airportStatus.inboundFlightsCount || 0,
-                // Assumes the API provides these properties
-                outboundTotal: airportStatus.outboundFlightsCount || 0,
-    onGroundTotal: airportStatus.aircraftOnGroundCount || 0,
+    icao: airportStatus.airportIcao,
+    name: airportStatus.airportName.replace(/"/g, ''),
+    inboundTotal: airportStatus.inboundFlightsCount || 0,
+    outboundOnGround: airportStatus.aircraftOnGroundCount || 0,
+    outboundTotal: airportStatus.outboundFlightsCount || 0,
     inboundBuckets: { in20: 0, in60: 0, over60: 0 }
-            };
+};
 
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
             inboundFlightIds.forEach(flightId => {
