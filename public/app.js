@@ -820,6 +820,21 @@ async function generateTrafficHotspotReport() {
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
         const activeAirports = worldData.result || [];
 
+        // --- NEW LOGIC START ---
+        // Pre-calculate the number of aircraft on the ground for each airport.
+        const onGroundByAirport = {};
+        (flightsData.result || []).forEach(flight => {
+            // An aircraft is on the ground if its departure airport is set and its speed is below 50 kts.
+            if (flight.departure && flight.speed < 50) {
+                const departureIcao = flight.departure;
+                if (!onGroundByAirport[departureIcao]) {
+                    onGroundByAirport[departureIcao] = 0;
+                }
+                onGroundByAirport[departureIcao]++;
+            }
+        });
+        // --- NEW LOGIC END ---
+
         if (activeAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
             scanButton.disabled = false;
@@ -830,45 +845,41 @@ async function generateTrafficHotspotReport() {
         const airportTrafficData = {};
 
         activeAirports.forEach(airportStatus => {
+            const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
+
             // Skip airports with no relevant traffic
-            if (!airportStatus.inboundFlightsCount && !airportStatus.departingFlightsCount && !airportStatus.onGroundCount) {
+            if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
                 return;
             }
 
             const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
             if (!airportInfo) return;
 
-            // --- FIX START: Validate airport coordinates before use ---
             const airportLon = parseFloat(airportInfo.longitude_deg);
             const airportLat = parseFloat(airportInfo.latitude_deg);
 
-            // If the airport from the database has invalid coordinates, skip it.
             if (isNaN(airportLon) || isNaN(airportLat)) {
                 console.warn(`Skipping airport ${airportInfo.ident} due to invalid coordinates in database.`);
                 return;
             }
             const airportPosition = turf.point([airportLon, airportLat]);
             
-            // Store a more complete data set for each airport
             const data = {
-    icao: airportStatus.airportIcao,
-    name: airportStatus.airportName.replace(/"/g, ''),
-    inboundTotal: airportStatus.inboundFlightsCount || 0,
-    outboundOnGround: airportStatus.aircraftOnGroundCount || 0,
-    outboundTotal: airportStatus.outboundFlightsCount || 0,
-    inboundBuckets: { in20: 0, in60: 0, over60: 0 }
-};
+                icao: airportStatus.airportIcao,
+                name: airportStatus.airportName.replace(/"/g, ''),
+                inboundTotal: airportStatus.inboundFlightsCount || 0,
+                outboundOnGround: calculatedOnGroundCount, // Use our calculated value
+                outboundTotal: airportStatus.outboundFlightsCount || 0,
+                inboundBuckets: { in20: 0, in60: 0, over60: 0 }
+            };
 
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
             inboundFlightIds.forEach(flightId => {
                 const flight = flightsMap.get(flightId);
-                if (flight && flight.speed > 50) { // Only count aircraft that are moving
-                    
-                    // --- FIX START: Validate flight coordinates before use ---
+                if (flight && flight.speed > 50) { 
                     const flightLon = parseFloat(flight.longitude);
                     const flightLat = parseFloat(flight.latitude);
                     
-                    // If the flight has invalid coordinates, safely skip it and move to the next one.
                     if (!isNaN(flightLon) && !isNaN(flightLat)) {
                         const aircraftPosition = turf.point([flightLon, flightLat]);
                         const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
@@ -887,15 +898,13 @@ async function generateTrafficHotspotReport() {
             airportTrafficData[data.icao] = data;
         });
         
-        // Sort airports by total inbound traffic, descending
         const sortedAirports = Object.values(airportTrafficData)
             .sort((a, b) => b.inboundTotal - a.inboundTotal)
-            .slice(0, 20); // Show the top 20 busiest airports
+            .slice(0, 20);
 
         if (sortedAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
         } else {
-            // Generate the new HTML using the .traffic-card structure
             let htmlContent = sortedAirports.map(data => `
                 <div class="traffic-card" data-icao="${data.icao}">
                     <div class="traffic-card-header">
@@ -916,23 +925,22 @@ async function generateTrafficHotspotReport() {
                             </div>
                         </div>
                         <div class="traffic-col">
-     <div class="col-header">
-        <span class="icon-outbound"></span>
-        Outbound
-    </div>
-    <div class="total-count">${data.outboundOnGround}</div>
-    <div class="detail-breakdown">
-        <span class="on-ground-text">on ground</span><br>
-        <span class="detail-value">${data.outboundTotal}</span> total departures
-    </div>
-</div>
+                            <div class="col-header">
+                                <span class="icon-outbound"></span>
+                                Outbound
+                            </div>
+                            <div class="total-count">${data.outboundOnGround}</div>
+                            <div class="detail-breakdown">
+                                <span class="on-ground-text">on ground</span><br>
+                                <span class="detail-value">${data.outboundTotal}</span> total departures
+                            </div>
+                        </div>
                     </div>
                 </div>
             `).join('');
 
             resultsContainer.innerHTML = htmlContent;
             
-            // Re-attach event listeners to the new cards
             resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
                 item.addEventListener('click', (e) => {
                     const selectedIcao = e.currentTarget.dataset.icao;
