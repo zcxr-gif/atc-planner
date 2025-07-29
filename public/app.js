@@ -916,15 +916,16 @@ async function generateTrafficHotspotReport() {
                             </div>
                         </div>
                         <div class="traffic-col">
-                             <div class="col-header">
-                                <span class="icon-outbound"></span>
-                                Outbound
-                            </div>
-                            <div class="total-count">${data.outboundTotal}</div>
-                            <div class="detail-breakdown">
-                                <span class="on-ground-text">${data.onGroundTotal}</span> on ground
-                            </div>
-                        </div>
+     <div class="col-header">
+        <span class="icon-outbound"></span>
+        Outbound
+    </div>
+    <div class="total-count">${data.outboundOnGround}</div>
+    <div class="detail-breakdown">
+        <span class="on-ground-text">on ground</span><br>
+        <span class="detail-value">${data.outboundTotal}</span> total departures
+    </div>
+</div>
                     </div>
                 </div>
             `).join('');
