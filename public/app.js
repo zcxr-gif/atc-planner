@@ -799,9 +799,6 @@ async function generateTrafficHotspotReport() {
     scanButton.disabled = true;
     scanButton.textContent = 'Scanning...';
 
-    // Helper function to add a delay
-    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
     try {
         if (!isLiveModeActive) {
             throw new Error("Live Mode is not active. Please connect to a server first.");
@@ -814,60 +811,59 @@ async function generateTrafficHotspotReport() {
 
         const flightsResponse = await fetch(`/.netlify/functions/flights/${sessionId}`);
         const flightsData = await flightsResponse.json();
-        const allFlights = flightsData.result || [];
+        const allFlights = (flightsData.result || []).filter(flight => flight.flightPlanId); // Only consider flights with a flight plan
         const airports = await getAirports();
 
         if (allFlights.length === 0) {
-             resultsContainer.innerHTML = '<p>The server is currently empty.</p>';
-             scanButton.disabled = false;
-             scanButton.textContent = 'Re-Scan';
-             return;
+            resultsContainer.innerHTML = '<p>No flights with active flight plans found on the server.</p>';
+            scanButton.disabled = false;
+            scanButton.textContent = 'Re-Scan';
+            return;
         }
 
+        // Fetch all flight plans in parallel for efficiency
+        const flightPlanPromises = allFlights.map(flight =>
+            fetch(`/.netlify/functions/flightplan/${sessionId}/${flight.flightPlanId}`).then(res => res.json())
+        );
+        const flightPlanResults = await Promise.all(flightPlanPromises);
+
         const airportTrafficData = {};
-        let processedCount = 0;
 
-        // *** MODIFICATION START ***
-        // We now loop through flights sequentially with a delay, instead of all at once.
-        for (const flight of allFlights) {
-            const fplResponse = await fetch(`/.netlify/functions/flightplan/${sessionId}/${flight.flightId}`);
-            if (fplResponse.ok) {
-                const fpl = await fplResponse.json();
-                 if (fpl && fpl.result && fpl.result.destinationId && flight.speed > 50) {
-                    const destIcao = fpl.result.destinationId;
-                    const destinationAirport = airports.find(a => a.ident === destIcao);
+        allFlights.forEach((flight, index) => {
+            const fpl = flightPlanResults[index];
+            const flightPlanItems = fpl.result?.flightPlanItems;
 
-                    if (destinationAirport) {
-                        if (!airportTrafficData[destIcao]) {
-                            airportTrafficData[destIcao] = {
-                                name: destinationAirport.name.replace(/"/g, ''),
-                                total: 0,
-                                buckets: { in20: 0, in60: 0, over60: 0 }
-                            };
-                        }
+            // Find the last waypoint, which is the destination
+            if (flightPlanItems && flightPlanItems.length > 0 && flight.speed > 50) {
+                const destinationItem = flightPlanItems[flightPlanItems.length - 1];
+                const destIcao = destinationItem.ident;
+                const destinationAirport = airports.find(a => a.ident === destIcao);
 
-                        const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
-                        const airportPosition = turf.point([parseFloat(destinationAirport.longitude_deg), parseFloat(destinationAirport.latitude_deg)]);
-                        const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
-                        const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
+                if (destinationAirport) {
+                    if (!airportTrafficData[destIcao]) {
+                        airportTrafficData[destIcao] = {
+                            name: destinationAirport.name.replace(/"/g, ''),
+                            total: 0,
+                            buckets: { in20: 0, in60: 0, over60: 0 }
+                        };
+                    }
 
-                        airportTrafficData[destIcao].total++;
-                        if (eteMinutes <= 20) {
-                            airportTrafficData[destIcao].buckets.in20++;
-                        } else if (eteMinutes <= 60) {
-                            airportTrafficData[destIcao].buckets.in60++;
-                        } else {
-                            airportTrafficData[destIcao].buckets.over60++;
-                        }
+                    const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
+                    const airportPosition = turf.point([parseFloat(destinationAirport.longitude_deg), parseFloat(destinationAirport.latitude_deg)]);
+                    const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
+                    const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
+
+                    airportTrafficData[destIcao].total++;
+                    if (eteMinutes <= 20) {
+                        airportTrafficData[destIcao].buckets.in20++;
+                    } else if (eteMinutes <= 60) {
+                        airportTrafficData[destIcao].buckets.in60++;
+                    } else {
+                        airportTrafficData[destIcao].buckets.over60++;
                     }
                 }
             }
-            // Update progress and add a delay to be kind to the API
-            processedCount++;
-            scanButton.textContent = `Scanning... (${processedCount}/${allFlights.length})`;
-            await sleep(150); // Wait 150ms before the next request
-        }
-        // *** MODIFICATION END ***
+        });
 
         const sortedAirports = Object.entries(airportTrafficData)
             .sort(([, a], [, b]) => b.total - a.total)
