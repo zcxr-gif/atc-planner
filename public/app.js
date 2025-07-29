@@ -769,8 +769,7 @@ function createTrafficScanPanel() {
     const content = `
         <div class="info-card">
             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
-                This tool scans the selected server to find airports with the most inbound traffic.
-                The scan may take a few moments.
+                This tool scans for inbounds and outbounds of the selected server. Click re-scan update the data.
             </p>
             <button id="begin-traffic-scan-btn" style="width: 100%;">Begin Scan</button>
         </div>
