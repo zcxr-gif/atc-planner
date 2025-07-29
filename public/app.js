@@ -822,18 +822,20 @@ async function generateTrafficHotspotReport() {
 
         // --- NEW LOGIC START ---
         // Pre-calculate the number of aircraft on the ground for each airport.
-        const onGroundByAirport = {};
-        (flightsData.result || []).forEach(flight => {
-            // An aircraft is on the ground if its departure airport is set and its speed is below 50 kts.
-            if (flight.departure && flight.speed < 50) {
-                const departureIcao = flight.departure;
-                if (!onGroundByAirport[departureIcao]) {
-                    onGroundByAirport[departureIcao] = 0;
-                }
-                onGroundByAirport[departureIcao]++;
-            }
-        });
-        // --- NEW LOGIC END ---
+        // In app.js, inside the generateTrafficHotspotReport function
+
+const onGroundByAirport = {};
+(flightsData.result || []).forEach(flight => {
+    // An aircraft is on the ground if its origin airport is set and its speed is below 50 kts.
+    // FIX: The check now correctly uses `flight.originAirport`.
+    if (flight.originAirport && flight.speed < 50) {
+        const departureIcao = flight.originAirport;
+        if (!onGroundByAirport[departureIcao]) {
+            onGroundByAirport[departureIcao] = 0;
+        }
+        onGroundByAirport[departureIcao]++;
+    }
+});
 
         if (activeAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';

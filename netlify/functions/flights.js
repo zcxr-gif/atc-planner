@@ -59,7 +59,9 @@ exports.handler = async function(event, context) {
         aircraftName: aircraftName, // Use the name we found
         username: f.username,
         altitude: f.altitude,
-        speed: f.speed
+        speed: f.speed,
+		originAirport: f.originAirport,
+    destinationAirport: f.destinationAirport
       };
     });
 
