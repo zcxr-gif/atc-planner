@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Style configs (remain mostly the same, but used differently) ---
     const RUNWAY_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'fill-color': '#4E4E4E', 'fill-opacity': 1 };
     const RUNWAY_STYLE_HIGHLIGHT = { 'line-color': '#FFD700', 'line-width': 2, 'fill-color': '#FFD700', 'fill-opacity': 0.7 };
-const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; // 
+    const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; //
     const FLIGHT_LINE_STYLES_REGULAR = {
         standard: { 'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.85 },
         arrival: { 'line-color': '#2979FF', 'line-width': 3, 'line-opacity': 1 },
@@ -636,7 +636,7 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
 </div>
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
     <button id="settings-btn">Settings</button>
-    <button id="help-btn">Help</button>					
+    <button id="help-btn">Help</button>
 </div>
         `;
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
@@ -755,7 +755,7 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
 		mainPanel.querySelector('#traffic-scan-btn').addEventListener('click', createTrafficScanPanel);
     }
-    
+
 	// ... all other UI panel creation functions (createLiveControlPanel, etc.)...
 
 function createTrafficScanPanel() {
@@ -820,7 +820,7 @@ async function generateTrafficHotspotReport() {
         const activeAirports = worldData.result || [];
 
         // --- NEW LOGIC START (with Proximity and Altitude Checks) ---
-        
+
         // 1. Pre-filter for flights that are potentially on the ground or on final approach.
         const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
 
@@ -837,7 +837,7 @@ async function generateTrafficHotspotReport() {
                 }
             }
         });
-        
+
         // 3. Initialize the counter for each active airport.
         const onGroundByAirport = {};
         for (const icao of activeAirportLocations.keys()) {
@@ -853,7 +853,7 @@ async function generateTrafficHotspotReport() {
             for (const [icao, coords] of activeAirportLocations.entries()) {
                 const airportPoint = turf.point([coords.lon, coords.lat]);
                 const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
-                
+
                 if (distance < minDistance) {
                     minDistance = distance;
                     closestIcao = icao;
@@ -903,7 +903,7 @@ async function generateTrafficHotspotReport() {
                 return;
             }
             const airportPosition = turf.point([airportLon, airportLat]);
-            
+
             const data = {
                 icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
@@ -916,10 +916,10 @@ async function generateTrafficHotspotReport() {
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
             inboundFlightIds.forEach(flightId => {
                 const flight = flightsMap.get(flightId);
-                if (flight && flight.speed > 50) { 
+                if (flight && flight.speed > 50) {
                     const flightLon = parseFloat(flight.longitude);
                     const flightLat = parseFloat(flight.latitude);
-                    
+
                     if (!isNaN(flightLon) && !isNaN(flightLat)) {
                         const aircraftPosition = turf.point([flightLon, flightLat]);
                         const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
@@ -937,7 +937,7 @@ async function generateTrafficHotspotReport() {
             });
             airportTrafficData[data.icao] = data;
         });
-        
+
         const sortedAirports = Object.values(airportTrafficData)
             .sort((a, b) => b.inboundTotal - a.inboundTotal)
             .slice(0, 20);
@@ -980,7 +980,7 @@ async function generateTrafficHotspotReport() {
             `).join('');
 
             resultsContainer.innerHTML = htmlContent;
-            
+
             resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
                 item.addEventListener('click', (e) => {
                     const selectedIcao = e.currentTarget.dataset.icao;
@@ -1182,7 +1182,7 @@ async function generateTrafficHotspotReport() {
                    iconElement.src = newIconPath;
                 }
             }
-            
+
             // --- OPTIMIZATION 3: CRITICAL - Only update popup if it's open ---
             // This is the most important change. We avoid rebuilding the HTML for hundreds
             // of popups that aren't even visible to the user.
@@ -1221,7 +1221,7 @@ async function generateTrafficHotspotReport() {
             const lat = Number(flight.latitude);
             const lon = Number(flight.longitude);
             const isSelected = flight.flightId === selectedFlightId;
-            
+
             const el = document.createElement('div');
             el.className = 'custom-map-marker';
             el.innerHTML = `<img src="${getAircraftIconPath(flight.aircraftName, isSelected)}" width="24" height="24" style="transform: rotate(${flight.heading}deg);">`;
@@ -1382,7 +1382,7 @@ async function updateAtcList(sessionId) {
     try {
         const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
         const atcData = await atcResponse.json();
-        
+
         const airports = await getAirports(); // Ensure airport data is available
 
         // --- Track active ATC airports ---
@@ -1448,7 +1448,7 @@ async function updateAtcList(sessionId) {
                     const durationMs = now - startTime;
                     const hours = Math.floor(durationMs / 3600000);
                     const minutes = Math.floor((durationMs % 3600000) / 60000);
-                    
+
                     if (hours > 0) {
                         durationText = `${hours}h ${minutes.toString().padStart(2, '0')}m`;
                     } else {
@@ -1692,7 +1692,7 @@ function createHelpPanel() {
 					// Define the icon to use for the navaid. 'vor_dme_small' is a placeholder for a real icon name.
 					// For this example, we will use a simple circle with text.
 					// 'icon-image': 'vor-icon', // Uncomment if you have a custom icon sprite
-					
+
 					// Display the 'name' property from our GeoJSON as a text label.
 					'text-field': ['get', 'name'],
 					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
@@ -2807,7 +2807,6 @@ async function getElevationAndMag(latlng) {
                     newHeading = (newHeading + 360) % 360;
                     const newHeadingText = newHeading.toString().padStart(3, '0');
                     planLayers[stepId].heading.magnetic = newHeadingText;
-                    headingSpan.textContent = `Hdg ${newHeadingText}° M`;
                     updateDataBlock(stepId);
                 }
                 input.parentElement.replaceChild(headingSpan, input);
