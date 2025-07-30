@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const layerAndSourceIds = new Set();
     const liveFlightMarkers = {};
     const planLabels = {};
+	
+	let lastUpdatedBounds = null;
 
     const mslPopup = document.getElementById('msl-popup');
     const reopenButton = document.getElementById('reopen-main-panel');
@@ -50,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Style configs (remain mostly the same, but used differently) ---
     const RUNWAY_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'fill-color': '#4E4E4E', 'fill-opacity': 1 };
     const RUNWAY_STYLE_HIGHLIGHT = { 'line-color': '#FFD700', 'line-width': 2, 'fill-color': '#FFD700', 'fill-opacity': 0.7 };
-    const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; //
+const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; // 
     const FLIGHT_LINE_STYLES_REGULAR = {
         standard: { 'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.85 },
         arrival: { 'line-color': '#2979FF', 'line-width': 3, 'line-opacity': 1 },
@@ -274,15 +276,13 @@ document.addEventListener('DOMContentLoaded', () => {
             map.addLayer({
                 'id': 'peaks-labels-layer', // A unique ID for this new layer
                 'type': 'symbol',           // We are displaying text labels
-                'source': 'peaks-source',   // Links this layer to the source we just defined
+                'source': 'peaks-source',   
 
-                // *** IMPORTANT: You must know the name of the data layer inside your MBTiles file.
-                // Based on your screenshot, it is likely 'peak'.
+                
                 'source-layer': 'peak',
 
                 'layout': {
-                    // *** IMPORTANT: This must match the property in your data that holds the peak's name.
-                    // Based on your screenshot, this is 'name_en'.
+                    
                     'text-field': ['get', 'name'],
 
                     'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
@@ -636,7 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
     <button id="settings-btn">Settings</button>
-    <button id="help-btn">Help</button>
+    <button id="help-btn">Help</button>					
 </div>
         `;
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
@@ -755,7 +755,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
 		mainPanel.querySelector('#traffic-scan-btn').addEventListener('click', createTrafficScanPanel);
     }
-
+    
 	// ... all other UI panel creation functions (createLiveControlPanel, etc.)...
 
 function createTrafficScanPanel() {
@@ -820,7 +820,7 @@ async function generateTrafficHotspotReport() {
         const activeAirports = worldData.result || [];
 
         // --- NEW LOGIC START (with Proximity and Altitude Checks) ---
-
+        
         // 1. Pre-filter for flights that are potentially on the ground or on final approach.
         const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
 
@@ -837,7 +837,7 @@ async function generateTrafficHotspotReport() {
                 }
             }
         });
-
+        
         // 3. Initialize the counter for each active airport.
         const onGroundByAirport = {};
         for (const icao of activeAirportLocations.keys()) {
@@ -853,7 +853,7 @@ async function generateTrafficHotspotReport() {
             for (const [icao, coords] of activeAirportLocations.entries()) {
                 const airportPoint = turf.point([coords.lon, coords.lat]);
                 const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
-
+                
                 if (distance < minDistance) {
                     minDistance = distance;
                     closestIcao = icao;
@@ -903,7 +903,7 @@ async function generateTrafficHotspotReport() {
                 return;
             }
             const airportPosition = turf.point([airportLon, airportLat]);
-
+            
             const data = {
                 icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
@@ -916,10 +916,10 @@ async function generateTrafficHotspotReport() {
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
             inboundFlightIds.forEach(flightId => {
                 const flight = flightsMap.get(flightId);
-                if (flight && flight.speed > 50) {
+                if (flight && flight.speed > 50) { 
                     const flightLon = parseFloat(flight.longitude);
                     const flightLat = parseFloat(flight.latitude);
-
+                    
                     if (!isNaN(flightLon) && !isNaN(flightLat)) {
                         const aircraftPosition = turf.point([flightLon, flightLat]);
                         const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
@@ -937,7 +937,7 @@ async function generateTrafficHotspotReport() {
             });
             airportTrafficData[data.icao] = data;
         });
-
+        
         const sortedAirports = Object.values(airportTrafficData)
             .sort((a, b) => b.inboundTotal - a.inboundTotal)
             .slice(0, 20);
@@ -980,7 +980,7 @@ async function generateTrafficHotspotReport() {
             `).join('');
 
             resultsContainer.innerHTML = htmlContent;
-
+            
             resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
                 item.addEventListener('click', (e) => {
                     const selectedIcao = e.currentTarget.dataset.icao;
@@ -1154,10 +1154,10 @@ async function generateTrafficHotspotReport() {
     const visibleFlightIds = new Set();
     const now = Date.now();
 
-    // --- OPTIMIZATION 1: Create a lookup map for faster access ---
+    // Create a lookup map for faster access
     const flightsById = new Map(flights.map(f => [f.flightId, f]));
 
-    // --- OPTIMIZATION 2: First, update existing markers and identify visible ones ---
+    // First, update existing markers and identify visible ones
     for (const flightId in liveFlightMarkers) {
         const marker = liveFlightMarkers[flightId];
         const flight = flightsById.get(flightId);
@@ -1182,10 +1182,8 @@ async function generateTrafficHotspotReport() {
                    iconElement.src = newIconPath;
                 }
             }
-
-            // --- OPTIMIZATION 3: CRITICAL - Only update popup if it's open ---
-            // This is the most important change. We avoid rebuilding the HTML for hundreds
-            // of popups that aren't even visible to the user.
+            
+            // Only update popup if it's open
             if (marker.getPopup().isOpen()) {
                  const callsign = flight.callsign || 'N/A';
                  const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
@@ -1193,15 +1191,18 @@ async function generateTrafficHotspotReport() {
                  const altitudeText = altitude !== null ? `${altitude.toLocaleString()}` : 'N/A';
                  const speedText = speed !== null ? `${speed}` : 'N/A';
 
+                 // **FIXED**: This block now contains the full, correct HTML content.
                  const popupContent = `
                     <div class="flight-popup-header">
                         <div class="flight-popup-callsign">${callsign}</div>
                         <div class="flight-popup-aircraft">${flight.aircraftName || 'N/A'}</div>
                     </div>
                     <div class="flight-popup-body">
-                        {...} // The rest of your popup HTML
+                         <div class="flight-popup-row"><span class="label">Altitude:</span><span class="value">${altitudeText} ft</span></div>
+                         <div class="flight-popup-row"><span class="label">Speed:</span><span class="value">${speedText} kts</span></div>
+                         <div class="flight-popup-row"><span class="label">User:</span><span class="value">${flight.username || 'N/A'}</span></div>
                     </div>
-                    ${flight.flightId ? `<div class="flight-popup-footer">{...}</div>` : ''}
+                    ${ flight.flightId ? `<div class="flight-popup-footer"><button class="cta-button view-fpl-btn" data-flight-id="${flight.flightId}" data-session-id="${sessionId}" data-callsign="${callsign}" data-altitude="${altitudeText} ft" data-speed="${speedText} kts GS">View FPL</button></div>` : '' }
                 `;
                 marker.getPopup().setHTML(popupContent);
             }
@@ -1213,7 +1214,7 @@ async function generateTrafficHotspotReport() {
         }
     }
 
-    // --- OPTIMIZATION 4: Second, add only the new markers that have appeared ---
+    // Second, add only the new markers that have appeared
     flights.forEach(flight => {
         const flightId = flight.flightId;
         // If the flight is in the viewport but NOT in our list of already-updated markers, it's new.
@@ -1221,13 +1222,11 @@ async function generateTrafficHotspotReport() {
             const lat = Number(flight.latitude);
             const lon = Number(flight.longitude);
             const isSelected = flight.flightId === selectedFlightId;
-
+            
             const el = document.createElement('div');
             el.className = 'custom-map-marker';
             el.innerHTML = `<img src="${getAircraftIconPath(flight.aircraftName, isSelected)}" width="24" height="24" style="transform: rotate(${flight.heading}deg);">`;
 
-            // DEFERRED POPUP CONTENT: We create the popup object but do NOT generate the complex HTML string
-            // until the user actually clicks the marker. This saves a massive amount of processing time.
             const popup = new maptilersdk.Popup({
                 offset: 25,
                 className: 'custom-popup',
@@ -1239,7 +1238,7 @@ async function generateTrafficHotspotReport() {
                 .setPopup(popup)
                 .addTo(map);
 
-            // Add an event listener to generate content just-in-time.
+            // Add an event listener to generate content just-in-time when the popup opens.
             marker.on('popupopen', () => {
                 const callsign = flight.callsign || 'N/A';
                 const altitude = (typeof flight.altitude === 'number') ? Math.round(flight.altitude) : null;
@@ -1382,7 +1381,7 @@ async function updateAtcList(sessionId) {
     try {
         const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
         const atcData = await atcResponse.json();
-
+        
         const airports = await getAirports(); // Ensure airport data is available
 
         // --- Track active ATC airports ---
@@ -1448,7 +1447,7 @@ async function updateAtcList(sessionId) {
                     const durationMs = now - startTime;
                     const hours = Math.floor(durationMs / 3600000);
                     const minutes = Math.floor((durationMs % 3600000) / 60000);
-
+                    
                     if (hours > 0) {
                         durationText = `${hours}h ${minutes.toString().padStart(2, '0')}m`;
                     } else {
@@ -1692,7 +1691,7 @@ function createHelpPanel() {
 					// Define the icon to use for the navaid. 'vor_dme_small' is a placeholder for a real icon name.
 					// For this example, we will use a simple circle with text.
 					// 'icon-image': 'vor-icon', // Uncomment if you have a custom icon sprite
-
+					
 					// Display the 'name' property from our GeoJSON as a text label.
 					'text-field': ['get', 'name'],
 					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
@@ -2807,6 +2806,7 @@ async function getElevationAndMag(latlng) {
                     newHeading = (newHeading + 360) % 360;
                     const newHeadingText = newHeading.toString().padStart(3, '0');
                     planLayers[stepId].heading.magnetic = newHeadingText;
+                    headingSpan.textContent = `Hdg ${newHeadingText}° M`;
                     updateDataBlock(stepId);
                 }
                 input.parentElement.replaceChild(headingSpan, input);
