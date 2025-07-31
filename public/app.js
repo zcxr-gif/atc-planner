@@ -824,6 +824,9 @@ async function generateTrafficHotspotReport() {
         const freqInitialMap = { 'Ground': 'G', 'Tower': 'T', 'ATIS': 'S', 'Approach': 'A', 'Departure': 'D' };
         const activeFrequenciesByAirport = {};
 
+        // Define the desired sorting order for frequency types.
+        const gtsadOrder = ['Ground', 'Tower', 'ATIS', 'Approach', 'Departure'];
+
         if (atcData.result) {
             atcData.result.forEach(facility => {
                 const icao = facility.airportName;
@@ -909,7 +912,8 @@ async function generateTrafficHotspotReport() {
                 outboundOnGround: calculatedOnGroundCount,
                 outboundTotal: airportStatus.outboundFlightsCount || 0,
                 inboundBuckets: { in20: 0, in60: 0, over60: 0 },
-                activeFrequencies: activeFrequenciesByAirport[airportStatus.airportIcao] ? Array.from(activeFrequenciesByAirport[airportStatus.airportIcao]).sort() : []
+                // **MODIFIED LINE**: Implement custom sorting based on the gtsadOrder array.
+                activeFrequencies: activeFrequenciesByAirport[airportStatus.airportIcao] ? Array.from(activeFrequenciesByAirport[airportStatus.airportIcao]).sort((a, b) => gtsadOrder.indexOf(a) - gtsadOrder.indexOf(b)) : []
             };
 
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
