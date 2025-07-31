@@ -308,6 +308,9 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
             updateNavaids();
             updateWaypoints();
             loadPlanFromLocalStorage();
+            
+            // NEW: Initialize mobile navigation
+            setupMobileNav();
 
             const loader = document.getElementById('loader');
             if (loader) {
@@ -316,6 +319,84 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         });
     }
     initializeApp();
+
+    // --- MOBILE NAVIGATION LOGIC ---
+
+    /**
+     * Toggles the visibility of a mobile panel (bottom sheet).
+     * @param {string} panelId The ID of the panel to show (e.g., 'main-panel').
+     * @param {HTMLElement} clickedButton The button element that was clicked.
+     */
+    function toggleMobilePanel(panelId, clickedButton) {
+        const allPanels = document.querySelectorAll('.floating-panel');
+        const targetPanel = document.getElementById(panelId);
+        const isAlreadyVisible = targetPanel && targetPanel.classList.contains('visible');
+
+        // Deactivate all nav buttons and hide all panels
+        document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
+        allPanels.forEach(p => p.classList.remove('visible'));
+
+        // If the clicked panel was not already visible, show it and activate its button.
+        if (!isAlreadyVisible) {
+            if (targetPanel) {
+                targetPanel.classList.add('visible');
+            }
+            if (clickedButton) {
+                clickedButton.classList.add('active');
+            }
+        }
+    }
+
+
+    /**
+     * Sets up all event listeners for the mobile navigation bar.
+     */
+    function setupMobileNav() {
+        const mobileNav = document.getElementById('mobile-nav');
+        if (!mobileNav || window.innerWidth > 768) {
+            if(mobileNav) mobileNav.style.display = 'none';
+            return;
+        }
+        
+        // By default, show the main planner panel on mobile load
+        const mainPanel = document.getElementById('main-panel');
+        if (mainPanel) {
+            mainPanel.classList.add('visible');
+            document.getElementById('mobile-nav-planner').classList.add('active');
+        }
+
+        document.getElementById('mobile-nav-planner').addEventListener('click', (e) => {
+            createMainPanel(); // Ensure it exists
+            toggleMobilePanel('main-panel', e.currentTarget);
+        });
+
+        document.getElementById('mobile-nav-live').addEventListener('click', (e) => {
+            createLiveControlPanel(); // Ensure it exists
+            toggleMobilePanel('live-control-panel', e.currentTarget);
+        });
+
+        document.getElementById('mobile-nav-traffic').addEventListener('click', (e) => {
+            createTrafficScanPanel(); // Ensure it exists
+            toggleMobilePanel('traffic-scan-panel', e.currentTarget);
+        });
+
+        document.getElementById('mobile-nav-settings').addEventListener('click', (e) => {
+            createSettingsPanel(); // Ensure it exists
+            toggleMobilePanel('settings-panel', e.currentTarget);
+        });
+
+        // A helper to close any open panel by tapping on the map
+        map.on('click', () => {
+             if (window.innerWidth <= 768) {
+                document.querySelectorAll('.floating-panel.visible').forEach(panel => {
+                    panel.classList.remove('visible');
+                });
+                document.querySelectorAll('.mobile-nav-btn.active').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+            }
+        });
+    }
 
     // --- LIVE MODE: INACTIVITY TIMER (no changes) ---
     function startInactivityTimer() {
@@ -461,7 +542,9 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         if (window.innerWidth <= 768) {
             // Use a short timeout to allow the element to be added to the DOM before transitioning
             setTimeout(() => {
-                panel.classList.add('visible');
+                // This class is now controlled by the mobile nav logic,
+                // so we don't automatically make it visible here.
+                // panel.classList.add('visible');
             }, 10);
         }
 
@@ -476,6 +559,8 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
             if (window.innerWidth <= 768) {
                 // On mobile, just hide the panel by removing the 'visible' class
                 panel.classList.remove('visible');
+                // Also deactivate any active nav button
+                document.querySelectorAll('.mobile-nav-btn.active').forEach(btn => btn.classList.remove('active'));
             } else {
                 // Original desktop behavior
                 if (panel.id === 'main-panel') {
@@ -614,30 +699,32 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
                 </div>
             </div>
 
-            <h3 style="margin-top: 15px;">Tools</h3>
-            <div id="drawing-toggle">
-                 <input type="checkbox" id="enable-drawing">
-                 <label for="enable-drawing" style="color: #fff; font-weight: normal;">Enable Drawing Mode</label>
-                 <span id="drawing-mode-text" style="font-size: 11px; color: #ccc; display: none; padding-left: 18px;">Uncheck to move the map</span>
-            </div>
+            <div class="desktop-tool-buttons">
+                <h3 style="margin-top: 15px;">Tools</h3>
+                <div id="drawing-toggle">
+                     <input type="checkbox" id="enable-drawing">
+                     <label for="enable-drawing" style="color: #fff; font-weight: normal;">Enable Drawing Mode</label>
+                     <span id="drawing-mode-text" style="font-size: 11px; color: #ccc; display: none; padding-left: 18px;">Uncheck to move the map</span>
+                </div>
 
-            <div id="line-type-selector" style="margin-top: 10px; display: none;">
-                <label style="color: #fff; font-weight: normal; width: 100%; margin-bottom: 5px;">Line Type:</label>
-                <div>
-                    <span><input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label></span>
-                    <span><input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label></span>
-                    <span><input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label></span>
+                <div id="line-type-selector" style="margin-top: 10px; display: none;">
+                    <label style="color: #fff; font-weight: normal; width: 100%; margin-bottom: 5px;">Line Type:</label>
+                    <div>
+                        <span><input type="radio" id="line-standard" name="line-type" value="standard" checked> <label for="line-standard" style="color: #fff; font-weight: normal;">Standard</label></span>
+                        <span><input type="radio" id="line-arrival" name="line-type" value="arrival"> <label for="line-arrival" style="color: #64b5f6; font-weight: normal;">Arrival</label></span>
+                        <span><input type="radio" id="line-departure" name="line-type" value="departure"> <label for="line-departure" style="color: #e57373; font-weight: normal;">Departure</label></span>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
+                    <button id="live-mode-btn">Live Mode</button>
+                    <button id="traffic-scan-btn">Traffic Scan</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
+                    <button id="settings-btn">Settings</button>
+                    <button id="help-btn">Help</button>					
                 </div>
             </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px;">
-    <button id="live-mode-btn">Live Mode</button>
-    <button id="traffic-scan-btn">Traffic Scan</button>
-</div>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-    <button id="settings-btn">Settings</button>
-    <button id="help-btn">Help</button>					
-</div>
         `;
         const titleHTML = `<img src="image_4a1efb.png" alt="Virtual Vectors Logo">`;
         const mainPanel = createFloatingPanel('main-panel', titleHTML, '20px', '20px', content);
@@ -769,7 +856,7 @@ function createTrafficScanPanel() {
     const content = `
         <div class="info-card">
             <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
-                This tool scans for inbounds and outbounds of the selected server. Click re-scan update the data.
+                This tool scans for inbounds and outbounds of the most active airports. Re-scan in order to get the latest data.
             </p>
             <button id="begin-traffic-scan-btn" style="width: 100%;">Begin Scan</button>
         </div>
@@ -1590,7 +1677,7 @@ function createHelpPanel() {
                 <tbody>
                     <tr><td>Above FL280</td><td>Mach 0.80 - 0.82</td></tr>
                     <tr><td>FL180 to FL280</td><td>280 - 300 KIAS</td></tr>
-                    <tr><td>12,000 ft to FL180</td><td>260 - 280 KIAS</td></tr>
+                    <tr><td>FL180 to FL180</td><td>260 - 280 KIAS</td></tr>
                     <tr><td>Below 12,000 ft</td><td>220 - 250 KIAS</td></tr>
                 </tbody>
             </table>
