@@ -788,7 +788,6 @@ async function generateTrafficHotspotReport() {
     const scanButton = document.getElementById('begin-traffic-scan-btn');
     if (!resultsContainer || !scanButton) return;
 
-    // Use the existing loader style from the HTML file
     resultsContainer.style.display = 'block';
     resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
     scanButton.disabled = true;
@@ -804,27 +803,42 @@ async function generateTrafficHotspotReport() {
             throw new Error("No server selected in Live Mode.");
         }
 
-        const [worldResponse, flightsResponse] = await Promise.all([
+        const [worldResponse, flightsResponse, atcResponse] = await Promise.all([
             fetch(`/.netlify/functions/world/${sessionId}`),
-            fetch(`/.netlify/functions/flights/${sessionId}`)
+            fetch(`/.netlify/functions/flights/${sessionId}`),
+            fetch(`/.netlify/functions/atc/${sessionId}`)
         ]);
 
-        if (!worldResponse.ok || !flightsResponse.ok) {
+        if (!worldResponse.ok || !flightsResponse.ok || !atcResponse.ok) {
             throw new Error("Failed to fetch server data.");
         }
 
         const worldData = await worldResponse.json();
         const flightsData = await flightsResponse.json();
+        const atcData = await atcResponse.json();
         const allAirports = await getAirports();
         const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
         const activeAirports = worldData.result || [];
 
-        // --- NEW LOGIC START (with Proximity and Altitude Checks) ---
-        
-        // 1. Pre-filter for flights that are potentially on the ground or on final approach.
-        const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
+        const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 4: 'Approach', 5: 'Departure', 7: 'ATIS' };
+        const freqInitialMap = { 'Ground': 'G', 'Tower': 'T', 'ATIS': 'S', 'Approach': 'A', 'Departure': 'D' };
+        const activeFrequenciesByAirport = {};
 
-        // 2. Create a Map of active airport locations for quick lookups.
+        if (atcData.result) {
+            atcData.result.forEach(facility => {
+                const icao = facility.airportName;
+                if (!icao || icao === "Center") return;
+                const typeName = frequencyTypeMap[facility.type];
+                if (typeName && freqInitialMap[typeName]) {
+                    if (!activeFrequenciesByAirport[icao]) {
+                        activeFrequenciesByAirport[icao] = new Set();
+                    }
+                    activeFrequenciesByAirport[icao].add(typeName);
+                }
+            });
+        }
+        
+        const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
         const activeAirportLocations = new Map();
         activeAirports.forEach(activeAirport => {
             const airportInfo = allAirports.find(a => a.ident === activeAirport.airportIcao);
@@ -838,42 +852,32 @@ async function generateTrafficHotspotReport() {
             }
         });
         
-        // 3. Initialize the counter for each active airport.
         const onGroundByAirport = {};
         for (const icao of activeAirportLocations.keys()) {
             onGroundByAirport[icao] = 0;
         }
 
-        // 4. For each low & slow flight, find its nearest active airport.
         lowAndSlowFlights.forEach(flight => {
             const aircraftPoint = turf.point([flight.longitude, flight.latitude]);
             let closestIcao = null;
             let minDistance = Infinity;
-
             for (const [icao, coords] of activeAirportLocations.entries()) {
                 const airportPoint = turf.point([coords.lon, coords.lat]);
                 const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
-                
                 if (distance < minDistance) {
                     minDistance = distance;
                     closestIcao = icao;
                 }
             }
-
-            // 5. If the aircraft is close enough to an airport...
             if (closestIcao && minDistance < 3) {
-                // ...now perform the crucial altitude check.
                 const airportCoords = activeAirportLocations.get(closestIcao);
                 const airportElevation = airportCoords.elev;
-                const aircraftAltitude = flight.altitude; // Altitude is in feet MSL
-
-                // Only count if the aircraft's altitude is within 500 feet of the airport's elevation.
+                const aircraftAltitude = flight.altitude;
                 if (Math.abs(aircraftAltitude - airportElevation) < 500) {
                     onGroundByAirport[closestIcao]++;
                 }
             }
         });
-        // --- NEW LOGIC END ---
 
         if (activeAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
@@ -883,21 +887,15 @@ async function generateTrafficHotspotReport() {
         }
 
         const airportTrafficData = {};
-
         activeAirports.forEach(airportStatus => {
             const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
-
-            // Skip airports with no relevant traffic
             if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
                 return;
             }
-
             const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
             if (!airportInfo) return;
-
             const airportLon = parseFloat(airportInfo.longitude_deg);
             const airportLat = parseFloat(airportInfo.latitude_deg);
-
             if (isNaN(airportLon) || isNaN(airportLat)) {
                 console.warn(`Skipping airport ${airportInfo.ident} due to invalid coordinates in database.`);
                 return;
@@ -908,9 +906,10 @@ async function generateTrafficHotspotReport() {
                 icao: airportStatus.airportIcao,
                 name: airportStatus.airportName.replace(/"/g, ''),
                 inboundTotal: airportStatus.inboundFlightsCount || 0,
-                outboundOnGround: calculatedOnGroundCount, // Use our calculated value
+                outboundOnGround: calculatedOnGroundCount,
                 outboundTotal: airportStatus.outboundFlightsCount || 0,
-                inboundBuckets: { in20: 0, in60: 0, over60: 0 }
+                inboundBuckets: { in20: 0, in60: 0, over60: 0 },
+                activeFrequencies: activeFrequenciesByAirport[airportStatus.airportIcao] ? Array.from(activeFrequenciesByAirport[airportStatus.airportIcao]).sort() : []
             };
 
             const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
@@ -919,33 +918,32 @@ async function generateTrafficHotspotReport() {
                 if (flight && flight.speed > 50) { 
                     const flightLon = parseFloat(flight.longitude);
                     const flightLat = parseFloat(flight.latitude);
-                    
                     if (!isNaN(flightLon) && !isNaN(flightLat)) {
                         const aircraftPosition = turf.point([flightLon, flightLat]);
                         const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
                         const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
-
-                        if (eteMinutes <= 20) {
-                            data.inboundBuckets.in20++;
-                        } else if (eteMinutes <= 60) {
-                            data.inboundBuckets.in60++;
-                        } else {
-                            data.inboundBuckets.over60++;
-                        }
+                        if (eteMinutes <= 20) data.inboundBuckets.in20++;
+                        else if (eteMinutes <= 60) data.inboundBuckets.in60++;
+                        else data.inboundBuckets.over60++;
                     }
                 }
             });
             airportTrafficData[data.icao] = data;
         });
         
-        const sortedAirports = Object.values(airportTrafficData)
-            .sort((a, b) => b.inboundTotal - a.inboundTotal)
-            .slice(0, 20);
+        const sortedAirports = Object.values(airportTrafficData).sort((a, b) => b.inboundTotal - a.inboundTotal).slice(0, 20);
 
         if (sortedAirports.length === 0) {
             resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
         } else {
-            let htmlContent = sortedAirports.map(data => `
+            let htmlContent = sortedAirports.map(data => {
+                const frequencyBubbles = data.activeFrequencies.map(freqName => {
+                    const initial = freqInitialMap[freqName];
+                    const className = `freq-bubble freq-type-${freqName.toLowerCase()}`;
+                    return `<span class="${className}" title="${freqName}">${initial}</span>`;
+                }).join('');
+
+                return `
                 <div class="traffic-card" data-icao="${data.icao}">
                     <div class="traffic-card-header">
                         <div class="airport-name">${data.name}</div>
@@ -954,30 +952,29 @@ async function generateTrafficHotspotReport() {
                     <div class="traffic-card-body">
                         <div class="traffic-col">
                             <div class="col-header">
-                                <span class="icon-inbound"></span>
-                                Inbound
+                                <span class="icon-inbound"></span> Inbound
                             </div>
                             <div class="total-count">${data.inboundTotal}</div>
                             <div class="detail-breakdown">
-                                <span class="detail-value">${data.inboundBuckets.in20}</span> in &lt; 20 min<br>
-                                <span class="detail-value">${data.inboundBuckets.in60}</span> in &lt; 1 hr<br>
-                                <span class="detail-value">${data.inboundBuckets.over60}</span> in &gt; 1 hr
+                                <span><span class="detail-value">${data.inboundBuckets.in20}</span> in &lt; 20 min</span>
+                                <span><span class="detail-value">${data.inboundBuckets.in60}</span> in &lt; 1 hr</span>
+                                <span><span class="detail-value">${data.inboundBuckets.over60}</span> in &gt; 1 hr</span>
                             </div>
                         </div>
                         <div class="traffic-col">
                             <div class="col-header">
-                                <span class="icon-outbound"></span>
-                                Outbound
+                                <span class="icon-outbound"></span> Outbound
                             </div>
                             <div class="total-count">${data.outboundOnGround}</div>
                             <div class="detail-breakdown">
-                                <span class="on-ground-text">on ground</span><br>
-                                <span class="detail-value">${data.outboundTotal}</span> total departures
+                                <span class="on-ground-text">on ground</span>
+                                <span class="total-departures-text"><span class="detail-value">${data.outboundTotal}</span> total departures</span>
                             </div>
                         </div>
                     </div>
+                    ${frequencyBubbles ? `<div class="traffic-card-frequencies">${frequencyBubbles}</div>` : ''}
                 </div>
-            `).join('');
+            `}).join('');
 
             resultsContainer.innerHTML = htmlContent;
             

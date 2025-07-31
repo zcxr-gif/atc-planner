@@ -511,6 +511,12 @@
     color: #b9bbbe;
     margin-top: 8px;
     line-height: 1.5;
+    display: flex;
+    flex-direction: column;
+}
+
+.detail-breakdown > span {
+    line-height: 1.4;
 }
 
 .detail-value {
@@ -564,6 +570,34 @@
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* --- ATC FREQUENCY BUBBLE STYLES --- */
+.traffic-card-frequencies {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.freq-bubble {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+    font-size: 13px;
+    color: #fff;
+    text-transform: uppercase;
+}
+.freq-type-ground { background-color: #E67E22; }
+.freq-type-tower { background-color: #3498DB; }
+.freq-type-atis { background-color: #9B59B6; }
+.freq-type-approach { background-color: #2ECC71; }
+.freq-type-departure { background-color: #27AE60; }
 		
         /* --- CUSTOM POPUP STYLES --- */
         .maptiler-popup-content.custom-popup {
