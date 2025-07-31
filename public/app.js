@@ -328,24 +328,25 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
      * @param {HTMLElement} clickedButton The button element that was clicked.
      */
     function toggleMobilePanel(panelId, clickedButton) {
-        const allPanels = document.querySelectorAll('.floating-panel');
-        const targetPanel = document.getElementById(panelId);
-        const isAlreadyVisible = targetPanel && targetPanel.classList.contains('visible');
+    const allPanels = document.querySelectorAll('.floating-panel');
+    const targetPanel = document.getElementById(panelId);
+    const isActive = targetPanel && (targetPanel.classList.contains('peek') || targetPanel.classList.contains('full'));
 
-        // Deactivate all nav buttons and hide all panels
-        document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
-        allPanels.forEach(p => p.classList.remove('visible'));
+    // Deactivate all buttons and hide all panels first
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => btn.classList.remove('active'));
+    allPanels.forEach(p => p.classList.remove('peek', 'full'));
 
-        // If the clicked panel was not already visible, show it and activate its button.
-        if (!isAlreadyVisible) {
-            if (targetPanel) {
-                targetPanel.classList.add('visible');
-            }
-            if (clickedButton) {
-                clickedButton.classList.add('active');
-            }
+    // If the button for the active panel is clicked again, it closes.
+    // Otherwise, we open the new panel.
+    if (!isActive) {
+        if (targetPanel) {
+            targetPanel.classList.add('peek'); // Always open to peek state first
+        }
+        if (clickedButton) {
+            clickedButton.classList.add('active');
         }
     }
+}
 
 
     /**
@@ -508,91 +509,68 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
 
     // --- UI PANELS (no changes here) ---
     function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
-        const existingPanel = document.getElementById(id);
-        if (existingPanel) {
-            // UPDATED: On mobile, just make it visible instead of removing/recreating
-            if (window.innerWidth <= 768) {
-                existingPanel.classList.add('visible');
-                return existingPanel;
-            }
-            existingPanel.remove();
-        }
-
-        const panel = document.createElement('div');
-        panel.id = id;
-        panel.className = 'floating-panel';
-        panel.style.top = top;
-        panel.style.left = left;
-
-        panel.innerHTML = `
-            <div class="panel-header">
-                ${titleHTML}
-                <div class="panel-controls">
-                    <button class="toggle-panel">-</button>
-                    <button class="close-panel" title="Close Panel">&#x2715;</button>
-                </div>
-            </div>
-            <div class="panel-content">
-                ${contentHTML}
-            </div>
-        `;
-        document.body.appendChild(panel);
-
-        // UPDATED: If on mobile, immediately add the 'visible' class to trigger the slide-up animation
-        if (window.innerWidth <= 768) {
-            // Use a short timeout to allow the element to be added to the DOM before transitioning
-            setTimeout(() => {
-                // This class is now controlled by the mobile nav logic,
-                // so we don't automatically make it visible here.
-                // panel.classList.add('visible');
-            }, 10);
-        }
-
-        // Prevent map interaction when clicking on panel
-        panel.addEventListener('mousedown', (e) => e.stopPropagation());
-        panel.addEventListener('wheel', (e) => e.stopPropagation());
-
-
-        const closeButton = panel.querySelector('.close-panel');
-        closeButton.addEventListener('click', () => {
-            // UPDATED: Modified close logic for mobile vs desktop
-            if (window.innerWidth <= 768) {
-                // On mobile, just hide the panel by removing the 'visible' class
-                panel.classList.remove('visible');
-                // Also deactivate any active nav button
-                document.querySelectorAll('.mobile-nav-btn.active').forEach(btn => btn.classList.remove('active'));
-            } else {
-                // Original desktop behavior
-                if (panel.id === 'main-panel') {
-                    if (reopenButton) reopenButton.style.display = 'block';
-                    panel.style.display = 'none';
-                } else if (panel.id === 'plan-panel') {
-                    const drawingCheckbox = document.getElementById('enable-drawing');
-                    if (drawingCheckbox) drawingCheckbox.checked = false;
-                    isDrawingEnabled = false;
-                    panel.style.display = 'none';
-                    const reopenPlanButton = document.getElementById('reopen-plan-panel');
-                    if(reopenPlanButton) reopenPlanButton.style.display = 'block';
-                } else if (panel.id === 'live-control-panel') {
-                    panel.style.display = 'none';
-                }
-                else {
-                    panel.remove();
-                }
-            }
-        });
-
-        panel.querySelector('.toggle-panel').addEventListener('click', (e) => {
-            const content = panel.querySelector('.panel-content');
-            const isHidden = content.style.display === 'none';
-            content.style.display = isHidden ? 'block' : 'none';
-            e.target.textContent = isHidden ? '-' : '+';
-        });
-
-        makeDraggable(panel);
-        return panel;
+    const existingPanel = document.getElementById(id);
+    if (existingPanel) {
+        return existingPanel; // Just return the existing panel, don't change its visibility here
     }
 
+    const panel = document.createElement('div');
+    panel.id = id;
+    panel.className = 'floating-panel';
+    panel.style.top = top;
+    panel.style.left = left;
+
+    panel.innerHTML = `
+        <div class="panel-header">
+            <div class="panel-grabber"></div>  ${titleHTML}
+            <div class="panel-controls">
+                <button class="toggle-panel">-</button>
+                <button class="close-panel" title="Close Panel">&#x2715;</button>
+            </div>
+        </div>
+        <div class="panel-content">
+            ${contentHTML}
+        </div>
+    `;
+    document.body.appendChild(panel);
+
+    // Prevent map interaction when clicking on panel
+    panel.addEventListener('mousedown', (e) => e.stopPropagation());
+    panel.addEventListener('wheel', (e) => e.stopPropagation());
+
+    const closeButton = panel.querySelector('.close-panel');
+    closeButton.addEventListener('click', () => {
+        // On mobile and desktop, this button simply closes the panel fully
+        panel.classList.remove('peek', 'full');
+        document.querySelectorAll('.mobile-nav-btn.active').forEach(btn => btn.classList.remove('active'));
+
+        if (window.innerWidth > 768) {
+            // Original desktop behavior
+            if (panel.id === 'main-panel') {
+                if (reopenButton) reopenButton.style.display = 'block';
+                panel.style.display = 'none';
+            } else {
+                panel.remove();
+            }
+        }
+    });
+
+    panel.querySelector('.toggle-panel').addEventListener('click', (e) => {
+        const content = panel.querySelector('.panel-content');
+        const isHidden = content.style.display === 'none';
+        content.style.display = isHidden ? 'block' : 'none';
+        e.target.textContent = isHidden ? '-' : '+';
+    });
+    
+    // Attach the correct dragger based on device type
+    if (window.innerWidth <= 768) {
+        makePanelDraggableForMobile(panel);
+    } else {
+        makeDraggable(panel); // Your existing desktop dragger
+    }
+
+    return panel;
+}
     function makeDraggable(element) {
         // UPDATED: Disable dragging on mobile devices
         if (window.innerWidth <= 768) {
@@ -1175,7 +1153,83 @@ async function generateTrafficHotspotReport() {
             }
         });
     }
+	 // Add this new function to your app.js
 
+/**
+ * Makes a panel draggable on mobile with "snap" states (peek, full, closed).
+ * @param {HTMLElement} panel The panel element to make draggable.
+ */
+function makePanelDraggableForMobile(panel) {
+    const header = panel.querySelector('.panel-header');
+    let startY, startHeight, currentY;
+
+    function onTouchStart(e) {
+        header.style.cursor = 'grabbing';
+        panel.style.transition = 'none'; // Disable transition during drag for direct feedback
+        startY = e.touches ? e.touches[0].clientY : e.clientY;
+        const rect = panel.getBoundingClientRect();
+        // We calculate height relative to the bottom of the viewport
+        startHeight = window.innerHeight - rect.top;
+    }
+
+    function onTouchMove(e) {
+        if (!startY) return;
+        currentY = e.touches ? e.touches[0].clientY : e.clientY;
+        const deltaY = currentY - startY;
+        let newHeight = startHeight - deltaY;
+
+        // Constrain dragging within limits
+        const maxHeight = window.innerHeight - 80; // Cap height
+        const minHeight = 0;
+        newHeight = Math.max(minHeight, Math.min(newHeight, maxHeight));
+
+        // Apply the transform directly for a 1:1 drag feel
+        panel.style.transform = `translateY(calc(100% - ${newHeight}px))`;
+    }
+
+    function onTouchEnd() {
+        if (!startY) return;
+        header.style.cursor = 'grab';
+        panel.style.transition = ''; // Re-enable transitions for the snap animation
+
+        const peekHeight = window.innerHeight * 0.4;
+        const fullHeight = window.innerHeight * 0.85;
+        const endHeight = window.innerHeight - panel.getBoundingClientRect().top;
+
+        // Reset startY to prevent accidental moves
+        startY = null;
+
+        // Determine the final state (snap to closest position)
+        const deltaY = currentY - startY; // Check if user was dragging up or down
+
+        // If dragged down more than a threshold, close it
+        if (endHeight < peekHeight * 0.8) {
+            panel.classList.remove('peek', 'full');
+            document.querySelectorAll('.mobile-nav-btn.active').forEach(btn => btn.classList.remove('active'));
+        } 
+        // If it's between peek and full, snap to the nearest one
+        else if (endHeight < (peekHeight + fullHeight) / 2) {
+            panel.classList.add('peek');
+            panel.classList.remove('full');
+        } 
+        // Otherwise, snap to full
+        else {
+            panel.classList.add('full');
+            panel.classList.remove('peek');
+        }
+        panel.style.transform = ''; // Remove inline style to let CSS classes take over
+    }
+
+    header.addEventListener('touchstart', onTouchStart, { passive: true });
+    header.addEventListener('touchmove', onTouchMove, { passive: true });
+    header.addEventListener('touchend', onTouchEnd);
+
+    // Also add mouse events for testing on desktop
+    header.addEventListener('mousedown', onTouchStart);
+    header.addEventListener('mousemove', (e) => { if(e.buttons === 1) onTouchMove(e) });
+    document.addEventListener('mouseup', onTouchEnd);
+ }
+	 
     // --- LIVE MODE: DATA FETCHING AND DISPLAY (Updated for MapTiler) ---
     function startLiveUpdates(sessionId) {
         stopLiveUpdates(); // Clear any previous state
