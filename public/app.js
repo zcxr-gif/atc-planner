@@ -2329,7 +2329,7 @@ function createHelpPanel() {
         const elevationInMeters = elevationInFeet * 0.3048;
 
         // The ID of the DEM source specified in your map's style.json.
-        const demSourceId = 'maptiler-terrain';
+        const demSourceId = 'Terrain RGB';
 
         // Before proceeding, ensure the required terrain data source actually exists on the map.
         if (!map.getSource(demSourceId)) {
