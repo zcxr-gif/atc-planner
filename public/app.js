@@ -698,6 +698,15 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
                     </div>
                 </div>
             </div>
+            
+            <div id="terrain-analysis-container" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+                <label for="terrain-height-input" style="font-size: 14px; display: block; margin-bottom: 5px; font-weight: 500;">Highlight Elevation (ft)</label>
+                <div style="display: flex; gap: 8px;">
+                    <input type="number" id="terrain-height-input" placeholder="e.g., 8000" step="100" title="Enter elevation in feet">
+                    <button id="apply-terrain-btn" class="cta-button" style="padding: 8px 12px; font-size: 14px;">Apply</button>
+                </div>
+                <button id="clear-terrain-btn" style="width: 100%; margin-top: 10px; background-color: #6c757d; display: none;">Clear Highlight</button>
+            </div>
 
             <div class="desktop-tool-buttons">
                 <h3 style="margin-top: 15px;">Tools</h3>
@@ -841,6 +850,27 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         mainPanel.querySelector('#help-btn').addEventListener('click', createHelpPanel);
         mainPanel.querySelector('#live-mode-btn').addEventListener('click', createLiveControlPanel);
 		mainPanel.querySelector('#traffic-scan-btn').addEventListener('click', createTrafficScanPanel);
+
+        // --- Terrain Analysis Listeners ---
+        const applyTerrainBtn = mainPanel.querySelector('#apply-terrain-btn');
+        const clearTerrainBtn = mainPanel.querySelector('#clear-terrain-btn');
+        const terrainInput = mainPanel.querySelector('#terrain-height-input');
+
+        applyTerrainBtn.addEventListener('click', () => {
+            const elevationFt = parseInt(terrainInput.value, 10);
+            if (!isNaN(elevationFt) && elevationFt >= 0) {
+                applyTerrainHighlight(elevationFt);
+                clearTerrainBtn.style.display = 'block';
+            } else {
+                alert('Please enter a valid elevation in feet.');
+            }
+        });
+
+        clearTerrainBtn.addEventListener('click', () => {
+            clearTerrainHighlight();
+            clearTerrainBtn.style.display = 'none';
+            terrainInput.value = '';
+        });
     }
     
 	// ... all other UI panel creation functions (createLiveControlPanel, etc.)...
@@ -2262,6 +2292,59 @@ function createHelpPanel() {
         if (map.getLayer('runways-layer')) {
              map.setPaintProperty('runways-layer', 'fill-color', RUNWAY_STYLE_REGULAR['fill-color']);
         }
+    }
+
+    /**
+     * Clears the terrain highlight layer from the map.
+     */
+    function clearTerrainHighlight() {
+        const layerId = 'terrain-highlight-layer';
+        if (map.getLayer(layerId)) {
+            map.removeLayer(layerId);
+        }
+    }
+
+    /**
+     * Applies a color highlight to the map for all terrain at or above a given elevation.
+     * @param {number} elevationInFeet The elevation to highlight above, in feet.
+     */
+    function applyTerrainHighlight(elevationInFeet) {
+        // First, clear any existing highlight layer to ensure we're starting fresh.
+        clearTerrainHighlight();
+
+        // The map's DEM source ('raster-dem') works with elevation in meters.
+        const elevationInMeters = elevationInFeet * 0.3048;
+
+        // The ID of the DEM source specified in your map's style.json.
+        const demSourceId = 'maptiler-terrain';
+
+        // Before proceeding, ensure the required terrain data source actually exists on the map.
+        if (!map.getSource(demSourceId)) {
+            console.error(`DEM source '${demSourceId}' not found on the map.`);
+            alert('The required terrain data source is not available on the current map style.');
+            return;
+        }
+
+        // Add the new layer to the map to display the highlight.
+        map.addLayer({
+            id: 'terrain-highlight-layer',
+            type: 'raster',
+            source: demSourceId, // Use the existing DEM data source.
+            paint: {
+                // 'raster-color' allows styling a 'raster-dem' source based on its elevation values.
+                'raster-color': [
+                    'step', // Use a 'step' expression for a sharp color change.
+                    ['raster-value'], // This expression gets the raw elevation value (in meters) of each pixel.
+                    'transparent',    // The default color for all elevations below the first specified stop.
+                    
+                    // At 'elevationInMeters', change the color to a semi-transparent red.
+                    // This color will apply to all elevations from this value upwards.
+                    elevationInMeters, 'rgba(220, 53, 69, 0.55)' 
+                ],
+                // Set fade duration to 0 to make the layer appear instantly.
+                'raster-fade-duration': 0
+            }
+        }, 'peaks-labels-layer'); // This optional argument places the new layer just below the 'peaks-labels-layer', ensuring mountain peak names remain visible on top of the highlight.
     }
 
     // --- DRAWING LOGIC (Rewritten for MapTiler) ---
