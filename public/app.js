@@ -856,6 +856,19 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         const clearTerrainBtn = mainPanel.querySelector('#clear-terrain-btn');
         const terrainInput = mainPanel.querySelector('#terrain-height-input');
 
+        // Disable the button initially until the terrain source is confirmed to be loaded.
+        applyTerrainBtn.disabled = true;
+        applyTerrainBtn.textContent = 'Loading...';
+
+        // Check periodically until the DEM source is loaded to prevent a timing error.
+        const demSourceCheck = setInterval(() => {
+            if (map.isSourceLoaded('maptiler-terrain')) {
+                applyTerrainBtn.disabled = false;
+                applyTerrainBtn.textContent = 'Apply';
+                clearInterval(demSourceCheck); // Stop checking once it's loaded
+            }
+        }, 500); // Check every half-second
+
         applyTerrainBtn.addEventListener('click', () => {
             const elevationFt = parseInt(terrainInput.value, 10);
             if (!isNaN(elevationFt) && elevationFt >= 0) {
