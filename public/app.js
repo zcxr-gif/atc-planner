@@ -1815,7 +1815,7 @@ function createHelpPanel() {
                 filter: ['==', ['get', 'hasActiveAtc'], true],
                 paint: {
                     'circle-radius': 10,
-                    'circle-color': var(--accent-primary),
+                    'circle-color': '#3498db',
                     'circle-opacity': 0.5,
                     'circle-stroke-width': 2,
                     'circle-stroke-color': '#FFFFFF'
@@ -1871,8 +1871,8 @@ function createHelpPanel() {
 
         map.setPaintProperty('airport-dots-pulse-layer', 'circle-radius', [
             '+',
-            ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3],
-            radius
+            ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3], // Base radius
+            radius // Add animated pulse radius
         ]);
         map.setPaintProperty('airport-dots-pulse-layer', 'circle-opacity', opacity);
         map.setPaintProperty('airport-dots-pulse-layer', 'circle-stroke-opacity', opacity);
