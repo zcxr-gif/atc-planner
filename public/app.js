@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let airportUpdateTimeout;
     let waypointUpdateTimeout;
     let currentLineType = 'standard';
+    let waypointPopup = null; // To hold the waypoint hover popup
 
     const planLayers = {};
     let currentAirportCoords = null;
@@ -263,6 +264,17 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         await getWaypoints();
 
         map.on('load', () => {
+            
+            // --- MODIFICATION START: Create and add the custom waypoint icon ---
+            const size = 15; // The size of the icon
+            const triangleImage = new Image(size, size);
+            triangleImage.onload = () => map.addImage('waypoint-triangle', triangleImage, { sdf: true });
+            triangleImage.src = `data:image/svg+xml;utf8,<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${size}px" height="${size}px" viewBox="0 0 100 100" version="1.1" xmlns="http://www.w3.org/2000/svg">
+    <path d="M50 15 L85 85 L15 85 Z" stroke="#FFFFFF" stroke-width="8" fill="#FFFFFF" fill-opacity="0.5"/>
+</svg>`;
+            // --- MODIFICATION END ---
+            
             // --- MOUNTAIN PEAKS MBTILES DATA - START ---
             // This section adds your custom mountain peak data from Google Cloud Storage.
 
@@ -305,7 +317,6 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
 
             setupEventListeners();
             
-            // *** MODIFICATION START ***
             // This is the core fix. We will wait until the map's terrain source is loaded
             // before we try to render any data layers. This prevents a race condition.
             const demSourceCheck = setInterval(() => {
@@ -321,7 +332,6 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
                     console.log("Waiting for DEM source to load...");
                 }
             }, 500); // Check every half-second.
-            // *** MODIFICATION END ***
             
             loadPlanFromLocalStorage();
             
@@ -1836,20 +1846,20 @@ function createHelpPanel() {
 		const waypoints = await getWaypoints();
 
 		const waypointFeatures = waypoints.filter(wp => {
-    if (!Array.isArray(wp.coords) || wp.coords.length < 2) return false;
-    const lon = wp.coords[0]; // Longitude is the first element
-    const lat = wp.coords[1]; // Latitude is the second element
-    return lat >= bounds.getSouth() && lat <= bounds.getNorth() && lon >= bounds.getWest() && lon <= bounds.getEast();
-}).map(wp => ({
-    type: 'Feature',
-    geometry: {
-        type: 'Point',
-        coordinates: [wp.coords[0], wp.coords[1]] // Use [lon, lat] from the coords array
-    },
-    properties: {
-        name: wp.name // Use the 'name' property for the label
-    }
-}));
+            if (!Array.isArray(wp.coords) || wp.coords.length < 2) return false;
+            const lon = wp.coords[0]; // Longitude is the first element
+            const lat = wp.coords[1]; // Latitude is the second element
+            return lat >= bounds.getSouth() && lat <= bounds.getNorth() && lon >= bounds.getWest() && lon <= bounds.getEast();
+        }).map(wp => ({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [wp.coords[0], wp.coords[1]] // Use [lon, lat] from the coords array
+            },
+            properties: {
+                name: wp.name // Use the 'name' property for the label
+            }
+        }));
 
 		const sourceId = 'waypoints-source';
 		const layerId = 'waypoints-layer';
@@ -1862,47 +1872,55 @@ function createHelpPanel() {
 				data: { type: 'FeatureCollection', features: waypointFeatures }
 			});
 			map.addLayer({
-    id: layerId, // This will be 'waypoints-layer'
-    type: 'symbol',
-    source: sourceId,
-    layout: {
-        // Use a built-in icon that is a triangle outline
-        'icon-image': 'triangle-stroked-15',
-        'icon-size': 1.5, // Make the icon a bit larger
-        'icon-allow-overlap': true // Ensures icons are always shown
-    },
-    paint: {
-        // Make the triangle icon black
-        'icon-color': '#000000'
-    }
-});
+				id: layerId,
+				type: 'symbol',
+				source: sourceId,
+                // --- MODIFICATION START: Use icon instead of text ---
+				layout: {
+					'icon-image': 'waypoint-triangle', // Use the custom icon
+                    'icon-size': 1.0,
+                    'icon-allow-overlap': true,
+                    'icon-anchor': 'center'
+				},
+                paint: {
+                    'icon-color': '#FFFFFF' // This allows the SDF icon to be colored.
+                }
+                // --- MODIFICATION END ---
+			});
+            
+            // --- MODIFICATION START: Add hover events for the popup ---
+            map.on('mouseenter', layerId, (e) => {
+                map.getCanvas().style.cursor = 'pointer';
 
-// Create a variable to hold the popup
-let waypointPopup;
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const name = e.features[0].properties.name;
 
-// Show popup with waypoint name when the mouse enters the icon
-map.on('mouseenter', layerId, (e) => {
-    map.getCanvas().style.cursor = 'pointer';
-    const coordinates = e.features[0].geometry.coordinates.slice();
-    const name = e.features[0].properties.name;
+                // Ensure that if the map is zoomed out such that multiple
+                // copies of the feature are visible, the popup appears
+                // over the copy being pointed to.
+                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                    coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                }
+                
+                if (waypointPopup) waypointPopup.remove();
+                waypointPopup = new maptilersdk.Popup({
+                        closeButton: false,
+                        offset: 15, // Offset popup from the icon center
+                        className: 'waypoint-popup' // Optional: for custom styling
+                    })
+                    .setLngLat(coordinates)
+                    .setHTML(`<strong>${name}</strong>`)
+                    .addTo(map);
+            });
 
-    // Create the popup and set its content
-    waypointPopup = new maptilersdk.Popup({
-            closeButton: false,
-            offset: 15 // Offset the popup slightly from the icon
-        })
-        .setLngLat(coordinates)
-        .setHTML(`<strong>${name}</strong>`)
-        .addTo(map);
-});
-
-// Remove the popup when the mouse leaves the icon
-map.on('mouseleave', layerId, () => {
-    map.getCanvas().style.cursor = '';
-    if (waypointPopup) {
-        waypointPopup.remove();
-    }
-});
+            map.on('mouseleave', layerId, () => {
+                map.getCanvas().style.cursor = '';
+                if (waypointPopup) {
+                    waypointPopup.remove();
+                    waypointPopup = null;
+                }
+            });
+            // --- MODIFICATION END ---
 		}
 
 		if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
