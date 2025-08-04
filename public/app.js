@@ -1844,7 +1844,7 @@ function createHelpPanel() {
 			map.addSource(sourceId, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: waypointFeatures }
-			
+			});
 map.addLayer({
     id: layerId, // This will be 'waypoints-layer'
     type: 'symbol',
