@@ -1862,23 +1862,47 @@ function createHelpPanel() {
 				data: { type: 'FeatureCollection', features: waypointFeatures }
 			});
 			map.addLayer({
-				id: layerId,
-				type: 'symbol',
-				source: sourceId,
-				layout: {
-					// 'icon-image': 'triangle-11', // Using text instead
-					'text-field': ['get', 'name'],
-					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-					'text-size': 11,
-					'text-anchor': 'bottom',
-					'text-offset': [0, -0.8]
-				},
-				paint: {
-					'text-color': '#ddd',
-					'text-halo-color': '#000',
-					'text-halo-width': 1.5
-				}
-			});
+    id: layerId, // This will be 'waypoints-layer'
+    type: 'symbol',
+    source: sourceId,
+    layout: {
+        // Use a built-in icon that is a triangle outline
+        'icon-image': 'triangle-stroked-15',
+        'icon-size': 1.5, // Make the icon a bit larger
+        'icon-allow-overlap': true // Ensures icons are always shown
+    },
+    paint: {
+        // Make the triangle icon black
+        'icon-color': '#000000'
+    }
+});
+
+// Create a variable to hold the popup
+let waypointPopup;
+
+// Show popup with waypoint name when the mouse enters the icon
+map.on('mouseenter', layerId, (e) => {
+    map.getCanvas().style.cursor = 'pointer';
+    const coordinates = e.features[0].geometry.coordinates.slice();
+    const name = e.features[0].properties.name;
+
+    // Create the popup and set its content
+    waypointPopup = new maptilersdk.Popup({
+            closeButton: false,
+            offset: 15 // Offset the popup slightly from the icon
+        })
+        .setLngLat(coordinates)
+        .setHTML(`<strong>${name}</strong>`)
+        .addTo(map);
+});
+
+// Remove the popup when the mouse leaves the icon
+map.on('mouseleave', layerId, () => {
+    map.getCanvas().style.cursor = '';
+    if (waypointPopup) {
+        waypointPopup.remove();
+    }
+});
 		}
 
 		if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
