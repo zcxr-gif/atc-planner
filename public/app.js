@@ -1776,16 +1776,14 @@ function createHelpPanel() {
         return;
     }
 
-    console.log("--- Updating VORs ---"); // DEBUG
-
     const bounds = map.getBounds();
     const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     const navaids = await getVORsFromOpenAIP(bbox);
     
-    // DEBUG: Log how many items we received from the API
-    console.log(`Received ${navaids.length} total navaid items from the API.`);
-
-    const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
+    // --- NEW: Log the raw navaid data to inspect it ---
+    console.log("Raw navaid data received:", navaids);
+    
+    const VOR_TYPES = [3, 4, 5, 6, 7]; 
     const navaidFeatures = navaids
         .filter(navaid => 
             navaid &&
@@ -1805,9 +1803,6 @@ function createHelpPanel() {
                 type: navaid.properties.type
             }
         }));
-
-    // DEBUG: Log how many navaids are left after filtering for VORs
-    console.log(`Found ${navaidFeatures.length} valid VORs to display.`);
 
     const geojsonData = {
         type: 'FeatureCollection',
