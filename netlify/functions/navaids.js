@@ -1,6 +1,5 @@
 // /netlify/functions/navaids.js
 
-// Using 'node-fetch' for robust fetching in a Node.js environment.
 const fetch = require('node-fetch');
 
 /**
@@ -28,24 +27,23 @@ exports.handler = async (event) => {
   }
 
   // 3. Prepare and send the request to the OpenAIP service.
-  const requestUrl = `https://api.openaip.net/api/navaids?bbox=${bbox}`;
+  const requestUrl = `https://api.core.openaip.net/api/navaids?bbox=${bbox}&page=1&limit=500`;
 
   try {
     const response = await fetch(requestUrl, {
       headers: {
-        'x-openaip-client-id': openAipApiKey,
+        // CORRECTED: Use the correct header 'x-openaip-api-key'
+        'x-openaip-api-key': openAipApiKey,
       },
     });
 
-    // If OpenAIP returns an error (like 401 Unauthorized), pass it to the client.
     if (!response.ok) {
       return {
         statusCode: response.status,
         body: JSON.stringify({ message: `Error from OpenAIP: ${response.statusText}` }),
       };
     }
-
-    // 4. Send the successful data back to the client application.
+    
     const data = await response.json();
     return {
       statusCode: 200,

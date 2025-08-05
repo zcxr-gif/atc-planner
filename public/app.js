@@ -1757,103 +1757,88 @@ function createHelpPanel() {
 
 	// --- ADDED/FIXED FUNCTIONS ---
 	async function updateNavaids() {
-		const navaidsCheckbox = document.getElementById('filter-navaids');
-		const sourceId = 'openaip-navaids-source';
-		const layerId = 'openaip-navaids-layer';
+    const navaidsCheckbox = document.getElementById('filter-navaids');
+    const sourceId = 'openaip-navaids-source';
+    const layerId = 'openaip-navaids-layer';
 
-		// 1. Check if the user wants to see navaids. If not, hide the layer and stop.
-		if (!navaidsCheckbox || !navaidsCheckbox.checked) {
-			if (map.getLayer(layerId)) {
-				map.setLayoutProperty(layerId, 'visibility', 'none');
-			}
-			return;
-		}
+    if (!navaidsCheckbox || !navaidsCheckbox.checked) {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+        return;
+    }
 
-		// 2. To prevent clutter, only show navaids at a reasonable zoom level.
-		const currentZoom = map.getZoom();
-		if (currentZoom < 7) {
-			if (map.getLayer(layerId)) {
-				map.setLayoutProperty(layerId, 'visibility', 'none');
-			}
-			return;
-		}
+    const currentZoom = map.getZoom();
+    if (currentZoom < 7) {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'none');
+        }
+        return;
+    }
 
-		// 3. Get the current map coordinates (bounding box).
-		const bounds = map.getBounds();
-		const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const bounds = map.getBounds();
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const navaids = await getVORsFromOpenAIP(bbox);
 
-		// 4. Fetch the navaid data for the visible area.
-		const navaids = await getVORsFromOpenAIP(bbox);
+    // --- ADDED: Filter for VOR types, based on your old working code ---
+    const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
+    const navaidFeatures = navaids
+        .filter(navaid => 
+            VOR_TYPES.includes(navaid.type) && 
+            navaid.geometry && 
+            navaid.geometry.coordinates
+        )
+        .map(navaid => ({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
+            },
+            properties: {
+                name: navaid.properties.name,
+                type: navaid.properties.type
+            }
+        }));
+    // --- END ADDITION ---
 
-		// 5. Convert the fetched data into a GeoJSON FeatureCollection for MapTiler.
-        // --- MODIFICATION START ---
-        // Added a filter to prevent errors from malformed API data and corrected the 'type' property.
-		const navaidFeatures = navaids
-            .filter(navaid => navaid && navaid.geometry && navaid.geometry.coordinates) // Ensures item has coordinates
-            .map(navaid => ({
-			type: 'Feature',
-			geometry: {
-				// The API provides coordinates in [longitude, latitude] format.
-				type: 'Point',
-				coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
-			},
-			properties: {
-				// We'll use the 'name' property for the label (e.g., "JFK").
-				name: navaid.properties.name,
-				// CORRECTED: The navaid type is inside the 'properties' object.
-				type: navaid.properties.type
-			}
-		}));
-        // --- MODIFICATION END ---
+    const geojsonData = {
+        type: 'FeatureCollection',
+        features: navaidFeatures
+    };
 
-		const geojsonData = {
-			type: 'FeatureCollection',
-			features: navaidFeatures
-		};
+    const source = map.getSource(sourceId);
+    if (source) {
+        source.setData(geojsonData);
+    } else {
+        map.addSource(sourceId, {
+            type: 'geojson',
+            data: geojsonData
+        });
 
-		// 6. Add or update the data source on the map.
-		const source = map.getSource(sourceId);
-		if (source) {
-			// If the source already exists, just update its data. This is more efficient.
-			source.setData(geojsonData);
-		} else {
-			// If it's the first time, create the source and the layer to display it.
-			map.addSource(sourceId, {
-				type: 'geojson',
-				data: geojsonData
-			});
+        map.addLayer({
+            id: layerId,
+            type: 'symbol',
+            source: sourceId,
+            layout: {
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                'text-size': 11,
+                'text-anchor': 'top',
+                'text-offset': [0, 0.8],
+                'text-allow-overlap': false
+            },
+            paint: {
+                'text-color': '#A9D4FF',
+                'text-halo-color': '#000000',
+                'text-halo-width': 1.5
+            }
+        });
+    }
 
-			map.addLayer({
-				id: layerId,
-				type: 'symbol', // A symbol layer can display both icons and text.
-				source: sourceId,
-				layout: {
-					// Define the icon to use for the navaid. 'vor_dme_small' is a placeholder for a real icon name.
-					// For this example, we will use a simple circle with text.
-					// 'icon-image': 'vor-icon', // Uncomment if you have a custom icon sprite
-					
-					// Display the 'name' property from our GeoJSON as a text label.
-					'text-field': ['get', 'name'],
-					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-					'text-size': 11,
-					'text-anchor': 'top',
-					'text-offset': [0, 0.8], // Position the text slightly above the point center.
-					'text-allow-overlap': false // Hide labels that would collide.
-				},
-				paint: {
-					// Style the text to be easily readable against the map.
-					'text-color': '#A9D4FF', // A light blue color for the text.
-					'text-halo-color': '#000000', // A black outline (halo).
-					'text-halo-width': 1.5 // The width of the outline.
-				}
-			});
-		}
-
-		// 7. Finally, ensure the layer is visible.
-		if (map.getLayer(layerId)) {
-			map.setLayoutProperty(layerId, 'visibility', 'visible');
-		}
-	}
+    if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', 'visible');
+    }
+}
 
 	async function updateWaypoints() {
 		const waypointsCheckbox = document.getElementById('filter-waypoints');
