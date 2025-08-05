@@ -258,20 +258,25 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {number} size - The width and height of the image in pixels.
  * @returns {ImageData} The generated image data for use with map.addImage.
  */
+/**
+ * Programmatically creates a compass rose image for VORs.
+ * @param {number} size - The width and height of the image in pixels.
+ * @returns {ImageData} The generated image data for use with map.addImage.
+ */
 function createVorCompassImage(size = 256) {
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
     const center = size / 2;
-    const radius = size / 2 - 8; // Padding for the drawing
+    const radius = size / 2 - 8;
 
     // Style settings
     ctx.strokeStyle = 'black';
     ctx.fillStyle = 'black';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = `bold ${size * 0.08}px "Open Sans", sans-serif`; // Adjusted font size slightly
+    ctx.font = `bold ${size * 0.08}px "Open Sans", sans-serif`;
 
     // --- 1. Draw the outer circle ---
     ctx.lineWidth = 3;
@@ -295,15 +300,14 @@ function createVorCompassImage(size = 256) {
         ctx.stroke();
     }
     
-    // --- 3. Draw ONLY the 4 cardinal heading numbers ---
-    // (Note: The numbers from your screenshot '6, 18, 27' are used here)
+    // --- 3. Draw the 4 cardinal heading numbers ---
+    const textRadius = radius - (size * 0.22);
     const headings = [
         { angle: 0,   label: '0' },
         { angle: 90,  label: '9' },
         { angle: 180, label: '18' },
         { angle: 270, label: '27' }
     ];
-    const textRadius = radius - (size * 0.22);
     headings.forEach(heading => {
         const angleRad = (heading.angle - 90) * Math.PI / 180;
         const textX = center + textRadius * Math.cos(angleRad);
@@ -311,23 +315,15 @@ function createVorCompassImage(size = 256) {
         ctx.fillText(heading.label, textX, textY);
     });
 
-    // --- 4. NEW: Draw the North-pointing needle and arrowhead ---
-    ctx.save(); // Use save/restore to not affect other drawings
+    // --- 4. Draw the North-pointing needle (MODIFIED) ---
+    ctx.save();
     ctx.lineWidth = 2.5;
-    // The needle line from the center to the top
+    // Calculate where the '0' text is and stop the line just before it.
+    const needleEndPointY = center - textRadius - (size * 0.04);
     ctx.beginPath();
     ctx.moveTo(center, center);
-    ctx.lineTo(center, size * 0.15); // End just before the arrowhead
+    ctx.lineTo(center, needleEndPointY);
     ctx.stroke();
-    // The arrowhead at the top
-    const arrowY = size * 0.15;
-    const arrowSize = size * 0.05;
-    ctx.beginPath();
-    ctx.moveTo(center, arrowY - (arrowSize / 2)); // Tip of arrow
-    ctx.lineTo(center - arrowSize / 2, arrowY + (arrowSize / 2));
-    ctx.lineTo(center + arrowSize / 2, arrowY + (arrowSize / 2));
-    ctx.closePath();
-    ctx.fill();
     ctx.restore();
 
     // --- 5. Draw the center VOR/DME hexagon symbol ---
@@ -337,15 +333,12 @@ function createVorCompassImage(size = 256) {
         const angle = (Math.PI / 3 * i) + (Math.PI / 6);
         const x = center + symRadius * Math.cos(angle);
         const y = center + symRadius * Math.sin(angle);
-        if (i === 0) {
-            ctx.moveTo(x, y);
-        } else {
-            ctx.lineTo(x, y);
-        }
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.lineWidth = 2; // Make the hexagon have a thicker border
-    ctx.stroke(); // Use stroke for a hollow hexagon
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     return ctx.getImageData(0, 0, size, size);
 }
@@ -1884,12 +1877,8 @@ function createVorCompassImage(size = 256) {
                 declination = wmmModel.field(lat, lon).declination;
             }
 
-            // --- NEW: Format frequency and identifier for the label ---
-            // Example: 117700 KHz -> "117.700 MHz"
             const frequencyText = navaid.frequency ? `${(navaid.frequency.value / 1000).toFixed(3)} MHz` : '';
             const identifierText = navaid.identifier || '';
-            // Note: The channel (e.g., 124X) is often not in the basic navaid data.
-            // We will build the label with the available Name, Frequency, and Identifier.
             const secondLine = `${frequencyText} ${identifierText}`.trim();
 
             return {
@@ -1901,7 +1890,6 @@ function createVorCompassImage(size = 256) {
                 properties: {
                     name: navaid.name,
                     rotation: declination,
-                    // --- NEW: Add the second line of the label as a property ---
                     details: secondLine
                 }
             };
@@ -1932,22 +1920,21 @@ function createVorCompassImage(size = 256) {
                 'icon-rotation-alignment': 'map',
                 'icon-rotate': ['get', 'rotation'],
                 
-                // --- NEW: Use 'concat' to create a multi-line label ---
                 'text-field': [
                     'concat',
-                    ['upcase', ['get', 'name']], // Make the VOR name uppercase
-                    '\n',                        // Add a newline
-                    ['get', 'details']           // Add the second line with freq/ID
+                    ['upcase', ['get', 'name']],
+                    '\n',
+                    ['get', 'details']
                 ],
                 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                'text-size': 14, // Slightly larger text
-                'text-line-height': 1.1, // Adjust spacing between lines
-                'text-justify': 'center', // Center the multi-line text
-                'text-anchor': 'top', // Anchor the text block below the icon's center
-                'text-offset': [0, 2.5] // Nudge text down to clear the center symbol
+                'text-size': 14,
+                'text-line-height': 1.1,
+                'text-justify': 'center',
+                'text-anchor': 'top',
+                // --- MODIFIED: Increased offset to move text down ---
+                'text-offset': [0, 5]
             },
             paint: {
-                // Using white text with a black halo for best visibility on any background
                 'text-color': '#FFFFFF',
                 'text-halo-color': '#000000',
                 'text-halo-width': 1.5
