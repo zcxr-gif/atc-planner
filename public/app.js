@@ -1779,19 +1779,17 @@ function createHelpPanel() {
     const bounds = map.getBounds();
     const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     const navaids = await getVORsFromOpenAIP(bbox);
-    
-    // --- NEW: Log the raw navaid data to inspect it ---
-    console.log("Raw navaid data received:", navaids);
-    
-    const VOR_TYPES = [3, 4, 5, 6, 7]; 
+
+    const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
     const navaidFeatures = navaids
+        // CORRECTED: The check for 'navaid.properties' is removed because it doesn't exist.
         .filter(navaid => 
             navaid &&
-            navaid.properties && 
             VOR_TYPES.includes(navaid.type) && 
             navaid.geometry && 
             navaid.geometry.coordinates
         )
+        // CORRECTED: Read 'name' and 'type' from the top-level navaid object.
         .map(navaid => ({
             type: 'Feature',
             geometry: {
@@ -1799,8 +1797,8 @@ function createHelpPanel() {
                 coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
             },
             properties: {
-                name: navaid.properties.name,
-                type: navaid.properties.type
+                name: navaid.name, // Changed from navaid.properties.name
+                type: navaid.type  // Changed from navaid.properties.type
             }
         }));
 
