@@ -1786,7 +1786,11 @@ function createHelpPanel() {
 		const navaids = await getVORsFromOpenAIP(bbox);
 
 		// 5. Convert the fetched data into a GeoJSON FeatureCollection for MapTiler.
-		const navaidFeatures = navaids.map(navaid => ({
+        // --- MODIFICATION START ---
+        // Added a filter to prevent errors from malformed API data and corrected the 'type' property.
+		const navaidFeatures = navaids
+            .filter(navaid => navaid && navaid.geometry && navaid.geometry.coordinates) // Ensures item has coordinates
+            .map(navaid => ({
 			type: 'Feature',
 			geometry: {
 				// The API provides coordinates in [longitude, latitude] format.
@@ -1796,10 +1800,11 @@ function createHelpPanel() {
 			properties: {
 				// We'll use the 'name' property for the label (e.g., "JFK").
 				name: navaid.properties.name,
-				// We can also store the type for potential future styling (e.g., 'VOR-DME').
-				type: navaid.type
+				// CORRECTED: The navaid type is inside the 'properties' object.
+				type: navaid.properties.type
 			}
 		}));
+        // --- MODIFICATION END ---
 
 		const geojsonData = {
 			type: 'FeatureCollection',
