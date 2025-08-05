@@ -252,12 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    /**
-     * Programmatically creates a compass rose image for VORs.
-     * @param {number} size - The width and height of the image in pixels.
-     * @returns {ImageData} The generated image data for use with map.addImage.
-     */
-    /**
+   
+ /**
  * Programmatically creates a compass rose image for VORs.
  * @param {number} size - The width and height of the image in pixels.
  * @returns {ImageData} The generated image data for use with map.addImage.
@@ -270,13 +266,12 @@ function createVorCompassImage(size = 256) {
     const center = size / 2;
     const radius = size / 2 - 8; // Padding for the drawing
 
-    // Style settings for the drawing
-    ctx.strokeStyle = 'black'; // Set line color to black
-    ctx.fillStyle = 'black';   // Set fill color to black
+    // Style settings
+    ctx.strokeStyle = 'black';
+    ctx.fillStyle = 'black';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Make font size relative to the icon size for better scaling
-    ctx.font = `bold ${size * 0.1}px "Open Sans", sans-serif`;
+    ctx.font = `bold ${size * 0.08}px "Open Sans", sans-serif`; // Adjusted font size slightly
 
     // --- 1. Draw the outer circle ---
     ctx.lineWidth = 3;
@@ -284,34 +279,31 @@ function createVorCompassImage(size = 256) {
     ctx.arc(center, center, radius, 0, 2 * Math.PI);
     ctx.stroke();
 
-    // --- 2. Draw all of the tick marks ---
+    // --- 2. Draw all tick marks ---
     for (let i = 0; i < 360; i += 10) {
-        const angleRad = (i - 90) * Math.PI / 180; // Offset to make 0 degrees point up
+        const angleRad = (i - 90) * Math.PI / 180;
         const isMajorTick = (i % 30 === 0);
-        
-        // Define inner and outer points for the tick mark
         const tickStart = isMajorTick ? radius - (size * 0.12) : radius - (size * 0.07);
         const startX = center + tickStart * Math.cos(angleRad);
         const startY = center + tickStart * Math.sin(angleRad);
         const endX = center + radius * Math.cos(angleRad);
         const endY = center + radius * Math.sin(angleRad);
-
         ctx.lineWidth = isMajorTick ? 2.5 : 1.5;
         ctx.beginPath();
         ctx.moveTo(startX, startY);
         ctx.lineTo(endX, endY);
         ctx.stroke();
     }
-
+    
     // --- 3. Draw ONLY the 4 cardinal heading numbers ---
+    // (Note: The numbers from your screenshot '6, 18, 27' are used here)
     const headings = [
         { angle: 0,   label: '0' },
-        { angle: 90,  label: '90' },
-        { angle: 180, label: '180' },
-        { angle: 270, label: '270' }
+        { angle: 90,  label: '9' },
+        { angle: 180, label: '18' },
+        { angle: 270, label: '27' }
     ];
-    
-    const textRadius = radius - (size * 0.22); // Position numbers inside the ticks
+    const textRadius = radius - (size * 0.22);
     headings.forEach(heading => {
         const angleRad = (heading.angle - 90) * Math.PI / 180;
         const textX = center + textRadius * Math.cos(angleRad);
@@ -319,12 +311,42 @@ function createVorCompassImage(size = 256) {
         ctx.fillText(heading.label, textX, textY);
     });
 
-    // --- 4. Draw a larger center dot ---
+    // --- 4. NEW: Draw the North-pointing needle and arrowhead ---
+    ctx.save(); // Use save/restore to not affect other drawings
+    ctx.lineWidth = 2.5;
+    // The needle line from the center to the top
     ctx.beginPath();
-    ctx.arc(center, center, size * 0.05, 0, 2 * Math.PI);
+    ctx.moveTo(center, center);
+    ctx.lineTo(center, size * 0.15); // End just before the arrowhead
+    ctx.stroke();
+    // The arrowhead at the top
+    const arrowY = size * 0.15;
+    const arrowSize = size * 0.05;
+    ctx.beginPath();
+    ctx.moveTo(center, arrowY - (arrowSize / 2)); // Tip of arrow
+    ctx.lineTo(center - arrowSize / 2, arrowY + (arrowSize / 2));
+    ctx.lineTo(center + arrowSize / 2, arrowY + (arrowSize / 2));
+    ctx.closePath();
     ctx.fill();
+    ctx.restore();
 
-    // Return the completed image data
+    // --- 5. Draw the center VOR/DME hexagon symbol ---
+    const symRadius = size * 0.06;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3 * i) + (Math.PI / 6);
+        const x = center + symRadius * Math.cos(angle);
+        const y = center + symRadius * Math.sin(angle);
+        if (i === 0) {
+            ctx.moveTo(x, y);
+        } else {
+            ctx.lineTo(x, y);
+        }
+    }
+    ctx.closePath();
+    ctx.lineWidth = 2; // Make the hexagon have a thicker border
+    ctx.stroke(); // Use stroke for a hollow hexagon
+
     return ctx.getImageData(0, 0, size, size);
 }
 
@@ -1822,24 +1844,7 @@ function createVorCompassImage(size = 256) {
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
 
     // This is a new function to clear airport-specific layers before drawing new ones.
-    function clearAirportLayers() {
-        const layers = [
-            'runways', 'runway-centerlines', 'runway-labels',
-            'final-approach-cones', 'final-approach-centerlines',
-            'distance-rings-casing', // Added
-            'distance-rings',
-            'distance-ring-labels' // Added
-        ];
-        layers.forEach(baseId => {
-            const layerId = `${baseId}-layer`;
-            const sourceId = `${baseId}-source`;
-            if (map.getLayer(layerId)) map.removeLayer(layerId);
-            if (map.getSource(sourceId)) map.removeSource(sourceId);
-        });
-    }
-
-	// --- ADDED/FIXED FUNCTIONS ---
-	async function updateNavaids() {
+    async function updateNavaids() {
     const navaidsCheckbox = document.getElementById('filter-navaids');
     const sourceId = 'openaip-navaids-source';
     const layerId = 'openaip-navaids-layer';
@@ -1872,14 +1877,20 @@ function createVorCompassImage(size = 256) {
             navaid.geometry.coordinates
         )
         .map(navaid => {
-            // --- NEW: Calculate Magnetic Declination ---
             const lat = navaid.geometry.coordinates[1];
             const lon = navaid.geometry.coordinates[0];
             let declination = 0;
-            // Use the loaded World Magnetic Model to get local variation
             if (wmmModel) {
                 declination = wmmModel.field(lat, lon).declination;
             }
+
+            // --- NEW: Format frequency and identifier for the label ---
+            // Example: 117700 KHz -> "117.700 MHz"
+            const frequencyText = navaid.frequency ? `${(navaid.frequency.value / 1000).toFixed(3)} MHz` : '';
+            const identifierText = navaid.identifier || '';
+            // Note: The channel (e.g., 124X) is often not in the basic navaid data.
+            // We will build the label with the available Name, Frequency, and Identifier.
+            const secondLine = `${frequencyText} ${identifierText}`.trim();
 
             return {
                 type: 'Feature',
@@ -1889,8 +1900,9 @@ function createVorCompassImage(size = 256) {
                 },
                 properties: {
                     name: navaid.name,
-                    type: navaid.type,
-                    rotation: declination // --- NEW: Add rotation property to the feature
+                    rotation: declination,
+                    // --- NEW: Add the second line of the label as a property ---
+                    details: secondLine
                 }
             };
         });
@@ -1917,21 +1929,28 @@ function createVorCompassImage(size = 256) {
                 'icon-image': 'vor-compass-rose',
                 'icon-size': 0.5,
                 'icon-allow-overlap': true,
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                'text-size': 11,
-                'text-anchor': 'bottom',
-                'text-offset': [0, -0.2],
-                'text-allow-overlap': false,
+                'icon-rotation-alignment': 'map',
+                'icon-rotate': ['get', 'rotation'],
                 
-                // --- NEW: These two lines rotate the icon ---
-                'icon-rotation-alignment': 'map', // Rotates with the map, not the screen
-                'icon-rotate': ['get', 'rotation']  // Get rotation value from the feature's property
+                // --- NEW: Use 'concat' to create a multi-line label ---
+                'text-field': [
+                    'concat',
+                    ['upcase', ['get', 'name']], // Make the VOR name uppercase
+                    '\n',                        // Add a newline
+                    ['get', 'details']           // Add the second line with freq/ID
+                ],
+                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                'text-size': 14, // Slightly larger text
+                'text-line-height': 1.1, // Adjust spacing between lines
+                'text-justify': 'center', // Center the multi-line text
+                'text-anchor': 'top', // Anchor the text block below the icon's center
+                'text-offset': [0, 2.5] // Nudge text down to clear the center symbol
             },
             paint: {
-                'text-color': '#000000',
-                'text-halo-color': '#FFFFFF',
-                'text-halo-width': 1
+                // Using white text with a black halo for best visibility on any background
+                'text-color': '#FFFFFF',
+                'text-halo-color': '#000000',
+                'text-halo-width': 1.5
             }
         });
     }
