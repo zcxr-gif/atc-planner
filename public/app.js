@@ -1865,19 +1865,25 @@ function createHelpPanel() {
 				id: layerId,
 				type: 'symbol',
 				source: sourceId,
-				minzoom: 9, // Only show this layer at zoom level 9+
+				minzoom: 8, // Show waypoint icons from zoom level 8+
 				layout: {
 					// --- Icon: A black triangle with a white halo ---
 					'icon-image': 'triangle-15',      // A standard triangle icon.
 					'icon-size': 1,                   // Default icon size.
 					'icon-allow-overlap': false,      // Hide overlapping icons to reduce clutter.
 	
-					// --- Label: The waypoint name ---
+					// --- Label: The waypoint name, shown conditionally ---
 					'text-field': ['get', 'name'],    // Display the 'name' property.
 					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-					'text-size': 10,
-					'text-anchor': 'bottom',          // Anchor the text from its bottom.
-					'text-offset': [0, -1.2],         // Offset text to appear just above the icon.
+					'text-size': [
+						'step', // Use a step expression for zoom-based sizing
+						['zoom'],
+						0,      // Default size is 0 (invisible)
+						11,     // At zoom level 11...
+						10      // ...the size becomes 10px
+					],
+					'text-anchor': 'top',             // Anchor the text label to the top of the icon.
+					'text-offset': [0, 0.8],          // Offset text to appear just below the icon.
 					'text-allow-overlap': false,      // Hide overlapping labels.
 					'text-optional': true,            // Marks the text as optional for decluttering.
 				},
