@@ -1835,6 +1835,27 @@ function createVorCompassImage(size = 256) {
     }
 
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
+function clearAirportLayers() {
+        const layers = [
+            'runways', 'runway-centerlines', 'runway-labels',
+            'final-approach-cones', 'final-approach-centerlines',
+            'distance-rings-casing',
+            'distance-rings',
+            'distance-ring-labels'
+        ];
+        layers.forEach(baseId => {
+            const layerId = `${baseId}-layer`;
+            const sourceId = `${baseId}-source`;
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getSource(sourceId)) map.removeSource(sourceId);
+        });
+        
+        // Also explicitly remove the info panel itself to ensure a clean state
+        const infoPanel = document.getElementById('airport-info-panel');
+        if (infoPanel) {
+            infoPanel.remove();
+        }
+    }
 
     // This is a new function to clear airport-specific layers before drawing new ones.
     async function updateNavaids() {
