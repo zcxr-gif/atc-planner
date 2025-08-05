@@ -1779,11 +1779,13 @@ function createHelpPanel() {
     const bounds = map.getBounds();
     const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     const navaids = await getVORsFromOpenAIP(bbox);
-
-    // --- ADDED: Filter for VOR types, based on your old working code ---
+    
     const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
     const navaidFeatures = navaids
         .filter(navaid => 
+            // CORRECTED: Added a check to ensure 'navaid.properties' exists before using it.
+            navaid &&
+            navaid.properties && 
             VOR_TYPES.includes(navaid.type) && 
             navaid.geometry && 
             navaid.geometry.coordinates
@@ -1799,7 +1801,6 @@ function createHelpPanel() {
                 type: navaid.properties.type
             }
         }));
-    // --- END ADDITION ---
 
     const geojsonData = {
         type: 'FeatureCollection',
