@@ -332,8 +332,17 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         map.addImage('triangle-15', { width, height, data: data });
     }
 });
-            // --- END FIX ---
-
+			map.loadImage('vor_compass.png', (error, image) => {
+    if (error) {
+        console.error('An error occurred while loading the VOR compass image:', error);
+        alert('Could not load VOR compass image. Please ensure "vor_compass.png" is in the correct folder.');
+        return;
+    }
+    // Add the loaded image to the map's style with the name 'vor-compass-rose'
+    map.addImage('vor-compass-rose', image);
+    console.log("VOR compass image loaded successfully.");
+});
+            
             setupEventListeners();
             
             // *** MODIFICATION START ***
@@ -1758,8 +1767,8 @@ function createHelpPanel() {
 	// --- ADDED/FIXED FUNCTIONS ---
 	async function updateNavaids() {
     const navaidsCheckbox = document.getElementById('filter-navaids');
-    const sourceId = 'openaip-navaids-source';
     const layerId = 'openaip-navaids-layer';
+    const sourceId = 'openaip-navaids-source';
 
     if (!navaidsCheckbox || !navaidsCheckbox.checked) {
         if (map.getLayer(layerId)) {
@@ -1769,7 +1778,7 @@ function createHelpPanel() {
     }
 
     const currentZoom = map.getZoom();
-    if (currentZoom < 7) {
+    if (currentZoom < 8) { // Only show VORs at a closer zoom
         if (map.getLayer(layerId)) {
             map.setLayoutProperty(layerId, 'visibility', 'none');
         }
@@ -1780,27 +1789,28 @@ function createHelpPanel() {
     const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
     const navaids = await getVORsFromOpenAIP(bbox);
 
+    // Filter for VOR-like navaids and map properties for display
     const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
     const navaidFeatures = navaids
-        // CORRECTED: The check for 'navaid.properties' is removed because it doesn't exist.
-        .filter(navaid => 
-            navaid &&
-            VOR_TYPES.includes(navaid.type) && 
-            navaid.geometry && 
-            navaid.geometry.coordinates
+        .filter(navaid =>
+            navaid && VOR_TYPES.includes(navaid.type) && navaid.geometry && navaid.geometry.coordinates
         )
-        // CORRECTED: Read 'name' and 'type' from the top-level navaid object.
-        .map(navaid => ({
-            type: 'Feature',
-            geometry: {
-                type: 'Point',
-                coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
-            },
-            properties: {
-                name: navaid.name, // Changed from navaid.properties.name
-                type: navaid.type  // Changed from navaid.properties.type
-            }
-        }));
+        .map(navaid => {
+            // The OpenAIP API provides frequency in kHz, so convert to MHz for display
+            const frequencyMHz = navaid.frequency ? (navaid.frequency / 1000).toFixed(3) : '---';
+            return {
+                type: 'Feature',
+                geometry: {
+                    type: 'Point',
+                    coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
+                },
+                properties: {
+                    name: navaid.name || 'N/A',
+                    frequency: frequencyMHz,
+                    identifier: navaid.identifier || '',
+                }
+            };
+        });
 
     const geojsonData = {
         type: 'FeatureCollection',
@@ -1821,17 +1831,29 @@ function createHelpPanel() {
             type: 'symbol',
             source: sourceId,
             layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                'text-size': 11,
-                'text-anchor': 'top',
-                'text-offset': [0, 0.8],
-                'text-allow-overlap': false
+                'icon-image': 'vor-compass-rose', // Use the image loaded from your file
+                'icon-size': 0.7, // You can adjust this value to make the image bigger or smaller
+                'icon-allow-overlap': true,
+                'icon-anchor': 'center', // Important: Anchor the image to its center
+
+                // This text will now appear centered on top of the compass rose image
+                'text-field': [
+                    'format',
+                    ['get', 'name'], { 'font-scale': 1.0, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'] },
+                    '\n',
+                    ['get', 'frequency'], ' MHz  ', ['get', 'identifier'], { 'font-scale': 0.9, 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Regular'] }
+                ],
+                'text-size': 10,
+                'text-anchor': 'center', // Anchor the text block to its center
+                'text-offset': [0, 0.5],   // Fine-tune the vertical position of the text
+                'text-allow-overlap': true, // Allow text to overlap the icon
+                'text-line-height': 1.1,
+                'text-justify': 'center'
             },
             paint: {
-                'text-color': '#A9D4FF',
-                'text-halo-color': '#000000',
-                'text-halo-width': 1.5
+                'text-color': '#000000',
+                'text-halo-color': 'rgba(255, 255, 255, 0.8)',
+                'text-halo-width': 2
             }
         });
     }
