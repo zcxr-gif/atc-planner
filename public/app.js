@@ -1768,70 +1768,121 @@ function createVorCompassImage(size = 256) {
         scaleSlider.addEventListener('change', saveSettings);
     }
 
-    // Inside app.js
-
+    // --- MODIFIED: Updated Help Panel ---
     function createHelpPanel() {
         const helpContent = `
-            <div class="info-card">
-                <h3>Getting Started</h3>
-                <ul>
-                    <li><strong>Load Airport:</strong> Type an airport ICAO code (e.g., KJFK) into the search box and click 'Load'.</li>
-                    <li><strong>Filter Airports:</strong> Use the checkboxes under 'Filters' to show or hide large, medium, or small airports on the map as you zoom.</li>
-                </ul>
-            </div>
-            <div class="info-card">
-                <h3>Drawing Tool</h3>
-                <p style="font-size: 14px; color: #ddd; margin: 0;">To plan a flight path:</p>
-                <ol style="font-size: 14px; color: #ddd; padding-left: 20px;">
-                    <li style="margin-bottom: 5px;">Check <strong>'Enable Drawing Mode'</strong> to start.</li>
-                    <li style="margin-bottom: 5px;">The tool will stay active to draw multiple lines. <strong>Uncheck the box</strong> when you are finished drawing to move the map again.</li>
-                    <li style="margin-bottom: 5px;">In the Flight Plan panel, <strong>click the heading value</strong> to edit it manually for precise intercepts.</li>
-                </ol>
-            </div>
+            <div class="help-accordion">
+                <button class="accordion-header">🚀 Getting Started</button>
+                <div class="accordion-content">
+                    <p>Welcome! Here’s how to begin:</p>
+                    <ul>
+                        <li><strong>Load an Airport:</strong> Type an airport ICAO (e.g., <kbd>KLAX</kbd>) in the top-left planner and click 'Load'. This will center the map and display its runways and details.</li>
+                        <li><strong>Explore the Map:</strong> Pan and zoom the map. As you zoom in, more airports, navigational aids (VORs), and waypoints will appear.</li>
+                        <li><strong>Use Mobile Nav:</strong> On smaller screens, use the navigation bar at the bottom to switch between Planner, Live Mode, Traffic Scan, and Settings panels.</li>
+                    </ul>
+                </div>
 
-            <div class="info-card">
-                <h3>Aircraft Speed Guidelines</h3>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
-                    Use these minimum speeds as a reference for sequencing traffic. All speeds are for a "clean" configuration (no flaps).
-                </p>
+                <button class="accordion-header">🗺️ Map Interface</button>
+                <div class="accordion-content">
+                    <p>Understanding what you see on the map.</p>
+                    <ul>
+                        <li><strong>Airport Dots:</strong> Colored dots represent airports. <span style="color:#FF0000; font-weight:bold;">■</span> Bravo, <span style="color:#FFA500; font-weight:bold;">■</span> Charlie, <span style="color:#2980b9; font-weight:bold;">■</span> Other. Click a dot to load its details.</li>
+                        <li><strong>Active ATC Pulse:</strong> In Live Mode, airports with active controllers will have a <span style="color:#4169E1; font-weight:bold;">blue dot</span> and a pulsing halo.</li>
+                        <li><strong>VORs:</strong> Appear as compass roses at higher zoom levels. The needle points to magnetic north, allowing you to quickly see the local magnetic variation.</li>
+                        <li><strong>Waypoints:</strong> Shown as black triangles (&#9662;) at higher zoom levels.</li>
+                        <li><strong>Mountain Peaks:</strong> Major peaks are labeled with their name when you zoom in.</li>
+                        <li><strong>Final Approach:</strong> When an airport is loaded, gray cones show the 10 NM final approach paths for each runway.</li>
+                    </ul>
+                </div>
 
-                <h4 class="guide-header">Narrow-Body Aircraft (e.g., A320, B737)</h4>
-                <table class="speed-guide-table">
-                    <thead>
-                        <tr>
-                            <th>Altitude Range</th>
-                            <th>Suggested Minimum Speed</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td>Above FL280</td><td>Mach 0.76 - 0.78</td></tr>
-                        <tr><td>FL180 to FL280</td><td>260 - 280 KIAS</td></tr>
-                        <tr><td>12,000 ft to FL180</td><td>250 - 260 KIAS</td></tr>
-                        <tr><td>Below 12,000 ft</td><td>210 - 240 KIAS</td></tr>
-                    </tbody>
-                </table>
+                <button class="accordion-header">✏️ Drawing & Flight Planning</button>
+                <div class="accordion-content">
+                    <p>Create custom flight paths and vectors.</p>
+                    <ol>
+                        <li>Enable <strong>'Enable Drawing Mode'</strong> in the Planner panel. Your cursor will change to a crosshair.</li>
+                        <li>Click and drag on the map to draw a line. The magnetic heading and distance will be added to the Flight Plan panel on the right.</li>
+                        <li>Select a line type (Standard, Arrival, Departure) to color-code your vectors.</li>
+                        <li>In the Flight Plan panel, you can enter altitude and speed assignments for each leg.</li>
+                        <li><strong>Edit Heading:</strong> Click the heading value (e.g., <kbd>Hdg 090° M</kbd>) in the plan to manually type a precise heading.</li>
+                        <li><strong>Altitude Profile Editor:</strong> <kbd>Right-click</kbd> any leg in the plan to open a visual editor. You can set a start and end altitude for a continuous climb or descent.</li>
+                        <li>Uncheck 'Enable Drawing Mode' to pan the map again.</li>
+                    </ol>
+                </div>
 
-                <h4 class="guide-header">Wide-Body Aircraft (e.g., A350, B777, B747)</h4>
-                <table class="speed-guide-table">
-                    <thead>
-                        <tr>
-                            <th>Altitude Range</th>
-                            <th>Suggested Minimum Speed</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr><td>Above FL280</td><td>Mach 0.80 - 0.82</td></tr>
-                        <tr><td>FL180 to FL280</td><td>280 - 300 KIAS</td></tr>
-                        <tr><td>FL180 to FL180</td><td>260 - 280 KIAS</td></tr>
-                        <tr><td>Below 12,000 ft</td><td>220 - 250 KIAS</td></tr>
-                    </tbody>
-                </table>
-                <p class="guide-notes">
-                    <strong>Remember:</strong> This are rough estimates, speeds may differ based on the situation.
-                </p>
+                <button class="accordion-header">📡 Live Mode & Traffic</button>
+                <div class="accordion-content">
+                    <p>Connect to live flight servers.</p>
+                    <ul>
+                        <li><strong>Connect:</strong> Open the Live Mode panel (from the main panel or mobile nav), select a server, and click 'Connect'.</li>
+                        <li><strong>Live Aircraft:</strong> See real-time aircraft on the map. Click a plane to view its details and a button to display its flight plan (FPL).</li>
+                        <li><strong>Active ATC:</strong> The Live Mode panel lists all active controllers and their frequencies.</li>
+                        <li><strong>ATIS:</strong> When an airport is loaded and an ATIS controller is active, their ATIS report will appear in the airport's INFO panel.</li>
+                        <li><strong>Traffic Scan:</strong> This tool provides a report of the busiest airports on the server, showing inbound, outbound, and on-ground traffic counts. Click any airport in the report to jump to it.</li>
+                    </ul>
+                </div>
+
+                <button class="accordion-header">⚙️ Settings</button>
+                <div class="accordion-content">
+                    <p>Customize your experience.</p>
+                    <ul>
+                        <li><strong>Use True Heading:</strong> Toggles the primary heading display on drawn flight plan legs between Magnetic (default) and True.</li>
+                        <li><strong>Show Data Blocks:</strong> Toggles the visibility of the data blocks (heading/speed/altitude) for your drawn lines.</li>
+                        <li><strong>Data Block Size:</strong> Use the slider to increase or decrease the size of the data blocks for better readability.</li>
+                    </ul>
+                </div>
+
+                <button class="accordion-header">✈️ Aircraft Speed Guidelines</button>
+                <div class="accordion-content">
+                    <p>Minimum clean speeds for sequencing.</p>
+                    <h4 class="guide-header">Narrow-Body (A320, B737)</h4>
+                    <table class="speed-guide-table">
+                        <thead><tr><th>Altitude Range</th><th>Speed</th></tr></thead>
+                        <tbody>
+                            <tr><td>Above FL280</td><td>Mach 0.76 - 0.78</td></tr>
+                            <tr><td>FL180 - FL280</td><td>260 - 280 KIAS</td></tr>
+                            <tr><td>12,000 ft - FL180</td><td>250 - 260 KIAS</td></tr>
+                            <tr><td>Below 12,000 ft</td><td>210 - 240 KIAS</td></tr>
+                        </tbody>
+                    </table>
+                    <h4 class="guide-header">Wide-Body (A350, B777)</h4>
+                    <table class="speed-guide-table">
+                        <thead><tr><th>Altitude Range</th><th>Speed</th></tr></thead>
+                        <tbody>
+                            <tr><td>Above FL280</td><td>Mach 0.80 - 0.82</td></tr>
+                            <tr><td>FL180 - FL280</td><td>280 - 300 KIAS</td></tr>
+                            <tr><td>Below 12,000 ft</td><td>220 - 250 KIAS</td></tr>
+                        </tbody>
+                    </table>
+                     <p class="guide-notes">
+                        <strong>Remember:</strong> These are rough estimates; speeds may differ based on the situation.
+                    </p>
+                </div>
             </div>
-            `;
-        createFloatingPanel('help-panel', '<h2>Help</h2>', '150px', '150px', helpContent);
+        `;
+        const helpPanel = createFloatingPanel('help-panel', '<h2>Help & Guides</h2>', '150px', '150px', helpContent);
+
+        const accordions = helpPanel.querySelectorAll('.accordion-header');
+
+        accordions.forEach(accordion => {
+            accordion.addEventListener('click', function() {
+                // Close other open accordions
+                accordions.forEach(otherAccordion => {
+                    if (otherAccordion !== this && otherAccordion.classList.contains('active')) {
+                        otherAccordion.classList.remove('active');
+                        otherAccordion.nextElementSibling.style.maxHeight = null;
+                    }
+                });
+
+                // Toggle the clicked accordion
+                this.classList.toggle('active');
+                const content = this.nextElementSibling;
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+            });
+        });
     }
 
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
