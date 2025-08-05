@@ -683,15 +683,17 @@ function createVorCompassImage(size = 256) {
         `;
         document.body.appendChild(panel);
 
-        // UPDATED: If on mobile, immediately add the 'visible' class to trigger the slide-up animation
-        if (window.innerWidth <= 768) {
-            // Use a short timeout to allow the element to be added to the DOM before transitioning
-            setTimeout(() => {
-                // This class is now controlled by the mobile nav logic,
-                // so we don't automatically make it visible here.
-                // panel.classList.add('visible');
-            }, 10);
-        }
+        function createFloatingPanel(id, titleHTML, top, left, contentHTML) {
+
+    // UPDATED: If on mobile, immediately add the 'visible' class to trigger the slide-up animation
+    if (window.innerWidth <= 768) {
+        // Use a short timeout to allow the element to be added to the DOM before transitioning
+        setTimeout(() => {
+            // This class is now controlled by the mobile nav logic for the main panels,
+            // but for dynamically created panels like the info panel, we must make it visible.
+            panel.classList.add('visible'); 
+        }, 10);
+    }
 
         // Prevent map interaction when clicking on panel
         panel.addEventListener('mousedown', (e) => e.stopPropagation());
