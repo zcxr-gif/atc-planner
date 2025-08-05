@@ -1,74 +1,63 @@
 // /netlify/functions/navaids.js
 
-/**
- * Netlify serverless function to fetch navaid data from the OpenAIP API.
- * This function acts as a secure proxy to protect the API key.
- */
-exports.handler = async function(event) {
-  // --- CONFIGURATION ---
-  // IMPORTANT: Your OpenAIP API key must be set as an environment variable
-  // in your Netlify project settings.
-  const apiKey = process.env.OPENAIP_API_KEY;
+// Using 'node-fetch' for robust fetching in a Node.js environment.
+const fetch = require('node-fetch');
 
-  // 1. Validate API Key
-  if (!apiKey) {
-    console.error("OpenAIP API key is not configured in environment variables.");
+/**
+ * Handles requests for VOR navaid data.
+ * It securely fetches data from the OpenAIP API using a server-side API key.
+ */
+exports.handler = async (event) => {
+  // 1. Get the API key from server environment variables.
+  const openAipApiKey = process.env.OPENAIP_API_KEY;
+  if (!openAipApiKey) {
+    console.error("FATAL: OPENAIP_API_KEY is not set on the server.");
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Server configuration error: API key is missing." })
+      body: JSON.stringify({ message: "Server is not configured correctly." }),
     };
   }
 
-  // 2. Validate Bounding Box Parameter
+  // 2. Get the required bounding box from the request URL.
   const { bbox } = event.queryStringParameters;
   if (!bbox) {
     return {
       statusCode: 400, // Bad Request
-      body: JSON.stringify({ error: "The 'bbox' (bounding box) query parameter is required." })
+      body: JSON.stringify({ message: "A 'bbox' query parameter is required." }),
     };
   }
 
-  // 3. Construct the OpenAIP API URL
-  const apiURL = `https://api.openaip.net/api/navaids?bbox=${bbox}`;
+  // 3. Prepare and send the request to the OpenAIP service.
+  const requestUrl = `https://api.openaip.net/api/navaids?bbox=${bbox}`;
 
-  // 4. Fetch Data from OpenAIP
   try {
-    const response = await fetch(apiURL, {
-      method: 'GET',
+    const response = await fetch(requestUrl, {
       headers: {
-        // The API key is sent as a header for security
-        'x-openaip-client-id': apiKey
-      }
+        'x-openaip-client-id': openAipApiKey,
+      },
     });
 
-    // Handle non-successful responses from OpenAIP
+    // If OpenAIP returns an error (like 401 Unauthorized), pass it to the client.
     if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`OpenAIP API Error (Status: ${response.status}): ${errorText}`);
-        return {
-            statusCode: response.status,
-            body: JSON.stringify({ error: `Failed to fetch data from OpenAIP. Status: ${response.status}` })
-        };
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ message: `Error from OpenAIP: ${response.statusText}` }),
+      };
     }
 
+    // 4. Send the successful data back to the client application.
     const data = await response.json();
-
-    // 5. Return a successful response to the client
     return {
       statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' // Allows the function to be called from any domain
-      },
-      // The frontend expects the data to be in the body of the response
-      body: JSON.stringify(data)
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
     };
 
   } catch (error) {
-    console.error("An unexpected error occurred in the navaids function:", error);
+    console.error("An unexpected network error occurred:", error);
     return {
-      statusCode: 500,
-      body: JSON.stringify({ error: "An internal server error occurred while fetching navaid data." })
+      statusCode: 502, // Bad Gateway
+      body: JSON.stringify({ message: "There was a problem communicating with the navaid data service." }),
     };
   }
 };
