@@ -257,68 +257,76 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number} size - The width and height of the image in pixels.
      * @returns {ImageData} The generated image data for use with map.addImage.
      */
-    function createVorCompassImage(size = 128) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        const center = size / 2;
-        const radius = size / 2 - 4; // Padding
+    /**
+ * Programmatically creates a compass rose image for VORs.
+ * @param {number} size - The width and height of the image in pixels.
+ * @returns {ImageData} The generated image data for use with map.addImage.
+ */
+function createVorCompassImage(size = 256) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const center = size / 2;
+    const radius = size / 2 - 8; // Padding for the drawing
 
-        // Style settings for the drawing
-        ctx.strokeStyle = 'white';
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 14px "Open Sans", sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
+    // Style settings for the drawing
+    ctx.strokeStyle = 'black'; // Set line color to black
+    ctx.fillStyle = 'black';   // Set fill color to black
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Make font size relative to the icon size for better scaling
+    ctx.font = `bold ${size * 0.1}px "Open Sans", sans-serif`;
 
-        // --- 1. Draw the outer circle ---
-        ctx.lineWidth = 2.5;
+    // --- 1. Draw the outer circle ---
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+
+    // --- 2. Draw all of the tick marks ---
+    for (let i = 0; i < 360; i += 10) {
+        const angleRad = (i - 90) * Math.PI / 180; // Offset to make 0 degrees point up
+        const isMajorTick = (i % 30 === 0);
+        
+        // Define inner and outer points for the tick mark
+        const tickStart = isMajorTick ? radius - (size * 0.12) : radius - (size * 0.07);
+        const startX = center + tickStart * Math.cos(angleRad);
+        const startY = center + tickStart * Math.sin(angleRad);
+        const endX = center + radius * Math.cos(angleRad);
+        const endY = center + radius * Math.sin(angleRad);
+
+        ctx.lineWidth = isMajorTick ? 2.5 : 1.5;
         ctx.beginPath();
-        ctx.arc(center, center, radius, 0, 2 * Math.PI);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
         ctx.stroke();
-
-        // --- 2. Draw tick marks and numbers every 30 degrees ---
-        for (let i = 0; i < 360; i += 10) {
-            // Offset by -90 degrees to make 0 point North
-            const angleRad = (i - 90) * Math.PI / 180;
-            const isMajorTick = (i % 30 === 0);
-
-            // Make major ticks (every 30 deg) longer than minor ticks (every 10 deg)
-            const tickStart = isMajorTick ? radius - 12 : radius - 7;
-            const startX = center + tickStart * Math.cos(angleRad);
-            const startY = center + tickStart * Math.sin(angleRad);
-            const endX = center + radius * Math.cos(angleRad);
-            const endY = center + radius * Math.sin(angleRad);
-
-            ctx.lineWidth = isMajorTick ? 2 : 1;
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(endX, endY);
-            ctx.stroke();
-
-            // Add numbers (e.g., 3, 6, 9) for the major ticks
-            if (isMajorTick && i > 0) {
-                const num = i / 10;
-                const textRadius = radius - 24; // Position numbers inside the ticks
-                const textX = center + textRadius * Math.cos(angleRad);
-                const textY = center + textRadius * Math.sin(angleRad);
-                ctx.fillText(num.toString(), textX, textY);
-            }
-        }
-
-        // --- 3. Draw North '0' text ---
-        const northTextRadius = radius - 24;
-        ctx.fillText('0', center, center - northTextRadius);
-
-        // --- 4. Draw a small circle in the center ---
-        ctx.beginPath();
-        ctx.arc(center, center, 4, 0, 2 * Math.PI);
-        ctx.fill();
-
-        // Return the raw image data
-        return ctx.getImageData(0, 0, size, size);
     }
+
+    // --- 3. Draw ONLY the 4 cardinal heading numbers ---
+    const headings = [
+        { angle: 0,   label: '0' },
+        { angle: 90,  label: '90' },
+        { angle: 180, label: '180' },
+        { angle: 270, label: '270' }
+    ];
+    
+    const textRadius = radius - (size * 0.22); // Position numbers inside the ticks
+    headings.forEach(heading => {
+        const angleRad = (heading.angle - 90) * Math.PI / 180;
+        const textX = center + textRadius * Math.cos(angleRad);
+        const textY = center + textRadius * Math.sin(angleRad);
+        ctx.fillText(heading.label, textX, textY);
+    });
+
+    // --- 4. Draw a larger center dot ---
+    ctx.beginPath();
+    ctx.arc(center, center, size * 0.05, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Return the completed image data
+    return ctx.getImageData(0, 0, size, size);
+}
 
     // --- INITIALIZATION ---
     async function initializeApp() {
@@ -333,7 +341,7 @@ document.addEventListener('DOMContentLoaded', () => {
         map.on('load', () => {
             // --- NEW: GENERATE AND LOAD VOR COMPASS IMAGE ---
             if (!map.hasImage('vor-compass-rose')) {
-                const vorCompassImage = createVorCompassImage(128); // Generate the image
+                const vorCompassImage = createVorCompassImage(300); // Generate the image
                 map.addImage('vor-compass-rose', vorCompassImage);   // Add it to the map
             }
             // --- END NEW ---
@@ -1896,7 +1904,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 layout: {
                     // Use the loaded compass rose image as the icon
                     'icon-image': 'vor-compass-rose',
-                    'icon-size': 0.45, // You may want to slightly increase the size
+                    'icon-size': 0.5, // You may want to slightly increase the size
                     'icon-allow-overlap': true,
 
                     // Display the VOR name as text
