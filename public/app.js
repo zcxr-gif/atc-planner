@@ -302,6 +302,37 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
                 'minzoom': 8
             });
             // --- MOUNTAIN PEAKS MBTILES DATA - END ---
+            
+            // --- FIX: HANDLE MISSING IMAGES (e.g., for waypoints) ---
+            map.on('styleimagemissing', (e) => {
+                if (e.id === 'triangle-15') {
+                    const width = 15;
+                    const height = 15;
+                    const bytesPerPixel = 4; // R, G, B, A
+                    const data = new Uint8Array(width * height * bytesPerPixel);
+
+                    // Create a white, downward-pointing, isosceles triangle
+                    for (let x = 0; x < width; x++) {
+                        for (let y = 0; y < height; y++) {
+                            const invertedY = height - 1 - y;
+                            const rowWidth = (invertedY / (height - 1)) * width;
+                            const rowStart = (width - rowWidth) / 2;
+                            const rowEnd = rowStart + rowWidth;
+
+                            if (x >= rowStart && x <= rowEnd) {
+                                const offset = (y * width + x) * bytesPerPixel;
+                                data[offset] = 255;     // R (white)
+                                data[offset + 1] = 255; // G (white)
+                                data[offset + 2] = 255; // B (white)
+                                data[offset + 3] = 255; // A (opaque)
+                            }
+                        }
+                    }
+                    // Add the generated image to the map style
+                    map.addImage('triangle-15', { width, height, data: data });
+                }
+            });
+            // --- END FIX ---
 
             setupEventListeners();
             
@@ -1867,13 +1898,13 @@ function createHelpPanel() {
 				source: sourceId,
 				minzoom: 8, // Show waypoint icons from zoom level 8+
 				layout: {
-					// --- Icon: A black triangle with a white halo ---
-					'icon-image': 'triangle-15',      // A standard triangle icon.
-					'icon-size': 1,                   // Default icon size.
-					'icon-allow-overlap': false,      // Hide overlapping icons to reduce clutter.
+					// --- Icon: A white triangle generated programmatically ---
+					'icon-image': 'triangle-15',
+					'icon-size': 1,
+					'icon-allow-overlap': false,
 	
 					// --- Label: The waypoint name, shown conditionally ---
-					'text-field': ['get', 'name'],    // Display the 'name' property.
+					'text-field': ['get', 'name'],
 					'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
 					'text-size': [
 						'step', // Use a step expression for zoom-based sizing
@@ -1882,20 +1913,20 @@ function createHelpPanel() {
 						11,     // At zoom level 11...
 						10      // ...the size becomes 10px
 					],
-					'text-anchor': 'top',             // Anchor the text label to the top of the icon.
-					'text-offset': [0, 0.8],          // Offset text to appear just below the icon.
-					'text-allow-overlap': false,      // Hide overlapping labels.
-					'text-optional': true,            // Marks the text as optional for decluttering.
+					'text-anchor': 'top',
+					'text-offset': [0, 0.8],
+					'text-allow-overlap': false,
+					'text-optional': true,
 				},
 				paint: {
-					// --- Icon Color ---
-					'icon-color': '#000000',          // Black color for the triangle.
-					'icon-halo-color': '#FFFFFF',     // White outline for better visibility.
-					'icon-halo-width': 1,
+					// --- Icon Color: White triangle with black halo for better contrast ---
+					'icon-color': '#FFFFFF',
+					'icon-halo-color': '#000000',
+					'icon-halo-width': 1.5,
 	
 					// --- Label Color ---
-					'text-color': '#ddd',             // Light gray text.
-					'text-halo-color': '#000',        // Black halo for readability.
+					'text-color': '#ddd',
+					'text-halo-color': '#000',
 					'text-halo-width': 1.5
 				}
 			});
