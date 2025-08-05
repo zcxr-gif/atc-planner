@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Style configs (remain mostly the same, but used differently) ---
     const RUNWAY_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'fill-color': '#4E4E4E', 'fill-opacity': 1 };
     const RUNWAY_STYLE_HIGHLIGHT = { 'line-color': '#FFD700', 'line-width': 2, 'fill-color': '#FFD700', 'fill-opacity': 0.7 };
-const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; // 
+    const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width': 1.5, 'line-dasharray': [10, 8] }; // 
     const FLIGHT_LINE_STYLES_REGULAR = {
         standard: { 'line-color': '#000000', 'line-width': 3, 'line-opacity': 0.85 },
         arrival: { 'line-color': '#2979FF', 'line-width': 3, 'line-opacity': 1 },
@@ -263,6 +263,19 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
         await getWaypoints();
 
         map.on('load', () => {
+            // --- NEW: LOAD VOR COMPASS IMAGE ---
+            map.loadImage(
+                'vor_compass.png', // The path to your image
+                (error, image) => {
+                    if (error) throw error;
+                    // Add the image to the map style. 'vor-compass-rose' is the ID we'll use to refer to it.
+                    if (!map.hasImage('vor-compass-rose')) {
+                        map.addImage('vor-compass-rose', image);
+                    }
+                }
+            );
+            // --- END NEW ---
+
             // --- MOUNTAIN PEAKS MBTILES DATA - START ---
             // This section adds your custom mountain peak data from Google Cloud Storage.
 
@@ -305,44 +318,35 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
             
             // --- FIX: HANDLE MISSING IMAGES (e.g., for waypoints) ---
             map.on('styleimagemissing', (e) => {
-    if (e.id === 'triangle-15') {
-        const width = 12; // Changed from 15 to 12
-        const height = 12; // Changed from 15 to 12
-        const bytesPerPixel = 4; // R, G, B, A
-        const data = new Uint8Array(width * height * bytesPerPixel);
+                if (e.id === 'triangle-15') {
+                    const width = 12; // Changed from 15 to 12
+                    const height = 12; // Changed from 15 to 12
+                    const bytesPerPixel = 4; // R, G, B, A
+                    const data = new Uint8Array(width * height * bytesPerPixel);
 
-        // Create a black, downward-pointing, isosceles triangle
-        for (let x = 0; x < width; x++) {
-            for (let y = 0; y < height; y++) {
-                const invertedY = height - 1 - y;
-                const rowWidth = (invertedY / (height - 1)) * width;
-                const rowStart = (width - rowWidth) / 2;
-                const rowEnd = rowStart + rowWidth;
+                    // Create a black, downward-pointing, isosceles triangle
+                    for (let x = 0; x < width; x++) {
+                        for (let y = 0; y < height; y++) {
+                            const invertedY = height - 1 - y;
+                            const rowWidth = (invertedY / (height - 1)) * width;
+                            const rowStart = (width - rowWidth) / 2;
+                            const rowEnd = rowStart + rowWidth;
 
-                if (x >= rowStart && x <= rowEnd) {
-                    const offset = (y * width + x) * bytesPerPixel;
-                    data[offset] = 0;     // R (black)
-                    data[offset + 1] = 0; // G (black)
-                    data[offset + 2] = 0; // B (black)
-                    data[offset + 3] = 255; // A (opaque)
+                            if (x >= rowStart && x <= rowEnd) {
+                                const offset = (y * width + x) * bytesPerPixel;
+                                data[offset] = 0;     // R (black)
+                                data[offset + 1] = 0; // G (black)
+                                data[offset + 2] = 0; // B (black)
+                                data[offset + 3] = 255; // A (opaque)
+                            }
+                        }
+                    }
+                    // Add the generated image to the map style
+                    map.addImage('triangle-15', { width, height, data: data });
                 }
-            }
-        }
-        // Add the generated image to the map style
-        map.addImage('triangle-15', { width, height, data: data });
-    }
-});
-			map.loadImage('vor_compass.png', (error, image) => {
-    if (error) {
-        console.error('An error occurred while loading the VOR compass image:', error);
-        alert('Could not load VOR compass image. Please ensure "vor_compass.png" is in the correct folder.');
-        return;
-    }
-    // Add the loaded image to the map's style with the name 'vor-compass-rose'
-    map.addImage('vor-compass-rose', image);
-    console.log("VOR compass image loaded successfully.");
-});
-            
+            });
+            // --- END FIX ---
+
             setupEventListeners();
             
             // *** MODIFICATION START ***
@@ -901,252 +905,252 @@ const RUNWAY_CENTERLINE_STYLE_REGULAR = { 'line-color': '#FFFFFF', 'line-width':
     
 	// ... all other UI panel creation functions (createLiveControlPanel, etc.)...
 
-function createTrafficScanPanel() {
-    const existingPanel = document.getElementById('traffic-scan-panel');
-    if (existingPanel) {
-        existingPanel.style.display = 'block';
-        if (window.innerWidth <= 768) existingPanel.classList.add('visible');
-        return;
-    }
-
-    const content = `
-        <div class="info-card">
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
-                This tool scans for inbounds and outbounds of the most active airports. Re-scan in order to get the latest data.
-            </p>
-            <button id="begin-traffic-scan-btn" style="width: 100%;">Begin Scan</button>
-        </div>
-        <div id="traffic-scan-results" class="info-card" style="display: none;">
-            </div>
-    `;
-
-    const panel = createFloatingPanel('traffic-scan-panel', '<h2>Server Traffic Scan</h2>', '100px', '400px', content);
-
-    panel.querySelector('#begin-traffic-scan-btn').addEventListener('click', generateTrafficHotspotReport);
-}
-
-
-async function generateTrafficHotspotReport() {
-    const resultsContainer = document.getElementById('traffic-scan-results');
-    const scanButton = document.getElementById('begin-traffic-scan-btn');
-    if (!resultsContainer || !scanButton) return;
-
-    resultsContainer.style.display = 'block';
-    resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
-    scanButton.disabled = true;
-    scanButton.textContent = 'Scanning...';
-
-    try {
-        if (!isLiveModeActive) {
-            throw new Error("Live Mode is not active. Please connect to a server first.");
-        }
-        const serverSelect = document.getElementById('server-select');
-        const sessionId = serverSelect ? serverSelect.value : null;
-        if (!sessionId) {
-            throw new Error("No server selected in Live Mode.");
-        }
-
-        const [worldResponse, flightsResponse, atcResponse] = await Promise.all([
-            fetch(`/.netlify/functions/world/${sessionId}`),
-            fetch(`/.netlify/functions/flights/${sessionId}`),
-            fetch(`/.netlify/functions/atc/${sessionId}`)
-        ]);
-
-        if (!worldResponse.ok || !flightsResponse.ok || !atcResponse.ok) {
-            throw new Error("Failed to fetch server data.");
-        }
-
-        const worldData = await worldResponse.json();
-        const flightsData = await flightsResponse.json();
-        const atcData = await atcResponse.json();
-        const allAirports = await getAirports();
-        const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
-        const activeAirports = worldData.result || [];
-
-        const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 4: 'Approach', 5: 'Departure', 7: 'ATIS' };
-        const freqInitialMap = { 'Ground': 'G', 'Tower': 'T', 'ATIS': 'S', 'Approach': 'A', 'Departure': 'D' };
-        const activeFrequenciesByAirport = {};
-
-        // Define the desired sorting order for frequency types.
-        const gtsadOrder = ['Ground', 'Tower', 'ATIS', 'Approach', 'Departure'];
-
-        if (atcData.result) {
-            atcData.result.forEach(facility => {
-                const icao = facility.airportName;
-                if (!icao || icao === "Center") return;
-                const typeName = frequencyTypeMap[facility.type];
-                if (typeName && freqInitialMap[typeName]) {
-                    if (!activeFrequenciesByAirport[icao]) {
-                        activeFrequenciesByAirport[icao] = new Set();
-                    }
-                    activeFrequenciesByAirport[icao].add(typeName);
-                }
-            });
-        }
-        
-        const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
-        const activeAirportLocations = new Map();
-        activeAirports.forEach(activeAirport => {
-            const airportInfo = allAirports.find(a => a.ident === activeAirport.airportIcao);
-            if (airportInfo) {
-                const lat = parseFloat(airportInfo.latitude_deg);
-                const lon = parseFloat(airportInfo.longitude_deg);
-                const elev = parseFloat(airportInfo.elevation_ft);
-                if (!isNaN(lat) && !isNaN(lon) && !isNaN(elev)) {
-                    activeAirportLocations.set(activeAirport.airportIcao, { lat, lon, elev });
-                }
-            }
-        });
-        
-        const onGroundByAirport = {};
-        for (const icao of activeAirportLocations.keys()) {
-            onGroundByAirport[icao] = 0;
-        }
-
-        lowAndSlowFlights.forEach(flight => {
-            const aircraftPoint = turf.point([flight.longitude, flight.latitude]);
-            let closestIcao = null;
-            let minDistance = Infinity;
-            for (const [icao, coords] of activeAirportLocations.entries()) {
-                const airportPoint = turf.point([coords.lon, coords.lat]);
-                const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestIcao = icao;
-                }
-            }
-            if (closestIcao && minDistance < 3) {
-                const airportCoords = activeAirportLocations.get(closestIcao);
-                const airportElevation = airportCoords.elev;
-                const aircraftAltitude = flight.altitude;
-                if (Math.abs(aircraftAltitude - airportElevation) < 500) {
-                    onGroundByAirport[closestIcao]++;
-                }
-            }
-        });
-
-        if (activeAirports.length === 0) {
-            resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
-            scanButton.disabled = false;
-            scanButton.textContent = 'Re-Scan';
+    function createTrafficScanPanel() {
+        const existingPanel = document.getElementById('traffic-scan-panel');
+        if (existingPanel) {
+            existingPanel.style.display = 'block';
+            if (window.innerWidth <= 768) existingPanel.classList.add('visible');
             return;
         }
 
-        const airportTrafficData = {};
-        activeAirports.forEach(airportStatus => {
-            const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
-            if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
-                return;
-            }
-            const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
-            if (!airportInfo) return;
-            const airportLon = parseFloat(airportInfo.longitude_deg);
-            const airportLat = parseFloat(airportInfo.latitude_deg);
-            if (isNaN(airportLon) || isNaN(airportLat)) {
-                console.warn(`Skipping airport ${airportInfo.ident} due to invalid coordinates in database.`);
-                return;
-            }
-            const airportPosition = turf.point([airportLon, airportLat]);
-            
-            const data = {
-                icao: airportStatus.airportIcao,
-                name: airportStatus.airportName.replace(/"/g, ''),
-                inboundTotal: airportStatus.inboundFlightsCount || 0,
-                outboundOnGround: calculatedOnGroundCount,
-                outboundTotal: airportStatus.outboundFlightsCount || 0,
-                inboundBuckets: { in20: 0, in60: 0, over60: 0 },
-                // **MODIFIED LINE**: Implement custom sorting based on the gtsadOrder array.
-                activeFrequencies: activeFrequenciesByAirport[airportStatus.airportIcao] ? Array.from(activeFrequenciesByAirport[airportStatus.airportIcao]).sort((a, b) => gtsadOrder.indexOf(a) - gtsadOrder.indexOf(b)) : []
-            };
+        const content = `
+            <div class="info-card">
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
+                    This tool scans for inbounds and outbounds of the most active airports. Re-scan in order to get the latest data.
+                </p>
+                <button id="begin-traffic-scan-btn" style="width: 100%;">Begin Scan</button>
+            </div>
+            <div id="traffic-scan-results" class="info-card" style="display: none;">
+                </div>
+        `;
 
-            const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
-            inboundFlightIds.forEach(flightId => {
-                const flight = flightsMap.get(flightId);
-                if (flight && flight.speed > 50) { 
-                    const flightLon = parseFloat(flight.longitude);
-                    const flightLat = parseFloat(flight.latitude);
-                    if (!isNaN(flightLon) && !isNaN(flightLat)) {
-                        const aircraftPosition = turf.point([flightLon, flightLat]);
-                        const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
-                        const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
-                        if (eteMinutes <= 20) data.inboundBuckets.in20++;
-                        else if (eteMinutes <= 60) data.inboundBuckets.in60++;
-                        else data.inboundBuckets.over60++;
+        const panel = createFloatingPanel('traffic-scan-panel', '<h2>Server Traffic Scan</h2>', '100px', '400px', content);
+
+        panel.querySelector('#begin-traffic-scan-btn').addEventListener('click', generateTrafficHotspotReport);
+    }
+
+
+    async function generateTrafficHotspotReport() {
+        const resultsContainer = document.getElementById('traffic-scan-results');
+        const scanButton = document.getElementById('begin-traffic-scan-btn');
+        if (!resultsContainer || !scanButton) return;
+
+        resultsContainer.style.display = 'block';
+        resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
+        scanButton.disabled = true;
+        scanButton.textContent = 'Scanning...';
+
+        try {
+            if (!isLiveModeActive) {
+                throw new Error("Live Mode is not active. Please connect to a server first.");
+            }
+            const serverSelect = document.getElementById('server-select');
+            const sessionId = serverSelect ? serverSelect.value : null;
+            if (!sessionId) {
+                throw new Error("No server selected in Live Mode.");
+            }
+
+            const [worldResponse, flightsResponse, atcResponse] = await Promise.all([
+                fetch(`/.netlify/functions/world/${sessionId}`),
+                fetch(`/.netlify/functions/flights/${sessionId}`),
+                fetch(`/.netlify/functions/atc/${sessionId}`)
+            ]);
+
+            if (!worldResponse.ok || !flightsResponse.ok || !atcResponse.ok) {
+                throw new Error("Failed to fetch server data.");
+            }
+
+            const worldData = await worldResponse.json();
+            const flightsData = await flightsResponse.json();
+            const atcData = await atcResponse.json();
+            const allAirports = await getAirports();
+            const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
+            const activeAirports = worldData.result || [];
+
+            const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 4: 'Approach', 5: 'Departure', 7: 'ATIS' };
+            const freqInitialMap = { 'Ground': 'G', 'Tower': 'T', 'ATIS': 'S', 'Approach': 'A', 'Departure': 'D' };
+            const activeFrequenciesByAirport = {};
+
+            // Define the desired sorting order for frequency types.
+            const gtsadOrder = ['Ground', 'Tower', 'ATIS', 'Approach', 'Departure'];
+
+            if (atcData.result) {
+                atcData.result.forEach(facility => {
+                    const icao = facility.airportName;
+                    if (!icao || icao === "Center") return;
+                    const typeName = frequencyTypeMap[facility.type];
+                    if (typeName && freqInitialMap[typeName]) {
+                        if (!activeFrequenciesByAirport[icao]) {
+                            activeFrequenciesByAirport[icao] = new Set();
+                        }
+                        activeFrequenciesByAirport[icao].add(typeName);
+                    }
+                });
+            }
+            
+            const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
+            const activeAirportLocations = new Map();
+            activeAirports.forEach(activeAirport => {
+                const airportInfo = allAirports.find(a => a.ident === activeAirport.airportIcao);
+                if (airportInfo) {
+                    const lat = parseFloat(airportInfo.latitude_deg);
+                    const lon = parseFloat(airportInfo.longitude_deg);
+                    const elev = parseFloat(airportInfo.elevation_ft);
+                    if (!isNaN(lat) && !isNaN(lon) && !isNaN(elev)) {
+                        activeAirportLocations.set(activeAirport.airportIcao, { lat, lon, elev });
                     }
                 }
             });
-            airportTrafficData[data.icao] = data;
-        });
-        
-        const sortedAirports = Object.values(airportTrafficData).sort((a, b) => b.inboundTotal - a.inboundTotal).slice(0, 20);
-
-        if (sortedAirports.length === 0) {
-            resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
-        } else {
-            let htmlContent = sortedAirports.map(data => {
-                const frequencyBubbles = data.activeFrequencies.map(freqName => {
-                    const initial = freqInitialMap[freqName];
-                    const className = `freq-bubble freq-type-${freqName.toLowerCase()}`;
-                    return `<span class="${className}" title="${freqName}">${initial}</span>`;
-                }).join('');
-
-                return `
-                <div class="traffic-card" data-icao="${data.icao}">
-                    <div class="traffic-card-header">
-                        <div class="airport-name">${data.name}</div>
-                        <div class="airport-icao">${data.icao}</div>
-                    </div>
-                    <div class="traffic-card-body">
-                        <div class="traffic-col">
-                            <div class="col-header">
-                                <span class="icon-inbound"></span> Inbound
-                            </div>
-                            <div class="total-count">${data.inboundTotal}</div>
-                            <div class="detail-breakdown">
-                                <span><span class="detail-value">${data.inboundBuckets.in20}</span> in &lt; 20 min</span>
-                                <span><span class="detail-value">${data.inboundBuckets.in60}</span> in &lt; 1 hr</span>
-                                <span><span class="detail-value">${data.inboundBuckets.over60}</span> in &gt; 1 hr</span>
-                            </div>
-                        </div>
-                        <div class="traffic-col">
-                            <div class="col-header">
-                                <span class="icon-outbound"></span> Outbound
-                            </div>
-                            <div class="total-count">${data.outboundOnGround}</div>
-                            <div class="detail-breakdown">
-                                <span class="on-ground-text">on ground</span>
-                                <span class="total-departures-text"><span class="detail-value">${data.outboundTotal}</span> total departures</span>
-                            </div>
-                        </div>
-                    </div>
-                    ${frequencyBubbles ? `<div class="traffic-card-frequencies">${frequencyBubbles}</div>` : ''}
-                </div>
-            `}).join('');
-
-            resultsContainer.innerHTML = htmlContent;
             
-            resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
-                item.addEventListener('click', (e) => {
-                    const selectedIcao = e.currentTarget.dataset.icao;
-                    displayAirportDetails(selectedIcao);
-                    const scanPanel = document.getElementById('traffic-scan-panel');
-                    if (scanPanel) {
-                        if (window.innerWidth <= 768) {
-                           scanPanel.classList.remove('visible');
-                        } else {
-                           scanPanel.remove();
+            const onGroundByAirport = {};
+            for (const icao of activeAirportLocations.keys()) {
+                onGroundByAirport[icao] = 0;
+            }
+
+            lowAndSlowFlights.forEach(flight => {
+                const aircraftPoint = turf.point([flight.longitude, flight.latitude]);
+                let closestIcao = null;
+                let minDistance = Infinity;
+                for (const [icao, coords] of activeAirportLocations.entries()) {
+                    const airportPoint = turf.point([coords.lon, coords.lat]);
+                    const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestIcao = icao;
+                    }
+                }
+                if (closestIcao && minDistance < 3) {
+                    const airportCoords = activeAirportLocations.get(closestIcao);
+                    const airportElevation = airportCoords.elev;
+                    const aircraftAltitude = flight.altitude;
+                    if (Math.abs(aircraftAltitude - airportElevation) < 500) {
+                        onGroundByAirport[closestIcao]++;
+                    }
+                }
+            });
+
+            if (activeAirports.length === 0) {
+                resultsContainer.innerHTML = '<p>No airports with active traffic found on the server.</p>';
+                scanButton.disabled = false;
+                scanButton.textContent = 'Re-Scan';
+                return;
+            }
+
+            const airportTrafficData = {};
+            activeAirports.forEach(airportStatus => {
+                const calculatedOnGroundCount = onGroundByAirport[airportStatus.airportIcao] || 0;
+                if (!airportStatus.inboundFlightsCount && !airportStatus.outboundFlightsCount && calculatedOnGroundCount === 0) {
+                    return;
+                }
+                const airportInfo = allAirports.find(a => a.ident === airportStatus.airportIcao);
+                if (!airportInfo) return;
+                const airportLon = parseFloat(airportInfo.longitude_deg);
+                const airportLat = parseFloat(airportInfo.latitude_deg);
+                if (isNaN(airportLon) || isNaN(airportLat)) {
+                    console.warn(`Skipping airport ${airportInfo.ident} due to invalid coordinates in database.`);
+                    return;
+                }
+                const airportPosition = turf.point([airportLon, airportLat]);
+                
+                const data = {
+                    icao: airportStatus.airportIcao,
+                    name: airportStatus.airportName.replace(/"/g, ''),
+                    inboundTotal: airportStatus.inboundFlightsCount || 0,
+                    outboundOnGround: calculatedOnGroundCount,
+                    outboundTotal: airportStatus.outboundFlightsCount || 0,
+                    inboundBuckets: { in20: 0, in60: 0, over60: 0 },
+                    // **MODIFIED LINE**: Implement custom sorting based on the gtsadOrder array.
+                    activeFrequencies: activeFrequenciesByAirport[airportStatus.airportIcao] ? Array.from(activeFrequenciesByAirport[airportStatus.airportIcao]).sort((a, b) => gtsadOrder.indexOf(a) - gtsadOrder.indexOf(b)) : []
+                };
+
+                const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
+                inboundFlightIds.forEach(flightId => {
+                    const flight = flightsMap.get(flightId);
+                    if (flight && flight.speed > 50) { 
+                        const flightLon = parseFloat(flight.longitude);
+                        const flightLat = parseFloat(flight.latitude);
+                        if (!isNaN(flightLon) && !isNaN(flightLat)) {
+                            const aircraftPosition = turf.point([flightLon, flightLat]);
+                            const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
+                            const eteMinutes = Math.round((distanceNM / flight.speed) * 60);
+                            if (eteMinutes <= 20) data.inboundBuckets.in20++;
+                            else if (eteMinutes <= 60) data.inboundBuckets.in60++;
+                            else data.inboundBuckets.over60++;
                         }
                     }
                 });
+                airportTrafficData[data.icao] = data;
             });
+            
+            const sortedAirports = Object.values(airportTrafficData).sort((a, b) => b.inboundTotal - a.inboundTotal).slice(0, 20);
+
+            if (sortedAirports.length === 0) {
+                resultsContainer.innerHTML = '<p>No inbound flights detected on the server.</p>';
+            } else {
+                let htmlContent = sortedAirports.map(data => {
+                    const frequencyBubbles = data.activeFrequencies.map(freqName => {
+                        const initial = freqInitialMap[freqName];
+                        const className = `freq-bubble freq-type-${freqName.toLowerCase()}`;
+                        return `<span class="${className}" title="${freqName}">${initial}</span>`;
+                    }).join('');
+
+                    return `
+                    <div class="traffic-card" data-icao="${data.icao}">
+                        <div class="traffic-card-header">
+                            <div class="airport-name">${data.name}</div>
+                            <div class="airport-icao">${data.icao}</div>
+                        </div>
+                        <div class="traffic-card-body">
+                            <div class="traffic-col">
+                                <div class="col-header">
+                                    <span class="icon-inbound"></span> Inbound
+                                </div>
+                                <div class="total-count">${data.inboundTotal}</div>
+                                <div class="detail-breakdown">
+                                    <span><span class="detail-value">${data.inboundBuckets.in20}</span> in &lt; 20 min</span>
+                                    <span><span class="detail-value">${data.inboundBuckets.in60}</span> in &lt; 1 hr</span>
+                                    <span><span class="detail-value">${data.inboundBuckets.over60}</span> in &gt; 1 hr</span>
+                                </div>
+                            </div>
+                            <div class="traffic-col">
+                                <div class="col-header">
+                                    <span class="icon-outbound"></span> Outbound
+                                </div>
+                                <div class="total-count">${data.outboundOnGround}</div>
+                                <div class="detail-breakdown">
+                                    <span class="on-ground-text">on ground</span>
+                                    <span class="total-departures-text"><span class="detail-value">${data.outboundTotal}</span> total departures</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${frequencyBubbles ? `<div class="traffic-card-frequencies">${frequencyBubbles}</div>` : ''}
+                    </div>
+                `}).join('');
+
+                resultsContainer.innerHTML = htmlContent;
+                
+                resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const selectedIcao = e.currentTarget.dataset.icao;
+                        displayAirportDetails(selectedIcao);
+                        const scanPanel = document.getElementById('traffic-scan-panel');
+                        if (scanPanel) {
+                            if (window.innerWidth <= 768) {
+                               scanPanel.classList.remove('visible');
+                            } else {
+                               scanPanel.remove();
+                            }
+                        }
+                    });
+                });
+            }
+        } catch (error) {
+            resultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">Error: ${error.message}</p>`;
+        } finally {
+            scanButton.disabled = false;
+            scanButton.textContent = 'Re-Scan';
         }
-    } catch (error) {
-        resultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">Error: ${error.message}</p>`;
-    } finally {
-        scanButton.disabled = false;
-        scanButton.textContent = 'Re-Scan';
     }
-}
      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
         if (existingPanel) {
@@ -1516,113 +1520,113 @@ async function generateTrafficHotspotReport() {
     }
 
     // In app.js, replace the existing updateAtcList function with this one.
-async function updateAtcList(sessionId) {
-    const atcListElement = document.getElementById('atc-list');
-    if (!atcListElement) return;
+    async function updateAtcList(sessionId) {
+        const atcListElement = document.getElementById('atc-list');
+        if (!atcListElement) return;
 
-    const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance', 4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS' };
+        const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 2: 'Unicom', 3: 'Clearance', 4: 'Approach', 5: 'Departure', 6: 'Center', 7: 'ATIS' };
 
-    try {
-        const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
-        const atcData = await atcResponse.json();
-        
-        const airports = await getAirports(); // Ensure airport data is available
+        try {
+            const atcResponse = await fetch(`/.netlify/functions/atc/${sessionId}`);
+            const atcData = await atcResponse.json();
+            
+            const airports = await getAirports(); // Ensure airport data is available
 
-        // --- Track active ATC airports ---
-        const newActiveAtisIcaos = new Set();
-        const newActiveAtcIcaos = new Set();
-        if (atcData.result) {
-            atcData.result.forEach(facility => {
-                if (facility.type === 7 && facility.airportName) {
-                    newActiveAtisIcaos.add(facility.airportName);
-                }
-                if (facility.airportName && facility.airportName !== "Center") {
-                    newActiveAtcIcaos.add(facility.airportName);
-                }
-            });
-        }
-        activeAtisStationIcaos = newActiveAtisIcaos;
-
-        if (!setsAreEqual(activeAtcAirportIcaos, newActiveAtcIcaos)) {
-            activeAtcAirportIcaos = newActiveAtcIcaos;
-            updateAirports();
-        }
-        // --- End tracking ---
-
-        if (!atcResponse.ok || atcData.errorCode !== 0 || !atcData.result) {
-            atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-            return;
-        }
-
-        const atcByAirport = atcData.result
-            .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
-            .reduce((acc, facility) => {
-                const icao = facility.airportName || "Center";
-                if (!acc[icao]) {
-                    acc[icao] = { name: facility.airportName || "Center Control", frequencies: [] };
-                }
-                acc[icao].frequencies.push(facility);
-                return acc;
-            }, {});
-
-        const airportIcaos = Object.keys(atcByAirport);
-        if (airportIcaos.length === 0) {
-            atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
-            return;
-        }
-
-        let htmlContent = airportIcaos.sort().map(icao => {
-            const airportData = atcByAirport[icao];
-            airportData.frequencies.sort((a, b) => a.type - b.type);
-
-            // Find the full airport name from the cached data
-            const airportInfo = airports.find(a => a.ident === icao);
-            const airportFullName = airportInfo ? airportInfo.name.replace(/"/g, '') : (icao === "Center" ? "Center Control" : icao);
-
-            const frequencyItems = airportData.frequencies.map(facility => {
-                const typeName = frequencyTypeMap[facility.type];
-                const controller = facility.username || "N/A";
-
-                // Calculate duration on frequency
-                let durationText = '';
-                if (facility.startTime) {
-                    const startTime = new Date(facility.startTime);
-                    const now = new Date();
-                    const durationMs = now - startTime;
-                    const hours = Math.floor(durationMs / 3600000);
-                    const minutes = Math.floor((durationMs % 3600000) / 60000);
-                    
-                    if (hours > 0) {
-                        durationText = `${hours}h ${minutes.toString().padStart(2, '0')}m`;
-                    } else {
-                        durationText = `${minutes}m`;
+            // --- Track active ATC airports ---
+            const newActiveAtisIcaos = new Set();
+            const newActiveAtcIcaos = new Set();
+            if (atcData.result) {
+                atcData.result.forEach(facility => {
+                    if (facility.type === 7 && facility.airportName) {
+                        newActiveAtisIcaos.add(facility.airportName);
                     }
-                }
+                    if (facility.airportName && facility.airportName !== "Center") {
+                        newActiveAtcIcaos.add(facility.airportName);
+                    }
+                });
+            }
+            activeAtisStationIcaos = newActiveAtisIcaos;
 
-                return `<li class="atc-frequency">
-                          <span class="atc-type atc-type-${typeName.toLowerCase()}">${typeName}</span>
-                          <div class="atc-controller-info">
-                              <span class="atc-controller">${controller}</span>
-                              <span class="atc-duration">${durationText}</span>
+            if (!setsAreEqual(activeAtcAirportIcaos, newActiveAtcIcaos)) {
+                activeAtcAirportIcaos = newActiveAtcIcaos;
+                updateAirports();
+            }
+            // --- End tracking ---
+
+            if (!atcResponse.ok || atcData.errorCode !== 0 || !atcData.result) {
+                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+                return;
+            }
+
+            const atcByAirport = atcData.result
+                .filter(facility => frequencyTypeMap.hasOwnProperty(facility.type))
+                .reduce((acc, facility) => {
+                    const icao = facility.airportName || "Center";
+                    if (!acc[icao]) {
+                        acc[icao] = { name: facility.airportName || "Center Control", frequencies: [] };
+                    }
+                    acc[icao].frequencies.push(facility);
+                    return acc;
+                }, {});
+
+            const airportIcaos = Object.keys(atcByAirport);
+            if (airportIcaos.length === 0) {
+                atcListElement.innerHTML = '<div class="atc-item">No active ATC on this server.</div>';
+                return;
+            }
+
+            let htmlContent = airportIcaos.sort().map(icao => {
+                const airportData = atcByAirport[icao];
+                airportData.frequencies.sort((a, b) => a.type - b.type);
+
+                // Find the full airport name from the cached data
+                const airportInfo = airports.find(a => a.ident === icao);
+                const airportFullName = airportInfo ? airportInfo.name.replace(/"/g, '') : (icao === "Center" ? "Center Control" : icao);
+
+                const frequencyItems = airportData.frequencies.map(facility => {
+                    const typeName = frequencyTypeMap[facility.type];
+                    const controller = facility.username || "N/A";
+
+                    // Calculate duration on frequency
+                    let durationText = '';
+                    if (facility.startTime) {
+                        const startTime = new Date(facility.startTime);
+                        const now = new Date();
+                        const durationMs = now - startTime;
+                        const hours = Math.floor(durationMs / 3600000);
+                        const minutes = Math.floor((durationMs % 3600000) / 60000);
+                        
+                        if (hours > 0) {
+                            durationText = `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+                        } else {
+                            durationText = `${minutes}m`;
+                        }
+                    }
+
+                    return `<li class="atc-frequency">
+                              <span class="atc-type atc-type-${typeName.toLowerCase()}">${typeName}</span>
+                              <div class="atc-controller-info">
+                                  <span class="atc-controller">${controller}</span>
+                                  <span class="atc-duration">${durationText}</span>
+                              </div>
+                            </li>`;
+                }).join('');
+
+                return `<div class="atc-item">
+                          <div class="atc-airport-header">
+                            <strong>${airportFullName}</strong>
+                            <span>${icao}</span>
                           </div>
-                        </li>`;
+                          <ul class="atc-frequency-list">${frequencyItems}</ul>
+                        </div>`;
             }).join('');
+            atcListElement.innerHTML = htmlContent;
 
-            return `<div class="atc-item">
-                      <div class="atc-airport-header">
-                        <strong>${airportFullName}</strong>
-                        <span>${icao}</span>
-                      </div>
-                      <ul class="atc-frequency-list">${frequencyItems}</ul>
-                    </div>`;
-        }).join('');
-        atcListElement.innerHTML = htmlContent;
-
-    } catch (error) {
-        console.error("Failed to fetch or render ATC data:", error);
-        atcListElement.innerHTML = '<div class="atc-item" style="color: var(--danger-color);">Error loading ATC data.</div>';
+        } catch (error) {
+            console.error("Failed to fetch or render ATC data:", error);
+            atcListElement.innerHTML = '<div class="atc-item" style="color: var(--danger-color);">Error loading ATC data.</div>';
+        }
     }
-}
 
     function createSettingsPanel() {
         const content = `
@@ -1681,187 +1685,180 @@ async function updateAtcList(sessionId) {
 
     // Inside app.js
 
-function createHelpPanel() {
-    const helpContent = `
-        <div class="info-card">
-            <h3>Getting Started</h3>
-            <ul>
-                <li><strong>Load Airport:</strong> Type an airport ICAO code (e.g., KJFK) into the search box and click 'Load'.</li>
-                <li><strong>Filter Airports:</strong> Use the checkboxes under 'Filters' to show or hide large, medium, or small airports on the map as you zoom.</li>
-            </ul>
-        </div>
-        <div class="info-card">
-            <h3>Drawing Tool</h3>
-            <p style="font-size: 14px; color: #ddd; margin: 0;">To plan a flight path:</p>
-            <ol style="font-size: 14px; color: #ddd; padding-left: 20px;">
-                <li style="margin-bottom: 5px;">Check <strong>'Enable Drawing Mode'</strong> to start.</li>
-                <li style="margin-bottom: 5px;">The tool will stay active to draw multiple lines. <strong>Uncheck the box</strong> when you are finished drawing to move the map again.</li>
-                <li style="margin-bottom: 5px;">In the Flight Plan panel, <strong>click the heading value</strong> to edit it manually for precise intercepts.</li>
-            </ol>
-        </div>
+    function createHelpPanel() {
+        const helpContent = `
+            <div class="info-card">
+                <h3>Getting Started</h3>
+                <ul>
+                    <li><strong>Load Airport:</strong> Type an airport ICAO code (e.g., KJFK) into the search box and click 'Load'.</li>
+                    <li><strong>Filter Airports:</strong> Use the checkboxes under 'Filters' to show or hide large, medium, or small airports on the map as you zoom.</li>
+                </ul>
+            </div>
+            <div class="info-card">
+                <h3>Drawing Tool</h3>
+                <p style="font-size: 14px; color: #ddd; margin: 0;">To plan a flight path:</p>
+                <ol style="font-size: 14px; color: #ddd; padding-left: 20px;">
+                    <li style="margin-bottom: 5px;">Check <strong>'Enable Drawing Mode'</strong> to start.</li>
+                    <li style="margin-bottom: 5px;">The tool will stay active to draw multiple lines. <strong>Uncheck the box</strong> when you are finished drawing to move the map again.</li>
+                    <li style="margin-bottom: 5px;">In the Flight Plan panel, <strong>click the heading value</strong> to edit it manually for precise intercepts.</li>
+                </ol>
+            </div>
 
-        <div class="info-card">
-            <h3>Aircraft Speed Guidelines</h3>
-            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
-                Use these minimum speeds as a reference for sequencing traffic. All speeds are for a "clean" configuration (no flaps).
-            </p>
+            <div class="info-card">
+                <h3>Aircraft Speed Guidelines</h3>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px;">
+                    Use these minimum speeds as a reference for sequencing traffic. All speeds are for a "clean" configuration (no flaps).
+                </p>
 
-            <h4 class="guide-header">Narrow-Body Aircraft (e.g., A320, B737)</h4>
-            <table class="speed-guide-table">
-                <thead>
-                    <tr>
-                        <th>Altitude Range</th>
-                        <th>Suggested Minimum Speed</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td>Above FL280</td><td>Mach 0.76 - 0.78</td></tr>
-                    <tr><td>FL180 to FL280</td><td>260 - 280 KIAS</td></tr>
-                    <tr><td>12,000 ft to FL180</td><td>250 - 260 KIAS</td></tr>
-                    <tr><td>Below 12,000 ft</td><td>210 - 240 KIAS</td></tr>
-                </tbody>
-            </table>
+                <h4 class="guide-header">Narrow-Body Aircraft (e.g., A320, B737)</h4>
+                <table class="speed-guide-table">
+                    <thead>
+                        <tr>
+                            <th>Altitude Range</th>
+                            <th>Suggested Minimum Speed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Above FL280</td><td>Mach 0.76 - 0.78</td></tr>
+                        <tr><td>FL180 to FL280</td><td>260 - 280 KIAS</td></tr>
+                        <tr><td>12,000 ft to FL180</td><td>250 - 260 KIAS</td></tr>
+                        <tr><td>Below 12,000 ft</td><td>210 - 240 KIAS</td></tr>
+                    </tbody>
+                </table>
 
-            <h4 class="guide-header">Wide-Body Aircraft (e.g., A350, B777, B747)</h4>
-            <table class="speed-guide-table">
-                <thead>
-                    <tr>
-                        <th>Altitude Range</th>
-                        <th>Suggested Minimum Speed</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td>Above FL280</td><td>Mach 0.80 - 0.82</td></tr>
-                    <tr><td>FL180 to FL280</td><td>280 - 300 KIAS</td></tr>
-                    <tr><td>FL180 to FL180</td><td>260 - 280 KIAS</td></tr>
-                    <tr><td>Below 12,000 ft</td><td>220 - 250 KIAS</td></tr>
-                </tbody>
-            </table>
-            <p class="guide-notes">
-                <strong>Remember:</strong> This are rough estimates, speeds may differ based on the situation.
-            </p>
-        </div>
-        `;
-    createFloatingPanel('help-panel', '<h2>Help</h2>', '150px', '150px', helpContent);
-}
+                <h4 class="guide-header">Wide-Body Aircraft (e.g., A350, B777, B747)</h4>
+                <table class="speed-guide-table">
+                    <thead>
+                        <tr>
+                            <th>Altitude Range</th>
+                            <th>Suggested Minimum Speed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Above FL280</td><td>Mach 0.80 - 0.82</td></tr>
+                        <tr><td>FL180 to FL280</td><td>280 - 300 KIAS</td></tr>
+                        <tr><td>FL180 to FL180</td><td>260 - 280 KIAS</td></tr>
+                        <tr><td>Below 12,000 ft</td><td>220 - 250 KIAS</td></tr>
+                    </tbody>
+                </table>
+                <p class="guide-notes">
+                    <strong>Remember:</strong> This are rough estimates, speeds may differ based on the situation.
+                </p>
+            </div>
+            `;
+        createFloatingPanel('help-panel', '<h2>Help</h2>', '150px', '150px', helpContent);
+    }
 
     // --- MAP DRAWING AND UPDATING (Rewritten for MapTiler) ---
 
     // This is a new function to clear airport-specific layers before drawing new ones.
     function clearAirportLayers() {
-    const layers = [
-        'runways', 'runway-centerlines', 'runway-labels',
-        'final-approach-cones', 'final-approach-centerlines',
-        'distance-rings-casing', // Added
-        'distance-rings',
-        'distance-ring-labels' // Added
-    ];
-    layers.forEach(baseId => {
-        const layerId = `${baseId}-layer`;
-        const sourceId = `${baseId}-source`;
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-    });
-}
+        const layers = [
+            'runways', 'runway-centerlines', 'runway-labels',
+            'final-approach-cones', 'final-approach-centerlines',
+            'distance-rings-casing', // Added
+            'distance-rings',
+            'distance-ring-labels' // Added
+        ];
+        layers.forEach(baseId => {
+            const layerId = `${baseId}-layer`;
+            const sourceId = `${baseId}-source`;
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getSource(sourceId)) map.removeSource(sourceId);
+        });
+    }
 
 	// --- ADDED/FIXED FUNCTIONS ---
 	async function updateNavaids() {
-    const navaidsCheckbox = document.getElementById('filter-navaids');
-    const layerId = 'openaip-navaids-layer';
-    const sourceId = 'openaip-navaids-source';
+        const navaidsCheckbox = document.getElementById('filter-navaids');
+        const sourceId = 'openaip-navaids-source';
+        const layerId = 'openaip-navaids-layer';
 
-    if (!navaidsCheckbox || !navaidsCheckbox.checked) {
-        if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, 'visibility', 'none');
+        if (!navaidsCheckbox || !navaidsCheckbox.checked) {
+            if (map.getLayer(layerId)) {
+                map.setLayoutProperty(layerId, 'visibility', 'none');
+            }
+            return;
         }
-        return;
-    }
 
-    const currentZoom = map.getZoom();
-    if (currentZoom < 8) { // Only show VORs at a closer zoom
-        if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, 'visibility', 'none');
+        const currentZoom = map.getZoom();
+        if (currentZoom < 7) {
+            if (map.getLayer(layerId)) {
+                map.setLayoutProperty(layerId, 'visibility', 'none');
+            }
+            return;
         }
-        return;
-    }
 
-    const bounds = map.getBounds();
-    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-    const navaids = await getVORsFromOpenAIP(bbox);
+        const bounds = map.getBounds();
+        const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+        const navaids = await getVORsFromOpenAIP(bbox);
 
-    // Filter for VOR-like navaids and map properties for display
-    const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
-    const navaidFeatures = navaids
-        .filter(navaid =>
-            navaid && VOR_TYPES.includes(navaid.type) && navaid.geometry && navaid.geometry.coordinates
-        )
-        .map(navaid => {
-            // The OpenAIP API provides frequency in kHz, so convert to MHz for display
-            const frequencyMHz = navaid.frequency ? (navaid.frequency / 1000).toFixed(3) : '---';
-            return {
+        const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
+        const navaidFeatures = navaids
+            .filter(navaid =>
+                navaid &&
+                VOR_TYPES.includes(navaid.type) &&
+                navaid.geometry &&
+                navaid.geometry.coordinates
+            )
+            .map(navaid => ({
                 type: 'Feature',
                 geometry: {
                     type: 'Point',
                     coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
                 },
                 properties: {
-                    name: navaid.name || 'N/A',
-                    frequency: frequencyMHz,
-                    identifier: navaid.identifier || '',
+                    name: navaid.name,
+                    type: navaid.type
                 }
-            };
-        });
+            }));
 
-    const geojsonData = {
-        type: 'FeatureCollection',
-        features: navaidFeatures
-    };
+        const geojsonData = {
+            type: 'FeatureCollection',
+            features: navaidFeatures
+        };
 
-    const source = map.getSource(sourceId);
-    if (source) {
-        source.setData(geojsonData);
-    } else {
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: geojsonData
-        });
+        const source = map.getSource(sourceId);
+        if (source) {
+            source.setData(geojsonData);
+        } else {
+            map.addSource(sourceId, {
+                type: 'geojson',
+                data: geojsonData
+            });
 
-        map.addLayer({
-            id: layerId,
-            type: 'symbol',
-            source: sourceId,
-            layout: {
-                'icon-image': 'vor-compass-rose', // Use the image loaded from your file
-                'icon-size': 0.7, // You can adjust this value to make the image bigger or smaller
-                'icon-allow-overlap': true,
-                'icon-anchor': 'center', // Important: Anchor the image to its center
+            map.addLayer({
+                id: layerId,
+                type: 'symbol',
+                source: sourceId,
+                // --- MODIFICATION START: Use the compass rose icon and adjust text ---
+                layout: {
+                    // Use the loaded compass rose image as the icon
+                    'icon-image': 'vor-compass-rose',
+                    'icon-size': 0.35, // Adjust this value to get your desired size
+                    'icon-allow-overlap': true, // Allow icons to overlap if needed
 
-                // This text will now appear centered on top of the compass rose image
-                'text-field': [
-                    'format',
-                    ['get', 'name'], { 'font-scale': 1.0, 'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'] },
-                    '\n',
-                    ['get', 'frequency'], ' MHz  ', ['get', 'identifier'], { 'font-scale': 0.9, 'text-font': ['Open Sans Semibold', 'Arial Unicode MS Regular'] }
-                ],
-                'text-size': 10,
-                'text-anchor': 'center', // Anchor the text block to its center
-                'text-offset': [0, 0.5],   // Fine-tune the vertical position of the text
-                'text-allow-overlap': true, // Allow text to overlap the icon
-                'text-line-height': 1.1,
-                'text-justify': 'center'
-            },
-            paint: {
-                'text-color': '#000000',
-                'text-halo-color': 'rgba(255, 255, 255, 0.8)',
-                'text-halo-width': 2
-            }
-        });
+                    // Display the VOR name as text
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                    'text-size': 11,
+                    'text-anchor': 'top', // Anchor the text to the top of the icon
+                    'text-offset': [0, 1.5], // Nudge the text up to sit above the icon
+                    'text-allow-overlap': false // Prevent text labels from overlapping
+                },
+                // --- MODIFICATION END ---
+                paint: {
+                    'text-color': '#A9D4FF',
+                    'text-halo-color': '#000000',
+                    'text-halo-width': 1.5
+                }
+            });
+        }
+
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'visible');
+        }
     }
-
-    if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, 'visibility', 'visible');
-    }
-}
 
 	async function updateWaypoints() {
 		const waypointsCheckbox = document.getElementById('filter-waypoints');
@@ -1911,37 +1908,37 @@ function createHelpPanel() {
 				source: sourceId,
 				minzoom: 8, // Show waypoint icons from zoom level 8+
 				layout: {
-    // --- Icon: A smaller black triangle ---
-    'icon-image': 'triangle-15',
-    'icon-size': 0.8, // Make the icon smaller on the map
-    'icon-allow-overlap': false,
+                    // --- Icon: A smaller black triangle ---
+                    'icon-image': 'triangle-15',
+                    'icon-size': 0.8, // Make the icon smaller on the map
+                    'icon-allow-overlap': false,
 
-    // --- Label: The waypoint name, shown conditionally ---
-    'text-field': ['get', 'name'],
-    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-    'text-size': [
-        'step',
-        ['zoom'],
-        0,
-        11,
-        10
-    ],
-    'text-anchor': 'top',
-    'text-offset': [0, 0.8],
-    'text-allow-overlap': false,
-    'text-optional': true,
-},
-paint: {
-    // --- Icon Color: Black triangle with a white halo ---
-    'icon-color': '#000000',
-    'icon-halo-color': '#FFFFFF',
-    'icon-halo-width': 1,
+                    // --- Label: The waypoint name, shown conditionally ---
+                    'text-field': ['get', 'name'],
+                    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                    'text-size': [
+                        'step',
+                        ['zoom'],
+                        0,
+                        11,
+                        10
+                    ],
+                    'text-anchor': 'top',
+                    'text-offset': [0, 0.8],
+                    'text-allow-overlap': false,
+                    'text-optional': true,
+                },
+                paint: {
+                    // --- Icon Color: Black triangle with a white halo ---
+                    'icon-color': '#000000',
+                    'icon-halo-color': '#FFFFFF',
+                    'icon-halo-width': 1,
 
-    // --- Label Color ---
-    'text-color': '#ddd',
-    'text-halo-color': '#000',
-    'text-halo-width': 1.5
-}
+                    // --- Label Color ---
+                    'text-color': '#ddd',
+                    'text-halo-color': '#000',
+                    'text-halo-width': 1.5
+                }
 			});
 		}
 	
@@ -1952,123 +1949,123 @@ paint: {
 	}
 
     function updateAirports() {
-    if (activeAirportIcao) {
-        // If an airport is selected, hide the general airport dots and pulse layer.
-        if (map.getLayer('airport-dots-layer')) map.setLayoutProperty('airport-dots-layer', 'visibility', 'none');
-        if (map.getLayer('airport-dots-pulse-layer')) map.setLayoutProperty('airport-dots-pulse-layer', 'visibility', 'none');
-        return;
-    }
-
-    const zoom = map.getZoom();
-    if (!airportsDataCache) return;
-
-    const mainPanel = document.getElementById('main-panel');
-    if (!mainPanel) return;
-    const selectedTypes = Array.from(mainPanel.querySelectorAll('#airport-filters input:checked')).map(input => input.value);
-    const bounds = map.getBounds();
-
-    const airportFeatures = airportsDataCache.filter(airport => {
-        if (!selectedTypes.includes(airport.type)) return false;
-        const lat = parseFloat(airport.latitude_deg);
-        const lon = parseFloat(airport.longitude_deg);
-        if (isNaN(lat) || isNaN(lon)) return false;
-
-        const sw = bounds.getSouthWest();
-        const ne = bounds.getNorthEast();
-
-        if (lat < sw.lat || lat > ne.lat || lon < sw.lng || lon > ne.lng) return false;
-
-        if (zoom < 6) return airport.type === 'large_airport';
-        if (zoom < 8) return ['large_airport', 'medium_airport'].includes(airport.type);
-        return true;
-    }).map(airport => ({
-        type: 'Feature',
-        geometry: {
-            type: 'Point',
-            coordinates: [parseFloat(airport.longitude_deg), parseFloat(airport.latitude_deg)]
-        },
-        properties: {
-            icao: airport.ident,
-            type: airport.type,
-            // Add a property to track if ATC is active, used for the pulse filter
-            hasActiveAtc: isLiveModeActive && activeAtcAirportIcaos.has(airport.ident)
+        if (activeAirportIcao) {
+            // If an airport is selected, hide the general airport dots and pulse layer.
+            if (map.getLayer('airport-dots-layer')) map.setLayoutProperty('airport-dots-layer', 'visibility', 'none');
+            if (map.getLayer('airport-dots-pulse-layer')) map.setLayoutProperty('airport-dots-pulse-layer', 'visibility', 'none');
+            return;
         }
-    }));
 
-    const sourceId = 'airport-dots-source';
-    const layerId = 'airport-dots-layer';
-    const pulseLayerId = 'airport-dots-pulse-layer';
+        const zoom = map.getZoom();
+        if (!airportsDataCache) return;
 
-    if (map.getSource(sourceId)) {
-        map.getSource(sourceId).setData({ type: 'FeatureCollection', features: airportFeatures });
-    } else {
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: airportFeatures }
-        });
+        const mainPanel = document.getElementById('main-panel');
+        if (!mainPanel) return;
+        const selectedTypes = Array.from(mainPanel.querySelectorAll('#airport-filters input:checked')).map(input => input.value);
+        const bounds = map.getBounds();
 
-        // Add the pulse layer first, so it appears underneath the main dot
-        map.addLayer({
-            id: pulseLayerId,
-            type: 'circle',
-            source: sourceId,
-            filter: ['==', ['get', 'hasActiveAtc'], true], // Only show for active airports
-            paint: {
-                'circle-radius': 10, // This will be animated
-                'circle-color': '#EABFFF', // Accent Purple
-                'circle-opacity': 0.5, // This will be animated
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#FFFFFF'
+        const airportFeatures = airportsDataCache.filter(airport => {
+            if (!selectedTypes.includes(airport.type)) return false;
+            const lat = parseFloat(airport.latitude_deg);
+            const lon = parseFloat(airport.longitude_deg);
+            if (isNaN(lat) || isNaN(lon)) return false;
+
+            const sw = bounds.getSouthWest();
+            const ne = bounds.getNorthEast();
+
+            if (lat < sw.lat || lat > ne.lat || lon < sw.lng || lon > ne.lng) return false;
+
+            if (zoom < 6) return airport.type === 'large_airport';
+            if (zoom < 8) return ['large_airport', 'medium_airport'].includes(airport.type);
+            return true;
+        }).map(airport => ({
+            type: 'Feature',
+            geometry: {
+                type: 'Point',
+                coordinates: [parseFloat(airport.longitude_deg), parseFloat(airport.latitude_deg)]
+            },
+            properties: {
+                icao: airport.ident,
+                type: airport.type,
+                // Add a property to track if ATC is active, used for the pulse filter
+                hasActiveAtc: isLiveModeActive && activeAtcAirportIcaos.has(airport.ident)
             }
-        });
+        }));
 
-        // Add the main airport dot layer
-        map.addLayer({
-            id: layerId,
-            type: 'circle',
-            source: sourceId,
-            paint: {
-                'circle-radius': ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3],
-                // --- MODIFICATION START ---
-                // This 'case' expression checks for active ATC first.
-                // If an airport has active ATC, its color is set to a dark blue.
-                // Otherwise, it falls back to the color based on airport type.
-                'circle-color': [
-                    'case',
-                    ['==', ['get', 'hasActiveAtc'], true],
-                    '#4169E1', // Royal Blue for active ATC
-                    ['match', ['get', 'type'],
-                        'large_airport', '#FF0000',     // Bravo
-                        'medium_airport', '#FFA500',    // Charlie
-                        'small_airport', '#2980b9',     // Small/Other
-                        '#95a5a6'                       // Default fallback
-                    ]
-                ],
-                // --- MODIFICATION END ---
-                'circle-stroke-color': '#000',
-                'circle-stroke-width': 1
-            }
-        });
+        const sourceId = 'airport-dots-source';
+        const layerId = 'airport-dots-layer';
+        const pulseLayerId = 'airport-dots-pulse-layer';
 
-        // Technical Note on Layering: The plane icons (maptilersdk.Marker) are HTML elements
-        // that are rendered on top of the map canvas. The airport dots are GeoJSON layers
-        // drawn directly on the canvas. Because of this, the HTML markers for planes will
-        // always appear on top of the canvas-drawn airport dots. Changing this behavior
-        // would require refactoring the flight markers to be a GeoJSON symbol layer.
+        if (map.getSource(sourceId)) {
+            map.getSource(sourceId).setData({ type: 'FeatureCollection', features: airportFeatures });
+        } else {
+            map.addSource(sourceId, {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: airportFeatures }
+            });
 
-        map.on('click', layerId, (e) => {
-            const icao = e.features[0].properties.icao;
-            displayAirportDetails(icao);
-        });
+            // Add the pulse layer first, so it appears underneath the main dot
+            map.addLayer({
+                id: pulseLayerId,
+                type: 'circle',
+                source: sourceId,
+                filter: ['==', ['get', 'hasActiveAtc'], true], // Only show for active airports
+                paint: {
+                    'circle-radius': 10, // This will be animated
+                    'circle-color': '#EABFFF', // Accent Purple
+                    'circle-opacity': 0.5, // This will be animated
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#FFFFFF'
+                }
+            });
 
-        map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
-        map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+            // Add the main airport dot layer
+            map.addLayer({
+                id: layerId,
+                type: 'circle',
+                source: sourceId,
+                paint: {
+                    'circle-radius': ['match', ['get', 'type'], 'large_airport', 7, 'medium_airport', 5, 3],
+                    // --- MODIFICATION START ---
+                    // This 'case' expression checks for active ATC first.
+                    // If an airport has active ATC, its color is set to a dark blue.
+                    // Otherwise, it falls back to the color based on airport type.
+                    'circle-color': [
+                        'case',
+                        ['==', ['get', 'hasActiveAtc'], true],
+                        '#4169E1', // Royal Blue for active ATC
+                        ['match', ['get', 'type'],
+                            'large_airport', '#FF0000',     // Bravo
+                            'medium_airport', '#FFA500',    // Charlie
+                            'small_airport', '#2980b9',     // Small/Other
+                            '#95a5a6'                       // Default fallback
+                        ]
+                    ],
+                    // --- MODIFICATION END ---
+                    'circle-stroke-color': '#000',
+                    'circle-stroke-width': 1
+                }
+            });
+
+            // Technical Note on Layering: The plane icons (maptilersdk.Marker) are HTML elements
+            // that are rendered on top of the map canvas. The airport dots are GeoJSON layers
+            // drawn directly on the canvas. Because of this, the HTML markers for planes will
+            // always appear on top of the canvas-drawn airport dots. Changing this behavior
+            // would require refactoring the flight markers to be a GeoJSON symbol layer.
+
+            map.on('click', layerId, (e) => {
+                const icao = e.features[0].properties.icao;
+                displayAirportDetails(icao);
+            });
+
+            map.on('mouseenter', layerId, () => { map.getCanvas().style.cursor = 'pointer'; });
+            map.on('mouseleave', layerId, () => { map.getCanvas().style.cursor = ''; });
+        }
+
+        // Ensure layers are visible
+        if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
+        if (map.getLayer(pulseLayerId)) map.setLayoutProperty(pulseLayerId, 'visibility', 'visible');
     }
-
-    // Ensure layers are visible
-    if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'visible');
-    if (map.getLayer(pulseLayerId)) map.setLayoutProperty(pulseLayerId, 'visibility', 'visible');
-}
 
     /**
      * Animates the pulsating halo for active airports.
@@ -2825,30 +2822,30 @@ paint: {
         updateAllFlightDataBlockStyles();
     }
 
-async function getElevationAndMag(latlng) {
-    let magVarText = "Mag Var: N/A";
-    if (wmmModel) {
-         const point = wmmModel.field(latlng.lat, latlng.lng);
-         magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
-    }
-    try {
-        const elevationMeters = await getPublicElevation(latlng);
-
-        let msaText = "MSA: --";
-
-        if (elevationMeters !== null && elevationMeters >= 0) {
-            const terrainElevationFeet = elevationMeters * 3.28084;
-            const calculatedMsa = terrainElevationFeet + 2000;
-            const roundedAltitude = Math.round(calculatedMsa / 1000) * 1000;
-            const displayAltitude = Math.max(roundedAltitude, 2000);
-            msaText = `MSA: ${displayAltitude.toLocaleString()}'`;
+    async function getElevationAndMag(latlng) {
+        let magVarText = "Mag Var: N/A";
+        if (wmmModel) {
+             const point = wmmModel.field(latlng.lat, latlng.lng);
+             magVarText = `Mag Var: ${point.declination.toFixed(2)}°`;
         }
-        mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
-    } catch (error) {
-        console.error("Failed to display elevation data:", error);
-        mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
+        try {
+            const elevationMeters = await getPublicElevation(latlng);
+
+            let msaText = "MSA: --";
+
+            if (elevationMeters !== null && elevationMeters >= 0) {
+                const terrainElevationFeet = elevationMeters * 3.28084;
+                const calculatedMsa = terrainElevationFeet + 2000;
+                const roundedAltitude = Math.round(calculatedMsa / 1000) * 1000;
+                const displayAltitude = Math.max(roundedAltitude, 2000);
+                msaText = `MSA: ${displayAltitude.toLocaleString()}'`;
+            }
+            mslPopup.innerHTML = `${msaText}<br>${magVarText}`;
+        } catch (error) {
+            console.error("Failed to display elevation data:", error);
+            mslPopup.innerHTML = `MSA: Unavailable<br>${magVarText}`;
+        }
     }
-}
      function getOptimalLabelPosition(start, end) {
         const midPoint = getMidPoint(start, end);
         const startPoint = turf.point([start.lng, start.lat]);
@@ -3010,27 +3007,27 @@ async function getElevationAndMag(latlng) {
             this.closest('.plan-step').remove();
         });
         document.getElementById(`alt-${stepId}`).addEventListener('input', (e) => {
-    const legData = planLayers[stepId];
-    const value = e.target.value;
+            const legData = planLayers[stepId];
+            const value = e.target.value;
 
-    // Treat an empty input as clearing the altitude values to undefined.
-    if (value === '') {
-        legData.altitude = undefined;
-        legData.startAltitude = undefined;
-        legData.endAltitude = undefined;
-    } else {
-        // Otherwise, parse the number and update the state if it's valid.
-        const newAlt = parseInt(value, 10);
-        if (!isNaN(newAlt)) {
-            legData.altitude = newAlt;
-            legData.startAltitude = newAlt;
-            legData.endAltitude = newAlt;
-        }
-    }
-    // Update the UI and save the changes.
-    updateAltitudeForLeg(stepId);
-    savePlanToLocalStorage();
-});
+            // Treat an empty input as clearing the altitude values to undefined.
+            if (value === '') {
+                legData.altitude = undefined;
+                legData.startAltitude = undefined;
+                legData.endAltitude = undefined;
+            } else {
+                // Otherwise, parse the number and update the state if it's valid.
+                const newAlt = parseInt(value, 10);
+                if (!isNaN(newAlt)) {
+                    legData.altitude = newAlt;
+                    legData.startAltitude = newAlt;
+                    legData.endAltitude = newAlt;
+                }
+            }
+            // Update the UI and save the changes.
+            updateAltitudeForLeg(stepId);
+            savePlanToLocalStorage();
+        });
         document.getElementById(`speed-${stepId}`).addEventListener('input', (e) => {
             const legData = planLayers[stepId];
             legData.speed = e.target.value;
