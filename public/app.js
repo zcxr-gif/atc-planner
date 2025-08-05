@@ -1840,93 +1840,106 @@ function createVorCompassImage(size = 256) {
 
 	// --- ADDED/FIXED FUNCTIONS ---
 	async function updateNavaids() {
-        const navaidsCheckbox = document.getElementById('filter-navaids');
-        const sourceId = 'openaip-navaids-source';
-        const layerId = 'openaip-navaids-layer';
+    const navaidsCheckbox = document.getElementById('filter-navaids');
+    const sourceId = 'openaip-navaids-source';
+    const layerId = 'openaip-navaids-layer';
 
-        if (!navaidsCheckbox || !navaidsCheckbox.checked) {
-            if (map.getLayer(layerId)) {
-                map.setLayoutProperty(layerId, 'visibility', 'none');
-            }
-            return;
+    if (!navaidsCheckbox || !navaidsCheckbox.checked) {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'none');
         }
+        return;
+    }
 
-        const currentZoom = map.getZoom();
-        if (currentZoom < 7) {
-            if (map.getLayer(layerId)) {
-                map.setLayoutProperty(layerId, 'visibility', 'none');
-            }
-            return;
+    const currentZoom = map.getZoom();
+    if (currentZoom < 7) {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, 'visibility', 'none');
         }
+        return;
+    }
 
-        const bounds = map.getBounds();
-        const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
-        const navaids = await getVORsFromOpenAIP(bbox);
+    const bounds = map.getBounds();
+    const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()];
+    const navaids = await getVORsFromOpenAIP(bbox);
 
-        const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
-        const navaidFeatures = navaids
-            .filter(navaid =>
-                navaid &&
-                VOR_TYPES.includes(navaid.type) &&
-                navaid.geometry &&
-                navaid.geometry.coordinates
-            )
-            .map(navaid => ({
+    const VOR_TYPES = [3, 4, 5, 6, 7]; // VOR, VOR-DME, DME, NDB, TACAN
+    const navaidFeatures = navaids
+        .filter(navaid =>
+            navaid &&
+            VOR_TYPES.includes(navaid.type) &&
+            navaid.geometry &&
+            navaid.geometry.coordinates
+        )
+        .map(navaid => {
+            // --- NEW: Calculate Magnetic Declination ---
+            const lat = navaid.geometry.coordinates[1];
+            const lon = navaid.geometry.coordinates[0];
+            let declination = 0;
+            // Use the loaded World Magnetic Model to get local variation
+            if (wmmModel) {
+                declination = wmmModel.field(lat, lon).declination;
+            }
+
+            return {
                 type: 'Feature',
                 geometry: {
                     type: 'Point',
-                    coordinates: [navaid.geometry.coordinates[0], navaid.geometry.coordinates[1]]
+                    coordinates: [lon, lat]
                 },
                 properties: {
                     name: navaid.name,
-                    type: navaid.type
+                    type: navaid.type,
+                    rotation: declination // --- NEW: Add rotation property to the feature
                 }
-            }));
+            };
+        });
 
-        const geojsonData = {
-            type: 'FeatureCollection',
-            features: navaidFeatures
-        };
+    const geojsonData = {
+        type: 'FeatureCollection',
+        features: navaidFeatures
+    };
 
-        const source = map.getSource(sourceId);
-        if (source) {
-            source.setData(geojsonData);
-        } else {
-            map.addSource(sourceId, {
-                type: 'geojson',
-                data: geojsonData
-            });
+    const source = map.getSource(sourceId);
+    if (source) {
+        source.setData(geojsonData);
+    } else {
+        map.addSource(sourceId, {
+            type: 'geojson',
+            data: geojsonData
+        });
 
-            map.addLayer({
-                id: layerId,
-                type: 'symbol',
-                source: sourceId,
-                layout: {
-                    // Use the loaded compass rose image as the icon
-                    'icon-image': 'vor-compass-rose',
-                    'icon-size': 0.5, // You may want to slightly increase the size
-                    'icon-allow-overlap': true,
-
-                    // Display the VOR name as text
-                    'text-field': ['get', 'name'],
-                    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                    'text-size': 11,
-                    'text-anchor': 'bottom',    // CHANGE: Anchor text to the bottom of the icon
-                    'text-offset': [0, -0.2],   // CHANGE: Nudge text down slightly
-                    'text-allow-overlap': false
-                },
-                paint: {
-                    'text-color': '#A9D4FF',
-                    'text-halo-color': '#000000',
-                    'text-halo-width': 1.5
-                }
-            });
-        }
-
-        if (map.getLayer(layerId)) {
-            map.setLayoutProperty(layerId, 'visibility', 'visible');
-        }
+        map.addLayer({
+            id: layerId,
+            type: 'symbol',
+            source: sourceId,
+            layout: {
+                'icon-image': 'vor-compass-rose',
+                'icon-size': 0.5,
+                'icon-allow-overlap': true,
+                'text-field': ['get', 'name'],
+                'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                'text-size': 11,
+                'text-anchor': 'bottom',
+                'text-offset': [0, -0.2],
+                'text-allow-overlap': false,
+                
+                // --- NEW: These two lines rotate the icon ---
+                'icon-rotation-alignment': 'map', // Rotates with the map, not the screen
+                'icon-rotate': ['get', 'rotation']  // Get rotation value from the feature's property
+            },
+            paint: {
+                'text-color': '#000000',
+                'text-halo-color': '#FFFFFF',
+                'text-halo-width': 1
+            }
+        });
     }
+
+    if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, 'visibility', 'visible');
+    }
+}
 
 	async function updateWaypoints() {
 		const waypointsCheckbox = document.getElementById('filter-waypoints');
