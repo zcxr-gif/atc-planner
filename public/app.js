@@ -1,4 +1,4 @@
-// app.js (Updated with ATIS functionality and migrated to MapTiler SDK)
+// app.js (Updated with AWS Terrain and all previous functionality)
 document.addEventListener('DOMContentLoaded', () => {
     // --- API & SETTINGS ---
     maptilersdk.config.apiKey = 'ety8GjHG3ccnoSZfOULB';
@@ -8,7 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
         container: 'map',
         style: 'https://api.maptiler.com/maps/01980624-ad9c-736d-a1c0-b481bf180ccf/style.json?key=ety8GjHG3ccnoSZfOULB',
         center: [-98.57, 39.82],
-        zoom: 4
+        zoom: 4,
+        // *** MODIFICATION 1: Tell the map to use a terrain source named 'aws-terrain' ***
+        terrain: {
+            source: 'aws-terrain',
+            exaggeration: 1.5 // Optional: Makes mountains look more dramatic
+        }
     });
 
     // --- GLOBAL VARIABLES & LAYER MANAGEMENT ---
@@ -354,6 +359,24 @@ function createVorCompassImage(size = 256) {
         await getWaypoints();
 
         map.on('load', () => {
+            // *** MODIFICATION 2: Define the AWS terrain source and add a hillshade layer for visibility ***
+            map.addSource('aws-terrain', {
+                type: 'raster-dem',
+                url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+                encoding: 'terrarium', // This is crucial for AWS tiles
+                tileSize: 256
+            });
+
+            map.addLayer({
+                id: 'hillshade',
+                source: 'aws-terrain',
+                type: 'hillshade',
+                paint: {
+                    'hillshade-exaggeration': 0.4,
+                    'hillshade-shadow-color': '#000000'
+                }
+            });
+
             // --- NEW: GENERATE AND LOAD VOR COMPASS IMAGE ---
             if (!map.hasImage('vor-compass-rose')) {
                 const vorCompassImage = createVorCompassImage(300); // Generate the image
@@ -434,27 +457,14 @@ function createVorCompassImage(size = 256) {
 
             setupEventListeners();
             
-            // *** MODIFICATION START ***
-            // This is the core fix. We will wait until the map's terrain source is loaded
-            // before we try to render any data layers. This prevents a race condition.
-            const demSourceCheck = setInterval(() => {
-                if (map.getSource('maptiler-terrain') && map.isSourceLoaded('maptiler-terrain')) {
-                    console.log("Map DEM source loaded. Initializing data layers.");
-                    // Now that the map is ready, draw the data layers.
-                    updateAirports();
-                    updateNavaids();
-                    updateWaypoints();
-                    
-                    clearInterval(demSourceCheck); // Stop checking.
-                } else {
-                    console.log("Waiting for DEM source to load...");
-                }
-            }, 500); // Check every half-second.
-            // *** MODIFICATION END ***
+            // Initial data load
+            updateAirports();
+            updateNavaids();
+            updateWaypoints();
             
             loadPlanFromLocalStorage();
             
-            // NEW: Initialize mobile navigation
+            // Initialize mobile navigation
             setupMobileNav();
 
             const loader = document.getElementById('loader');
