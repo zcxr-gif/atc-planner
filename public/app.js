@@ -362,7 +362,7 @@ function createVorCompassImage(size = 256) {
             // *** MODIFICATION 2: Define the AWS terrain source and add a hillshade layer for visibility ***
             map.addSource('aws-terrain', {
                 type: 'raster-dem',
-                url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+                url: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
                 encoding: 'terrarium', // This is crucial for AWS tiles
                 tileSize: 256
             });
