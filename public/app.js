@@ -358,16 +358,16 @@ function createVorCompassImage(size = 256) {
         await getRunways();
         await getWaypoints();
 		
-	map.on('load', () => {
+        map.on('load', () => {
             // *** MODIFICATION 2: Define the AWS terrain source and add a hillshade layer for visibility ***
             map.addSource('aws-terrain', {
-    type: 'raster-dem',
-    tiles: [
-        'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
-    ],
-    tileSize: 256,
-    encoding: 'terrarium'
-});
+                type: 'raster-dem',
+                tiles: [
+                    'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+                ],
+                tileSize: 256,
+                encoding: 'terrarium'
+            });
 
 
             map.addLayer({
@@ -379,6 +379,27 @@ function createVorCompassImage(size = 256) {
                     'hillshade-shadow-color': '#000000'
                 }
             });
+
+            // --- NEW: TERRAIN HIGHLIGHT LAYER ---
+            // This layer also uses the AWS terrain data, but we will style it as a
+            // solid color based on the elevation values provided by the source.
+            map.addLayer({
+                id: 'terrain-highlight-layer',
+                type: 'raster',
+                source: 'aws-terrain',
+                paint: {
+                    // Start with a fully transparent color. We will change this with a slider.
+                    'raster-color': 'hsla(0, 0%, 0%, 0)', 
+                    'raster-color-mix': [0, 0, 0, 0], // Not strictly needed but good for clarity
+                    'raster-resampling': 'nearest'
+                },
+                // Make the layer invisible by default. We'll turn it on with a toggle.
+                layout: {
+                    'visibility': 'none'
+                }
+            });
+            // --- END NEW TERRAIN HIGHLIGHT LAYER ---
+
 
             // --- NEW: GENERATE AND LOAD VOR COMPASS IMAGE ---
             if (!map.hasImage('vor-compass-rose')) {
@@ -1726,6 +1747,7 @@ function createVorCompassImage(size = 256) {
         }
     }
 
+    // UPDATED `createSettingsPanel` function with Terrain Analysis section.
     function createSettingsPanel() {
         const content = `
             <div class="info-card">
@@ -1749,7 +1771,20 @@ function createVorCompassImage(size = 256) {
                     <input type="range" id="data-block-scale-slider" min="0.5" max="1.5" step="0.1" value="${appSettings.dataBlockScale}" style="width: 100%;">
                 </div>
             </div>
-             <div class="info-card">
+
+            <div class="info-card">
+                <h3>Terrain Analysis</h3>
+                 <label for="terrain-highlight-toggle" style="display: flex; align-items: center; justify-content: space-between;">
+                    Enable Terrain Highlight
+                    <input type="checkbox" id="terrain-highlight-toggle">
+                </label>
+                 <p style="font-size: 11px; color: #bbb; margin: 4px 0 10px 0;">Highlights all terrain at or above the selected altitude.</p>
+                <div id="terrain-slider-container" style="opacity: 0.5; pointer-events: none;">
+                    <label for="terrain-altitude-slider">Highlight Altitude: <span id="terrain-altitude-value">Off</span></label>
+                    <input type="range" id="terrain-altitude-slider" min="0" max="15000" step="500" value="8000" style="width: 100%;">
+                </div>
+            </div>
+            <div class="info-card">
                 <h3>Data Source</h3>
                 <p style="font-size: 12px; color: #ddd; margin: 0;">
                     Runway data from an open-source project may have inaccuracies. Use the INFO panel to manually correct magnetic variation if needed.
@@ -1759,6 +1794,8 @@ function createVorCompassImage(size = 256) {
         createFloatingPanel('settings-panel', '<h2>Settings</h2>', '150px', '150px', content);
 
         const settingsPanel = document.getElementById('settings-panel');
+        
+        // --- Existing event listeners for other settings ---
         settingsPanel.querySelector('#heading-type-toggle').addEventListener('change', (e) => {
             appSettings.useTrueHeading = e.target.checked;
             updateAllFlightDataBlockStyles();
@@ -1767,7 +1804,7 @@ function createVorCompassImage(size = 256) {
 
         settingsPanel.querySelector('#show-data-blocks-toggle').addEventListener('change', (e) => {
             appSettings.showDataBlocks = e.target.checked;
-            updateAllFlightDataBlockStyles(); // Changed from toggleDataBlockVisibility()
+            updateAllFlightDataBlockStyles(); 
             saveSettings();
         });
 
@@ -1779,7 +1816,62 @@ function createVorCompassImage(size = 256) {
             updateAllFlightDataBlockStyles();
         });
         scaleSlider.addEventListener('change', saveSettings);
+
+        // --- START: NEW TERRAIN HIGHLIGHTER LOGIC ---
+        const terrainToggle = settingsPanel.querySelector('#terrain-highlight-toggle');
+        const terrainSlider = settingsPanel.querySelector('#terrain-altitude-slider');
+        const terrainValueLabel = settingsPanel.querySelector('#terrain-altitude-value');
+        const terrainSliderContainer = settingsPanel.querySelector('#terrain-slider-container');
+
+        // Function to update the terrain layer based on slider value
+        const updateTerrainHighlight = () => {
+            const altitudeFeet = parseInt(terrainSlider.value);
+            // The DEM data source provides elevation in meters. Convert the slider value.
+            const altitudeMeters = altitudeFeet * 0.3048; 
+            
+            terrainValueLabel.textContent = `${altitudeFeet.toLocaleString()} ft`;
+
+            // This is the core logic. We use a MapTiler "step" expression.
+            // - It checks the elevation of each pixel (`['raster-value']`).
+            // - If the elevation is below `altitudeMeters`, it uses the first color (transparent).
+            // - If the elevation is at or above `altitudeMeters`, it uses the second color (red).
+            const highlightColor = 'hsla(0, 85%, 55%, 0.4)'; // A semi-transparent red
+            map.setPaintProperty('terrain-highlight-layer', 'raster-color', [
+                'step',
+                ['raster-value'],
+                'hsla(0, 0%, 0%, 0)', // Color for values below the step (transparent)
+                altitudeMeters,       // The altitude threshold
+                highlightColor        // Color for values at or above the step
+            ]);
+        };
+
+        // Event listener for the toggle checkbox
+        terrainToggle.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                // Turn on the feature
+                terrainSliderContainer.style.opacity = '1';
+                terrainSliderContainer.style.pointerEvents = 'auto';
+                map.setLayoutProperty('terrain-highlight-layer', 'visibility', 'visible');
+                updateTerrainHighlight(); // Apply the current slider value
+            } else {
+                // Turn off the feature
+                terrainSliderContainer.style.opacity = '0.5';
+                terrainSliderContainer.style.pointerEvents = 'none';
+                terrainValueLabel.textContent = 'Off';
+                map.setLayoutProperty('terrain-highlight-layer', 'visibility', 'none');
+            }
+        });
+
+        // Event listener for the slider
+        terrainSlider.addEventListener('input', () => {
+            // Only update if the feature is toggled on
+            if (terrainToggle.checked) {
+                updateTerrainHighlight();
+            }
+        });
+        // --- END: NEW TERRAIN HIGHLIGHTER LOGIC ---
     }
+
 
     // Inside app.js
 
