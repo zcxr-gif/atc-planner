@@ -358,14 +358,20 @@ function createVorCompassImage(size = 256) {
         await getRunways();
         await getWaypoints();
 
-        map.on('load', () => {
-            // *** MODIFICATION 2: Define the AWS terrain source and add a hillshade layer for visibility ***
-            map.addSource('aws-terrain', {
+        map.addSource('aws-terrain', {
     type: 'raster-dem',
-    url: 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png',
+    tiles: [
+        'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'
+    ],
     tileSize: 256,
     encoding: 'terrarium'
 });
+
+map.setTerrain({
+    source: 'aws-terrain',
+    exaggeration: 1.5
+});
+
 
             map.addLayer({
                 id: 'hillshade',
