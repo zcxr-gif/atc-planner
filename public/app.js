@@ -23,6 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const planLabels = {};
 	
 	let lastUpdatedBounds = null;
+    let glideslopePopup = new maptilersdk.Popup({
+        closeButton: false,
+        closeOnClick: false
+    });
+
 
     const mslPopup = document.getElementById('msl-popup');
     const reopenButton = document.getElementById('reopen-main-panel');
@@ -865,6 +870,7 @@ function createVorCompassImage(size = 256) {
                         <label><input type="checkbox" id="filter-navaids" checked> Show VORs</label>
                         <label><input type="checkbox" id="filter-waypoints" checked> Show Waypoints</label>
                         <label><input type="checkbox" id="enable-final-approach" checked> Show 10nm Final</label>
+                        <label><input type="checkbox" id="filter-glideslope" checked> Show Glideslope</label>
                     </div>
                 </div>
             </div>
@@ -946,11 +952,19 @@ function createVorCompassImage(size = 256) {
                 updateNavaids();
                 updateWaypoints();
             }
-            // Logic for final approach visibility can be tied to layer visibility property
-            const finalApproachCheckbox = document.getElementById('enable-final-approach');
-            const visibility = (finalApproachCheckbox && finalApproachCheckbox.checked) ? 'visible' : 'none';
-            if(map.getLayer('final-approach-cones-layer')) map.setLayoutProperty('final-approach-cones-layer', 'visibility', visibility);
-            if(map.getLayer('final-approach-centerlines-layer')) map.setLayoutProperty('final-approach-centerlines-layer', 'visibility', visibility);
+            if (e.target.id === 'enable-final-approach') {
+                const finalApproachCheckbox = document.getElementById('enable-final-approach');
+                const visibility = (finalApproachCheckbox && finalApproachCheckbox.checked) ? 'visible' : 'none';
+                if(map.getLayer('final-approach-cones-layer')) map.setLayoutProperty('final-approach-cones-layer', 'visibility', visibility);
+                if(map.getLayer('final-approach-centerlines-layer')) map.setLayoutProperty('final-approach-centerlines-layer', 'visibility', visibility);
+            }
+            if (e.target.id === 'filter-glideslope') {
+                const glideslopeCheckbox = document.getElementById('filter-glideslope');
+                const visibility = (glideslopeCheckbox && glideslopeCheckbox.checked) ? 'visible' : 'none';
+                if(map.getLayer('glideslope-dots-layer')) {
+                    map.setLayoutProperty('glideslope-dots-layer', 'visibility', visibility);
+                }
+            }
         });
 
         mainPanel.querySelector('#enable-drawing').addEventListener('change', (e) => {
@@ -1938,7 +1952,8 @@ function clearAirportLayers() {
             'final-approach-cones', 'final-approach-centerlines',
             'distance-rings-casing',
             'distance-rings',
-            'distance-ring-labels'
+            'distance-ring-labels',
+            'glideslope-dots' // <-- ADDED
         ];
         layers.forEach(baseId => {
             const layerId = `${baseId}-layer`;
@@ -2316,9 +2331,10 @@ function clearAirportLayers() {
             currentAirportCoords = { lat, lng: lon };
 
             const airportRunways = await getRunwaysForAirport(icao);
-            drawRunwaysForAirport(icao); // Rewritten to use GeoJSON
+            drawRunwaysForAirport(icao);
             updateAirportInfoPanel(airport, airportRunways);
             createDistanceRings(lat, lon);
+            createGlideslopeDots(icao); // <-- ADDED
 
             map.flyTo({ center: [lon, lat], zoom: 13 });
 
@@ -2553,6 +2569,111 @@ function clearAirportLayers() {
         if (map.getLayer('runways-layer')) {
              map.setPaintProperty('runways-layer', 'fill-color', RUNWAY_STYLE_REGULAR['fill-color']);
         }
+    }
+    
+    // --- NEW: GLIDESLOPE VISUALIZATION ---
+    async function createGlideslopeDots(icao) {
+        const runways = await getRunwaysForAirport(icao);
+        const glideslopeFeatures = [];
+        const NM_TO_FEET = 6076.12;
+        const GLIDESLOPE_ANGLE_RAD = 3 * (Math.PI / 180); // 3 degrees in radians
+
+        runways.forEach(runway => {
+            // Process the 'low-end' of the runway (e.g., 27R)
+            const le_lat = parseFloat(runway.le_latitude_deg);
+            const le_lon = parseFloat(runway.le_longitude_deg);
+            const le_hdg = parseFloat(runway.le_heading_degT);
+            const le_elev = parseFloat(runway.le_elevation_ft);
+
+            if (![le_lat, le_lon, le_hdg, le_elev].some(isNaN)) {
+                const thresholdPoint = turf.point([le_lon, le_lat]);
+                const bearing = (le_hdg + 180) % 360; // Reciprocal heading for outward path
+
+                for (let i = 1; i <= 10; i++) { // Create up to 10 dots
+                    const distanceNM = i * 1.5;
+                    const distanceFeet = distanceNM * NM_TO_FEET;
+                    const pointOnFinal = turf.destination(thresholdPoint, distanceNM, bearing, { units: 'nauticalmiles' });
+                    
+                    const altitude = Math.round((Math.tan(GLIDESLOPE_ANGLE_RAD) * distanceFeet) + le_elev);
+                    
+                    pointOnFinal.properties = {
+                        altitude: altitude,
+                        distanceNM: distanceNM
+                    };
+                    glideslopeFeatures.push(pointOnFinal);
+                }
+            }
+            
+            // Process the 'high-end' of the runway (e.g., 09L)
+            const he_lat = parseFloat(runway.he_latitude_deg);
+            const he_lon = parseFloat(runway.he_longitude_deg);
+            const he_hdg = parseFloat(runway.he_heading_degT);
+            const he_elev = parseFloat(runway.he_elevation_ft);
+
+            if (![he_lat, he_lon, he_hdg, he_elev].some(isNaN)) {
+                const thresholdPoint = turf.point([he_lon, he_lat]);
+                const bearing = (he_hdg + 180) % 360;
+
+                for (let i = 1; i <= 10; i++) {
+                    const distanceNM = i * 1.5;
+                    const distanceFeet = distanceNM * NM_TO_FEET;
+                    const pointOnFinal = turf.destination(thresholdPoint, distanceNM, bearing, { units: 'nauticalmiles' });
+                    
+                    const altitude = Math.round((Math.tan(GLIDESLOPE_ANGLE_RAD) * distanceFeet) + he_elev);
+
+                    pointOnFinal.properties = {
+                        altitude: altitude,
+                        distanceNM: distanceNM
+                    };
+                    glideslopeFeatures.push(pointOnFinal);
+                }
+            }
+        });
+
+        const geojson = { type: 'FeatureCollection', features: glideslopeFeatures };
+        addSourceAndLayer('glideslope-dots', 
+            { type: 'geojson', data: geojson },
+            {
+                type: 'circle',
+                paint: {
+                    'circle-color': '#FFA500', // Orange
+                    'circle-radius': 6,
+                    'circle-stroke-color': '#000000',
+                    'circle-stroke-width': 1.5
+                }
+            }
+        );
+        
+        // Check initial visibility from the checkbox
+        const glideslopeCheckbox = document.getElementById('filter-glideslope');
+        const visibility = (glideslopeCheckbox && glideslopeCheckbox.checked) ? 'visible' : 'none';
+        if(map.getLayer('glideslope-dots-layer')) {
+            map.setLayoutProperty('glideslope-dots-layer', 'visibility', visibility);
+        }
+
+        // Add hover interactivity
+        map.on('mouseenter', 'glideslope-dots-layer', (e) => {
+            map.getCanvas().style.cursor = 'pointer';
+            const coordinates = e.features[0].geometry.coordinates.slice();
+            const props = e.features[0].properties;
+            const popupContent = `<div style="text-align: center; font-family: 'Roboto Mono', monospace; font-size: 14px; color: #fff; background: #333; padding: 5px 8px; border-radius: 4px;">
+                                    <strong>${props.altitude.toLocaleString()}'</strong><br>
+                                    <span style="font-size: 11px;">${props.distanceNM.toFixed(1)} NM Final</span>
+                                  </div>`;
+
+            while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+            }
+
+            glideslopePopup.setLngLat(coordinates).setHTML(popupContent).addTo(map);
+        });
+
+        map.on('mouseleave', 'glideslope-dots-layer', () => {
+            map.getCanvas().style.cursor = '';
+            if (glideslopePopup.isOpen()) {
+                glideslopePopup.remove();
+            }
+        });
     }
 
     // --- DRAWING LOGIC (Rewritten for MapTiler) ---
