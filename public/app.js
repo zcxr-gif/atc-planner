@@ -1204,78 +1204,82 @@ function createVorCompassImage(size = 256) {
      * Fetches and displays a traffic report for the most active airports on the server.
      */
     async function generateTrafficHotspotReport() {
-        const resultsContainer = document.getElementById('traffic-scan-results');
-        const scanButton = document.getElementById('begin-traffic-scan-btn');
-        if (!resultsContainer || !scanButton) return;
+    const resultsContainer = document.getElementById('traffic-scan-results');
+    const scanButton = document.getElementById('begin-traffic-scan-btn');
+    if (!resultsContainer || !scanButton) return;
 
-        const placeholder = document.getElementById('traffic-scan-placeholder');
-        if (placeholder) placeholder.remove();
+    const placeholder = document.getElementById('traffic-scan-placeholder');
+    if (placeholder) placeholder.style.display = 'none';
 
-        resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
-        scanButton.disabled = true;
-        scanButton.textContent = 'Scanning...';
+    resultsContainer.innerHTML = `<div class="loader-dual-ring"></div>`;
+    scanButton.disabled = true;
+    scanButton.textContent = 'Scanning...';
 
-        try {
-            if (!isLiveModeActive) {
-                throw new Error("Live Mode is not active. Please connect to a server first.");
-            }
-            const serverSelect = document.getElementById('server-select');
-            const sessionId = serverSelect ? serverSelect.value : null;
-            if (!sessionId) {
-                throw new Error("No server selected in Live Mode.");
-            }
-
-            const [worldResponse, flightsResponse, atcResponse] = await Promise.all([
-                fetch(`/.netlify/functions/world/${sessionId}`),
-                fetch(`/.netlify/functions/flights/${sessionId}`),
-                fetch(`/.netlify/functions/atc/${sessionId}`)
-            ]);
-
-            if (!worldResponse.ok || !flightsResponse.ok || !atcResponse.ok) {
-                throw new Error("Failed to fetch server data.");
-            }
-
-            const worldData = await worldResponse.json();
-            const flightsData = await flightsResponse.json();
-            const atcData = await atcResponse.json();
-            const allAirports = await getAirports();
-
-            const airportTrafficDataArray = await processAndGetTrafficData({ worldData, flightsData, atcData, allAirports });
-
-            if (airportTrafficDataArray.length === 0) {
-                resultsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No airports with active traffic found on the server.</p>';
-            } else {
-                const sortedAirports = airportTrafficDataArray.sort((a, b) => (b.inboundTotal + b.outboundOnGround) - (a.inboundTotal + a.outboundOnGround)).slice(0, 20);
-
-                if (sortedAirports.length === 0) {
-                    resultsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No inbound or on-ground flights detected on the server.</p>';
-                } else {
-                    let htmlContent = sortedAirports.map(data => createTrafficCardHTML(data)).join('');
-                    resultsContainer.innerHTML = htmlContent;
-
-                    resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
-                        item.addEventListener('click', (e) => {
-                            const selectedIcao = e.currentTarget.dataset.icao;
-                            displayAirportDetails(selectedIcao);
-                            const scanPanel = document.getElementById('traffic-scan-panel');
-                            if (scanPanel) {
-                                if (window.innerWidth <= 768) {
-                                    scanPanel.classList.remove('visible');
-                                } else {
-                                    scanPanel.remove();
-                                }
-                            }
-                        });
-                    });
-                }
-            }
-        } catch (error) {
-            resultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">Error: ${error.message}</p>`;
-        } finally {
-            scanButton.disabled = false;
-            scanButton.textContent = 'Re-Scan Top Airports';
+    try {
+        if (!isLiveModeActive) {
+            throw new Error("Live Mode is not active. Please connect to a server first.");
         }
+        const serverSelect = document.getElementById('server-select');
+        const sessionId = serverSelect ? serverSelect.value : null;
+        if (!sessionId) {
+            throw new Error("No server selected in Live Mode.");
+        }
+
+        const [worldResponse, flightsResponse, atcResponse] = await Promise.all([
+            fetch(`/.netlify/functions/world/${sessionId}`),
+            fetch(`/.netlify/functions/flights/${sessionId}`),
+            fetch(`/.netlify/functions/atc/${sessionId}`)
+        ]);
+
+        if (!worldResponse.ok || !flightsResponse.ok || !atcResponse.ok) {
+            throw new Error("Failed to fetch server data.");
+        }
+
+        const worldData = await worldResponse.json();
+        const flightsData = await flightsResponse.json();
+        const atcData = await atcResponse.json();
+        const allAirports = await getAirports();
+
+        // Call the corrected processing function
+        const airportTrafficDataArray = await processAndGetTrafficData({ worldData, flightsData, atcData, allAirports });
+
+        if (airportTrafficDataArray.length === 0) {
+            resultsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No airports with active traffic found on the server.</p>';
+        } else {
+            // Sort by a combination of inbound and on-ground traffic for relevance
+            const sortedAirports = airportTrafficDataArray.sort((a, b) => (b.inboundTotal + b.outboundOnGround) - (a.inboundTotal + a.outboundOnGround)).slice(0, 20);
+
+            if (sortedAirports.length === 0) {
+                 resultsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">No inbound or on-ground flights detected on the server.</p>';
+            } else {
+                let htmlContent = sortedAirports.map(data => createTrafficCardHTML(data)).join('');
+                resultsContainer.innerHTML = htmlContent;
+
+                resultsContainer.querySelectorAll('.traffic-card').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        const selectedIcao = e.currentTarget.dataset.icao;
+                        displayAirportDetails(selectedIcao);
+                        const scanPanel = document.getElementById('traffic-scan-panel');
+                        if (scanPanel) {
+                             if (window.innerWidth <= 768) {
+                                scanPanel.classList.remove('visible');
+                             } else {
+                                // For desktop, you might want to close it or just leave it.
+                                // Closing it provides a cleaner UX.
+                                scanPanel.style.display = 'none';
+                             }
+                        }
+                    });
+                });
+            }
+        }
+    } catch (error) {
+        resultsContainer.innerHTML = `<p style="color: var(--danger-color); text-align: center;">Error: ${error.message}</p>`;
+    } finally {
+        scanButton.disabled = false;
+        scanButton.textContent = 'Re-Scan Top Airports';
     }
+}
 
 
     /**
@@ -1284,144 +1288,143 @@ function createVorCompassImage(size = 256) {
      * @param {string|null} targetIcao - If provided, processes data for only this airport.
      * @returns {Promise<object[]|object|null>} An array of airport data, a single airport object, or null.
      */
-    async function processAndGetTrafficData(apiData, targetIcao = null) {
-        const { worldData, flightsData, atcData, allAirports } = apiData;
+    * @param {object} apiData - An object containing worldData, flightsData, atcData, and allAirports.
+ * @param {string|null} targetIcao - If provided, processes data for only this airport.
+ * @returns {Promise<object[]|object|null>} An array of airport data, a single airport object, or null.
+ */
+async function processAndGetTrafficData(apiData, targetIcao = null) {
+    const { worldData, flightsData, atcData, allAirports } = apiData;
 
-        const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
-        let activeAirports = worldData.result || [];
+    const flightsMap = new Map((flightsData.result || []).map(f => [f.flightId, f]));
+    let activeAirports = worldData.result || [];
 
-        if (targetIcao) {
-            const isAlreadyActive = activeAirports.some(ap => ap.airportIcao === targetIcao);
-            if (!isAlreadyActive) {
-                const airportInfo = allAirports.find(a => a.ident === targetIcao);
-                if (airportInfo) {
-                    activeAirports.push({
-                        airportIcao: airportInfo.ident,
-                        airportName: airportInfo.name,
-                        inboundFlightsCount: 0,
-                        outboundFlightsCount: 0,
-                        inboundFlights: []
-                    });
-                } else {
-                    return targetIcao ? null : [];
-                }
-            }
-            activeAirports = activeAirports.filter(ap => ap.airportIcao === targetIcao);
-        }
-
-        const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 4: 'Approach', 5: 'Departure', 7: 'ATIS' };
-        const activeFrequenciesByAirport = {};
-        const gtsadOrder = ['Ground', 'Tower', 'ATIS', 'Approach', 'Departure'];
-
-        if (atcData.result) {
-            atcData.result.forEach(facility => {
-                const icao = facility.airportName;
-                if (!icao || icao === "Center") return;
-                const typeName = frequencyTypeMap[facility.type];
-                if (typeName && gtsadOrder.includes(typeName)) {
-                    if (!activeFrequenciesByAirport[icao]) activeFrequenciesByAirport[icao] = new Set();
-                    activeFrequenciesByAirport[icao].add(typeName);
-                }
-            });
-        }
-
-        const activeAirportLocations = new Map();
-        const onGroundByAirport = {};
-        const inboundByAirport = {};
-        const outboundByAirport = {};
-
-        activeAirports.forEach(activeAirport => {
-            const airportInfo = allAirports.find(a => a.ident === activeAirport.airportIcao);
+    // If searching for a specific airport, ensure it's in the list for processing.
+    if (targetIcao) {
+        const isAlreadyActive = activeAirports.some(ap => ap.airportIcao === targetIcao);
+        if (!isAlreadyActive) {
+            const airportInfo = allAirports.find(a => a.ident === targetIcao);
             if (airportInfo) {
-                const lat = parseFloat(airportInfo.latitude_deg);
-                const lon = parseFloat(airportInfo.longitude_deg);
-                const elev = parseFloat(airportInfo.elevation_ft);
-                if (!isNaN(lat) && !isNaN(lon) && !isNaN(elev)) {
-                    activeAirportLocations.set(activeAirport.airportIcao, { lat, lon, elev });
-                    onGroundByAirport[activeAirport.airportIcao] = 0;
-                    inboundByAirport[activeAirport.airportIcao] = [];
-                    outboundByAirport[activeAirport.airportIcao] = [];
-                }
+                // Add the searched airport to the list with 0 traffic, as it wasn't in the active list.
+                activeAirports.push({
+                    airportIcao: airportInfo.ident,
+                    airportName: airportInfo.name,
+                    inboundFlightsCount: 0,
+                    outboundFlightsCount: 0,
+                    inboundFlights: []
+                });
+            } else {
+                return targetIcao ? null : []; // Airport not found in our database
             }
-        });
-
-        (flightsData.result || []).forEach(flight => {
-            const aircraftPoint = turf.point([flight.longitude, flight.latitude]);
-            let closestIcao = null;
-            let minDistance = Infinity;
-            for (const [icao, coords] of activeAirportLocations.entries()) {
-                const airportPoint = turf.point([coords.lon, coords.lat]);
-                const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    closestIcao = icao;
-                }
-            }
-
-            if (closestIcao && minDistance < 3 && flight.speed < 150) {
-                const airportCoords = activeAirportLocations.get(closestIcao);
-                const airportElevation = airportCoords.elev;
-                if (Math.abs(flight.altitude - airportElevation) < 500) {
-                    onGroundByAirport[closestIcao]++;
-                }
-            }
-
-            if (flight.departure && outboundByAirport[flight.departure]) {
-                outboundByAirport[flight.departure].push(flight);
-            }
-            if (flight.arrival && inboundByAirport[flight.arrival]) {
-                inboundByAirport[flight.arrival].push(flight.flightId);
-            }
-        });
-
-        const airportTrafficData = [];
-        activeAirports.forEach(airportStatus => {
-            const icao = airportStatus.airportIcao;
-            const airportInfo = allAirports.find(a => a.ident === icao);
-            if (!airportInfo) return;
-
-            const calculatedOnGroundCount = onGroundByAirport[icao] || 0;
-            const inboundFlightIds = new Set(inboundByAirport[icao] || []);
-            const outboundFlightCount = (outboundByAirport[icao] || []).length;
-
-            if (inboundFlightIds.size === 0 && outboundFlightCount === 0 && calculatedOnGroundCount === 0 && !targetIcao) {
-                return;
-            }
-
-            const airportPosition = turf.point([parseFloat(airportInfo.longitude_deg), parseFloat(airportInfo.latitude_deg)]);
-            const data = {
-                icao: icao,
-                name: airportInfo.name.replace(/"/g, ''),
-                inboundTotal: inboundFlightIds.size,
-                outboundOnGround: calculatedOnGroundCount,
-                outboundTotal: outboundFlightCount,
-                inboundBuckets: { in20: 0, in60: 0, over60: 0 },
-                activeFrequencies: activeFrequenciesByAirport[icao] ? Array.from(activeFrequenciesByAirport[icao]).sort((a, b) => gtsadOrder.indexOf(a) - gtsadOrder.indexOf(b)) : []
-            };
-
-            inboundFlightIds.forEach(flightId => {
-                const flight = flightsMap.get(flightId);
-                if (flight && flight.speed > 50) {
-                    const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
-                    const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
-                    const eteMinutes = (distanceNM / flight.speed) * 60;
-                    if (eteMinutes <= 20) data.inboundBuckets.in20++;
-                    else if (eteMinutes <= 60) data.inboundBuckets.in60++;
-                    else data.inboundBuckets.over60++;
-                }
-            });
-            airportTrafficData.push(data);
-        });
-
-        if (targetIcao) {
-            return airportTrafficData.length > 0 ? airportTrafficData[0] : null;
         }
-        return airportTrafficData;
+        // Filter the list to only the target airport.
+        activeAirports = activeAirports.filter(ap => ap.airportIcao === targetIcao);
     }
-    
-    // =========================================================================
-    // ===== END NEW TRAFFIC SCANNER FUNCTIONS =================================
-    // =========================================================================
+
+    const frequencyTypeMap = { 0: 'Ground', 1: 'Tower', 4: 'Approach', 5: 'Departure', 7: 'ATIS' };
+    const activeFrequenciesByAirport = {};
+    const gtsadOrder = ['Ground', 'Tower', 'ATIS', 'Approach', 'Departure'];
+
+    if (atcData.result) {
+        atcData.result.forEach(facility => {
+            const icao = facility.airportName;
+            if (!icao || icao === "Center") return;
+            const typeName = frequencyTypeMap[facility.type];
+            if (typeName && gtsadOrder.includes(typeName)) {
+                if (!activeFrequenciesByAirport[icao]) activeFrequenciesByAirport[icao] = new Set();
+                activeFrequenciesByAirport[icao].add(typeName);
+            }
+        });
+    }
+
+    const activeAirportLocations = new Map();
+    const onGroundByAirport = {};
+
+    activeAirports.forEach(activeAirport => {
+        const airportInfo = allAirports.find(a => a.ident === activeAirport.airportIcao);
+        if (airportInfo) {
+            const lat = parseFloat(airportInfo.latitude_deg);
+            const lon = parseFloat(airportInfo.longitude_deg);
+            const elev = parseFloat(airportInfo.elevation_ft);
+            if (!isNaN(lat) && !isNaN(lon) && !isNaN(elev)) {
+                activeAirportLocations.set(activeAirport.airportIcao, { lat, lon, elev });
+                onGroundByAirport[activeAirport.airportIcao] = 0; // Initialize on-ground count
+            }
+        }
+    });
+
+    // Calculate "on ground" flights by proximity and low speed/altitude.
+    const lowAndSlowFlights = (flightsData.result || []).filter(f => f.speed < 150);
+    lowAndSlowFlights.forEach(flight => {
+        const aircraftPoint = turf.point([flight.longitude, flight.latitude]);
+        let closestIcao = null;
+        let minDistance = Infinity;
+
+        for (const [icao, coords] of activeAirportLocations.entries()) {
+            const airportPoint = turf.point([coords.lon, coords.lat]);
+            const distance = turf.distance(aircraftPoint, airportPoint, { units: 'nauticalmiles' });
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestIcao = icao;
+            }
+        }
+
+        if (closestIcao && minDistance < 3) {
+            const airportCoords = activeAirportLocations.get(closestIcao);
+            const airportElevation = airportCoords.elev;
+            if (Math.abs(flight.altitude - airportElevation) < 500) {
+                onGroundByAirport[closestIcao]++;
+            }
+        }
+    });
+
+    const airportTrafficData = [];
+    activeAirports.forEach(airportStatus => {
+        const icao = airportStatus.airportIcao;
+        const airportInfo = allAirports.find(a => a.ident === icao);
+        if (!airportInfo) return;
+
+        const calculatedOnGroundCount = onGroundByAirport[icao] || 0;
+        // **FIX**: Use the reliable server-provided counts directly.
+        const inboundTotal = airportStatus.inboundFlightsCount || 0;
+        const outboundTotal = airportStatus.outboundFlightsCount || 0;
+        const inboundFlightIds = new Set(airportStatus.inboundFlights || []);
+
+        // Only include airports that have some form of traffic.
+        if (inboundTotal === 0 && outboundTotal === 0 && calculatedOnGroundCount === 0 && !targetIcao) {
+            return;
+        }
+
+        const airportPosition = turf.point([parseFloat(airportInfo.longitude_deg), parseFloat(airportInfo.latitude_deg)]);
+        const data = {
+            icao: icao,
+            name: airportInfo.name.replace(/"/g, ''),
+            inboundTotal: inboundTotal,
+            outboundOnGround: calculatedOnGroundCount,
+            outboundTotal: outboundTotal,
+            inboundBuckets: { in20: 0, in60: 0, over60: 0 },
+            activeFrequencies: activeFrequenciesByAirport[icao] ? Array.from(activeFrequenciesByAirport[icao]).sort((a, b) => gtsadOrder.indexOf(a) - gtsadOrder.indexOf(b)) : []
+        };
+
+        // Calculate ETE for inbound flights.
+        inboundFlightIds.forEach(flightId => {
+            const flight = flightsMap.get(flightId);
+            if (flight && flight.speed > 50) {
+                const aircraftPosition = turf.point([flight.longitude, flight.latitude]);
+                const distanceNM = turf.distance(aircraftPosition, airportPosition, { units: 'nauticalmiles' });
+                const eteMinutes = (distanceNM / flight.speed) * 60;
+                if (eteMinutes <= 20) data.inboundBuckets.in20++;
+                else if (eteMinutes <= 60) data.inboundBuckets.in60++;
+                else data.inboundBuckets.over60++;
+            }
+        });
+        airportTrafficData.push(data);
+    });
+
+    if (targetIcao) {
+        return airportTrafficData.length > 0 ? airportTrafficData[0] : null;
+    }
+    return airportTrafficData;
+}
 
      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
