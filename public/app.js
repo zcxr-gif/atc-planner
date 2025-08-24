@@ -767,16 +767,16 @@ function createVorCompassImage(size = 256) {
         }
     }
 
-    function createMainPanel() {
-        const existingPanel = document.getElementById('main-panel');
-        if (existingPanel) {
+   function createMainPanel() {
+    const existingPanel = document.getElementById('main-panel');
+    if (existingPanel) {
+        // This logic is for the desktop 'reopen' button. Let toggleMobilePanel handle mobile visibility.
+        if (window.innerWidth > 768) {
             existingPanel.style.display = 'block';
-            if (window.innerWidth <= 768) existingPanel.classList.add('visible');
-            if (reopenButton) reopenButton.style.display = 'none';
-            return;
         }
-
         if (reopenButton) reopenButton.style.display = 'none';
+        return;
+    }
 
         const content = `
             <form id="airport-form">
@@ -976,12 +976,13 @@ function createVorCompassImage(size = 256) {
     }
     
     function createTrafficScanPanel() {
-        const existingPanel = document.getElementById('traffic-scan-panel');
-        if (existingPanel) {
+    const existingPanel = document.getElementById('traffic-scan-panel');
+    if (existingPanel) {
+        if (window.innerWidth > 768) {
             existingPanel.style.display = 'block';
-            if (window.innerWidth <= 768) existingPanel.classList.add('visible');
-            return;
         }
+        return;
+    }
 
         const content = `
             <div class="info-card">
@@ -1208,11 +1209,12 @@ function createVorCompassImage(size = 256) {
             scanButton.textContent = 'Re-Scan';
         }
     }
-     async function createLiveControlPanel() {
+      async function createLiveControlPanel() {
         const existingPanel = document.getElementById('live-control-panel');
         if (existingPanel) {
-            existingPanel.style.display = 'block';
-             if (window.innerWidth <= 768) existingPanel.classList.add('visible');
+            if (window.innerWidth > 768) {
+                existingPanel.style.display = 'block';
+            }
             return;
         }
 
@@ -2072,7 +2074,7 @@ function clearAirportLayers() {
 
         pulseAnimationId = requestAnimationFrame(animatePulse);
     }
-    async function displayAirportDetails(icao) {
+     async function displayAirportDetails(icao) {
         clearAirportLayers();
         activeAirportIcao = icao;
         updateAirports();
@@ -2084,11 +2086,12 @@ function clearAirportLayers() {
 
             currentAirportCoords = { lat: parseFloat(airport.latitude_deg), lng: parseFloat(airport.longitude_deg) };
 
+            // Wait for all drawing and UI updates to complete before moving the map
             const airportRunways = await getRunwaysForAirport(icao);
-            drawRunwaysForAirport(icao);
-            updateAirportInfoPanel(airport, airportRunways);
+            await drawRunwaysForAirport(icao);
+            await updateAirportInfoPanel(airport, airportRunways);
             createDistanceRings(currentAirportCoords.lat, currentAirportCoords.lng);
-            createGlideslopeDots(icao);
+            await createGlideslopeDots(icao);
 
             map.flyTo({ center: [currentAirportCoords.lng, currentAirportCoords.lat], zoom: 13 });
 
